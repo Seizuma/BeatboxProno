@@ -26,7 +26,7 @@ authRouter.get('/discord/callback', async (req, res) => {
   const home = process.env.PUBLIC_WEB_URL ?? '/';
 
   if (!code || !state || state !== req.cookies?.bbp_state) {
-    return res.redirect(`${home}/?auth=echec`);
+    return res.redirect(`${home}/?auth=failed`);
   }
   res.clearCookie('bbp_state');
 
@@ -34,10 +34,10 @@ authRouter.get('/discord/callback', async (req, res) => {
     const profile = await exchangeCode(String(code));
     const user = await upsertDiscordUser(profile);
     issueSession(res, user);
-    res.redirect(`${home}/moi`);
+    res.redirect(`${home}/me`);
   } catch (err) {
     console.error('[auth]', err.message);
-    res.redirect(`${home}/?auth=echec`);
+    res.redirect(`${home}/?auth=failed`);
   }
 });
 

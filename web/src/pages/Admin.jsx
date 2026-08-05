@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useSession, isStaff } from '../lib/context.jsx';
+import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 
 const TABS = [
   ['events', 'Événements'],
@@ -172,6 +173,7 @@ function ArtistsAdmin() {
   return (
     <div className="stack">
       {flash}
+      <ArtistPhotosPanel onDone={reload} />
       <section className="panel stack">
         <h2>Ajouter un artiste</h2>
         <div className="row" style={{ alignItems: 'flex-end' }}>

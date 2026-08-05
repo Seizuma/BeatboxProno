@@ -1,21 +1,24 @@
 {
   "name": "bbp-server",
-  "version": "1.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "prisma migrate deploy && node src/index.js",
+    "start": "node src/index.js",
     "seed": "node prisma/seed.js",
-    "test": "node --test src/lib/*.test.js"
+    "test": "node --test src/lib/*.test.js",
+    "photos": "node scripts/link-artist-photos.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "prisma": "^5.22.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "express-rate-limit": "^7.4.1",
     "jsonwebtoken": "^9.0.2",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
   }
 }

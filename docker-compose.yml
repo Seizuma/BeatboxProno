@@ -23,6 +23,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      # Les photos de beatboxers vivent dans l'autre projet du VPS. On les monte
+      # en lecture seule : ce conteneur ne doit jamais pouvoir les modifier.
+      - ${ARTIST_PHOTOS_HOST_DIR}:/media/artists:ro
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -33,6 +37,7 @@ services:
       DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
       BOOTSTRAP_ADMIN_DISCORD_IDS: ${BOOTSTRAP_ADMIN_DISCORD_IDS}
+      ARTIST_PHOTOS_DIR: /media/artists
 
   web:
     build: ./web

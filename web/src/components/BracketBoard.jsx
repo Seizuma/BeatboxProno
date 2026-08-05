@@ -1,20 +1,14 @@
 import { useMemo } from 'react';
-
-const ROUND_LABEL = {
-  ROUND_OF_16: 'Huitièmes',
-  QUARTER: 'Quarts de finale',
-  SEMI: 'Demi-finales',
-  SMALL_FINAL: 'Petite finale',
-  FINAL: 'Finale',
-  LEGACY: 'Legacy',
-};
+import { useI18n } from '../lib/i18n.jsx';
+import { contenderPhoto } from '../lib/media.js';
+import ArtistFigure from './ArtistFigure.jsx';
 
 const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
 const DISPLAY_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
 
 /** Splits de votes proposés — 3 juges, ou 5 pour les grosses finales. */
 const SCORES = [
-  { label: 'Sans avis', a: null, b: null },
+  { label: null, a: null, b: null }, // « sans avis », libellé traduit au rendu
   { label: '3 – 0', a: 3, b: 0 },
   { label: '2 – 1', a: 2, b: 1 },
   { label: '1 – 2', a: 1, b: 2 },
@@ -27,10 +21,14 @@ const SCORES = [
 const key = (round, slot) => `${round}:${slot}`;
 
 /**
+ * L'arbre. Chaque colonne occupe toute la hauteur et répartit ses affiches en
+ * `space-around` : avec deux fois moins d'affiches qu'au tour précédent, chaque
+ * battle se retrouve exactement à mi-hauteur des deux qui l'alimentent. C'est
+ * la pyramide, obtenue par la géométrie du flex plutôt qu'à coups de marges.
+ *
  * @param {object[]} phaseBattles  squelette officiel {round, slot, contenderAId, contenderBId, label}
  * @param {object}   picks         { "ROUND:SLOT": {contenderAId, contenderBId, winnerId, scoreA, scoreB} }
- * @param {string[]} seedFromRanking  ordre pronostiqué de la phase précédente,
- *                                    utilisé pour composer le premier tour
+ * @param {string[]} seedFromRanking  ordre pronostiqué de la phase précédente
  */
 export default function BracketBoard({
   phase,
@@ -41,6 +39,7 @@ export default function BracketBoard({
   locked,
   seedFromRanking = [],
 }) {
+  const { t } = useI18n();
   const byId = useMemo(() => new Map(contenders.map((c) => [c.id, c])), [contenders]);
 
   const rounds = useMemo(() => {
@@ -49,6 +48,9 @@ export default function BracketBoard({
   }, [phaseBattles]);
 
   const firstMainRound = MAIN_LINE.find((r) => rounds.includes(r));
+
+  const battlesOf = (round) =>
+    phaseBattles.filter((b) => b.round === round).sort((x, y) => x.slot - y.slot);
 
   /** Qui s'affronte dans cette battle, d'après l'officiel puis d'après les picks. */
   function participants(battle) {
@@ -88,8 +90,10 @@ export default function BracketBoard({
     }
     if (prevIndex >= 0) {
       const prev = MAIN_LINE[prevIndex];
-      return [picks[key(prev, battle.slot * 2)]?.winnerId ?? null,
-              picks[key(prev, battle.slot * 2 + 1)]?.winnerId ?? null];
+      return [
+        picks[key(prev, battle.slot * 2)]?.winnerId ?? null,
+        picks[key(prev, battle.slot * 2 + 1)]?.winnerId ?? null,
+      ];
     }
     return [null, null];
   }
@@ -118,86 +122,112 @@ export default function BracketBoard({
     });
   }
 
+  /** Une colonne se dessine par paires quand la suivante en compte moitié moins. */
+  const pairing = useMemo(() => {
+    const map = {};
+    rounds.forEach((round, i) => {
+      const next = rounds[i + 1];
+      const mine = battlesOf(round).length;
+      const theirs = next ? battlesOf(next).length : 0;
+      map[round] = {
+        paired: Boolean(next) && mine >= 2 && mine === theirs * 2,
+        fed: i > 0 && map[rounds[i - 1]]?.paired,
+      };
+    });
+    return map;
+  }, [rounds, phaseBattles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function renderBattle(battle) {
+    const [aId, bId] = participants(battle);
+    const pick = picks[key(battle.round, battle.slot)] ?? {};
+    const ready = Boolean(aId && bId);
+
+    return (
+      <div className="bracket__node" key={battle.id ?? key(battle.round, battle.slot)}>
+        <div className={`battle${pick.winnerId ? ' battle--called' : ''}`}>
+          {battle.label && <p className="battle__label">{battle.label}</p>}
+
+          {[aId, bId].map((id, side) => {
+            const c = byId.get(id);
+            const won = pick.winnerId && pick.winnerId === id;
+            return (
+              <button
+                key={side}
+                type="button"
+                className={`battle__side${won ? ' battle__side--won' : ''}`}
+                disabled={locked || !ready}
+                onClick={() => setPick(battle, { winnerId: id })}
+              >
+                <ArtistFigure src={contenderPhoto(c)} name={c?.name} size="xs" />
+                <span className="battle__name">
+                  {c?.name ?? <em className="faint">{t('bracket.tbd')}</em>}
+                </span>
+                <span className="battle__seed">{c?.seed ?? '—'}</span>
+              </button>
+            );
+          })}
+
+          {ready && (
+            <div className="battle__foot">
+              <label htmlFor={`sc-${phase.id}-${battle.round}-${battle.slot}`}>
+                {t('bracket.score')}
+              </label>
+              <select
+                id={`sc-${phase.id}-${battle.round}-${battle.slot}`}
+                disabled={locked}
+                value={pick.scoreA == null ? '' : `${pick.scoreA}-${pick.scoreB}`}
+                onChange={(e) => {
+                  const found = SCORES.find((s) => `${s.a}-${s.b}` === e.target.value);
+                  setPick(battle, { scoreA: found?.a ?? null, scoreB: found?.b ?? null });
+                }}
+              >
+                {SCORES.map((s) => (
+                  <option key={s.label ?? 'none'} value={s.a == null ? '' : `${s.a}-${s.b}`}>
+                    {s.label ?? t('bracket.score.none')}
+                  </option>
+                ))}
+              </select>
+              {pick.winnerId && (
+                <button
+                  type="button"
+                  className="btn btn--small btn--ghost"
+                  disabled={locked}
+                  onClick={() => setPick(battle, { winnerId: null })}
+                >
+                  {t('bracket.clear')}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounds">
+    <div className="bracket">
       {rounds.map((round) => {
-        const battles = phaseBattles
-          .filter((b) => b.round === round)
-          .sort((x, y) => x.slot - y.slot);
+        const battles = battlesOf(round);
+        const { paired, fed } = pairing[round] ?? {};
+
+        const pairs = [];
+        if (paired) {
+          for (let i = 0; i < battles.length; i += 2) pairs.push(battles.slice(i, i + 2));
+        }
 
         return (
-          <section className="round" key={round}>
-            <h4 className="round__title">{ROUND_LABEL[round] ?? round}</h4>
+          <section className="bracket__round" key={round}>
+            <h4 className="bracket__title">{t(`bracket.round.${round}`)}</h4>
 
-            {battles.map((battle) => {
-              const [aId, bId] = participants(battle);
-              const pick = picks[key(battle.round, battle.slot)] ?? {};
-              const ready = Boolean(aId && bId);
-
-              return (
-                <div className="battle" key={battle.id ?? key(battle.round, battle.slot)}>
-                  {battle.label && (
-                    <p className="eyebrow" style={{ padding: '0.4rem 0.65rem 0', margin: 0 }}>
-                      {battle.label}
-                    </p>
-                  )}
-
-                  {[aId, bId].map((id, side) => {
-                    const c = byId.get(id);
-                    const won = pick.winnerId && pick.winnerId === id;
-                    return (
-                      <button
-                        key={side}
-                        type="button"
-                        className={`battle__side${won ? ' battle__side--won' : ''}`}
-                        disabled={locked || !ready}
-                        onClick={() => setPick(battle, { winnerId: id })}
-                      >
-                        <span className="battle__seed">{c?.seed ?? '—'}</span>
-                        <span className="battle__name">
-                          {c?.name ?? <em className="faint">à déterminer</em>}
-                        </span>
-                        {won && <span className="tag tag--accent">Vainqueur</span>}
-                      </button>
-                    );
-                  })}
-
-                  {ready && (
-                    <div className="battle__foot">
-                      <label htmlFor={`sc-${battle.round}-${battle.slot}`}>Score</label>
-                      <select
-                        id={`sc-${battle.round}-${battle.slot}`}
-                        disabled={locked}
-                        value={
-                          pick.scoreA == null ? '' : `${pick.scoreA}-${pick.scoreB}`
-                        }
-                        onChange={(e) => {
-                          const found = SCORES.find(
-                            (s) => `${s.a}-${s.b}` === e.target.value
-                          );
-                          setPick(battle, { scoreA: found?.a ?? null, scoreB: found?.b ?? null });
-                        }}
-                      >
-                        {SCORES.map((s) => (
-                          <option key={s.label} value={s.a == null ? '' : `${s.a}-${s.b}`}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                      {pick.winnerId && (
-                        <button
-                          className="btn btn--small btn--ghost"
-                          disabled={locked}
-                          onClick={() => setPick(battle, { winnerId: null })}
-                        >
-                          Effacer
-                        </button>
-                      )}
+            <div className={`bracket__col${fed ? ' bracket__col--fed' : ''}`}>
+              {paired
+                ? pairs.map((pair, i) => (
+                    <div className="bracket__pair" key={i}>
+                      {pair.map(renderBattle)}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  ))
+                : battles.map(renderBattle)}
+            </div>
           </section>
         );
       })}

@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
+import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
 
 export default function Profile() {
   const { id } = useParams();
   const { user, loading } = useSession();
+  const { t, date } = useI18n();
   const targetId = id ?? user?.id;
 
   const [data, setData] = useState(null);
@@ -17,23 +19,23 @@ export default function Profile() {
     api.get(`/users/${targetId}`).then(setData).catch((e) => setError(e.message));
   }, [targetId]);
 
-  if (loading) return <p className="faint" style={{ marginTop: '2rem' }}>Chargement…</p>;
+  if (loading) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
   if (!targetId) {
     return (
       <div className="empty" style={{ marginTop: '3rem' }}>
-        <p>Connectez-vous pour retrouver vos pronostics.</p>
+        <p>{t('profile.signin')}</p>
         <DiscordButton />
       </div>
     );
   }
   if (error) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
-  if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>Chargement…</p>;
+  if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
 
-  const buckets = {
-    'En cours': data.predictions.filter((p) => p.submitted && !p.scoredAt),
-    Terminés: data.predictions.filter((p) => p.scoredAt),
-    Brouillons: data.predictions.filter((p) => !p.submitted),
-  };
+  const buckets = [
+    ['profile.bucket.live', data.predictions.filter((p) => p.submitted && !p.scoredAt)],
+    ['profile.bucket.done', data.predictions.filter((p) => p.scoredAt)],
+    ['profile.bucket.drafts', data.predictions.filter((p) => !p.submitted)],
+  ];
 
   return (
     <div className="stack" style={{ paddingTop: '2.5rem' }}>
@@ -41,32 +43,34 @@ export default function Profile() {
         {data.user.avatarUrl && <img className="avatar avatar--lg" src={data.user.avatarUrl} alt="" />}
         <div>
           <p className="eyebrow">
-            Inscrit depuis {new Date(data.user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+            {t('profile.member', {
+              date: date(data.user.createdAt, { month: 'long', year: 'numeric' }),
+            })}
           </p>
           <h1>{data.user.globalName ?? data.user.username}</h1>
         </div>
       </header>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-        <Stat value={data.totals.points} label="Points cumulés" accent />
-        <Stat value={data.totals.finished} label="Pronostics scorés" />
-        <Stat value={data.totals.pending} label="En attente de résultat" />
-        <Stat value={data.totals.drafts} label="Brouillons" />
+        <Stat value={data.totals.points} label={t('profile.points')} accent />
+        <Stat value={data.totals.finished} label={t('profile.scored')} />
+        <Stat value={data.totals.pending} label={t('profile.pending')} />
+        <Stat value={data.totals.drafts} label={t('profile.drafts')} />
       </div>
 
-      {Object.entries(buckets).map(([title, rows]) => (
-        <section className="stack" key={title}>
-          <h2>{title}</h2>
+      {buckets.map(([titleKey, rows]) => (
+        <section className="stack" key={titleKey}>
+          <h2>{t(titleKey)}</h2>
           {rows.length === 0 ? (
-            <p className="empty">Rien ici pour l'instant.</p>
+            <p className="empty">{t('profile.bucket.empty')}</p>
           ) : (
             <div className="panel panel--flush">
               <table>
                 <thead>
                   <tr>
-                    <th>Événement</th>
-                    <th>Catégorie</th>
-                    <th className="num">Points</th>
+                    <th>{t('artists.col.event')}</th>
+                    <th>{t('artists.col.category')}</th>
+                    <th className="num">{t('leaderboard.col.points')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -77,7 +81,7 @@ export default function Profile() {
                       <td className="muted">{p.category.name}</td>
                       <td className="num">{p.scoredAt ? p.points : '—'}</td>
                       <td className="num">
-                        <Link to={`/evenements/${p.event.slug}`}>Ouvrir</Link>
+                        <Link to={`/events/${p.event.slug}`}>{t('common.open')}</Link>
                       </td>
                     </tr>
                   ))}

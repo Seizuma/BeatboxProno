@@ -1,10 +1,12 @@
-# Pronos Beatbox
+# beatboxpredictions
 
 Site de pronostics pour les compétitions de beatbox : classements de wildcards,
-arbres de battles, top 4, classement des pronostiqueurs. Connexion par Discord,
-back-office pour saisir les résultats.
+arbres de battles, top 4, classement et statistiques des pronostiqueurs.
+Connexion par Discord, back-office pour saisir les résultats.
 
 React + Vite · Node + Express + Prisma · PostgreSQL · Docker
+
+Interface en anglais par défaut, en français si le navigateur le demande.
 
 ---
 
@@ -16,9 +18,12 @@ wildcards et les éliminations, arbre à remplir pour les brackets, top 4 final.
 Les choix de l'utilisateur se propagent automatiquement d'un tour au suivant :
 désigner un vainqueur en quart le place en demi-finale.
 
-**Côté admin** — création des événements et des artistes, saisie des résultats,
-attribution des rôles. Chaque résultat publié relance immédiatement le calcul des
-scores de tous les pronostics concernés.
+Le classement se compose au glisser-déposer, à la souris comme au doigt. L'arbre
+se lit en pyramide, chaque affiche placée à mi-hauteur des deux qui l'alimentent.
+
+**Côté admin** — création des événements et des artistes, rattachement des photos,
+saisie des résultats, attribution des rôles. Chaque résultat publié relance
+immédiatement le calcul des scores de tous les pronostics concernés.
 
 ---
 
@@ -40,7 +45,8 @@ Tout le barème vit dans un seul fichier : `server/src/lib/scoring.js`, couvert 
 
 Le point « l'affiche a eu lieu » est comparé sur la paire de contenders, sans tenir
 compte de l'ordre ni du slot : prédire *Alem vs NaPoM* en demi-finale paie même si
-l'officiel les fait se croiser dans l'autre moitié du tableau.
+l'officiel les fait se croiser dans l'autre moitié du tableau. La page de
+statistiques applique la même règle pour calculer la réussite en battle.
 
 ```bash
 cd server && npm test
@@ -74,7 +80,7 @@ Sur <https://discord.com/developers/applications> : nouvelle application, onglet
 redirection — elle doit correspondre exactement à `DISCORD_REDIRECT_URI` :
 
 ```
-https://pronos.mondomaine.fr/api/auth/discord/callback
+https://predictions.mondomaine.fr/api/auth/discord/callback
 ```
 
 En local, ajoutez aussi `http://localhost:5173/api/auth/discord/callback`.
@@ -82,11 +88,45 @@ Seul le scope `identify` est demandé.
 
 ---
 
+## Les photos des artistes
+
+Elles vivent dans un autre projet du VPS (`Beatbox-Games/server/beatbox_artists`).
+Le dossier est monté **en lecture seule** dans le conteneur `api` : ce projet ne
+peut rien y écrire, il se contente de lire et d'enregistrer le chemin public dans
+`Artist.imageUrl`.
+
+Dans `.env` :
+
+```bash
+ARTIST_PHOTOS_HOST_DIR=/chemin/absolu/vers/Beatbox-Games/server/beatbox_artists
+```
+
+Puis l'appariement, en ligne de commande :
+
+```bash
+docker compose exec api node scripts/link-artist-photos.js          # aperçu
+docker compose exec api node scripts/link-artist-photos.js --apply  # écrit
+```
+
+… ou depuis l'onglet **Artistes** de l'administration, qui affiche le même
+rapport et propose un bouton.
+
+Le nom du fichier est comparé au `slug` de l'artiste, à son nom et à ses alias,
+accents, casse et séparateurs ignorés : `Alem_FR.jpg`, `alem.png` et `Alem.webp`
+tombent tous sur l'artiste `alem`. Le rapport liste ce qui n'a pas été apparié
+dans les deux sens — pour rattraper un cas isolé, ajoutez le nom du fichier comme
+alias de l'artiste, ou appelez `PUT /api/admin/photos/<id>` avec `{ "file": "…" }`.
+
+Les images sont servies sous `/api/media/artists/…`, donc par le proxy existant :
+aucune règle nginx supplémentaire.
+
+---
+
 ## Déployer sur le VPS OVH
 
 ```bash
-git clone git@github.com:VOTRE-COMPTE/VOTRE-REPO.git pronos
-cd pronos
+git clone git@github.com:VOTRE-COMPTE/VOTRE-REPO.git predictions
+cd predictions
 cp .env.example .env && nano .env
 docker compose up -d --build
 ```
@@ -101,7 +141,7 @@ Nouveau *Proxy Host* :
 
 | Champ | Valeur |
 | --- | --- |
-| Domain Names | `pronos.mondomaine.fr` |
+| Domain Names | `predictions.mondomaine.fr` |
 | Scheme | `http` |
 | Forward Hostname / IP | `127.0.0.1` (ou le nom du conteneur si NPM est sur le même réseau Docker) |
 | Forward Port | `8080` |
@@ -112,7 +152,7 @@ Si NPM tourne lui-même dans Docker, `127.0.0.1` désigne son propre conteneur.
 Rattachez-le au réseau du projet et pointez sur `web:80` :
 
 ```bash
-docker network connect pronos_default nginx-proxy-manager
+docker network connect predictions_default nginx-proxy-manager
 ```
 
 Le nginx interne du conteneur `web` sert les fichiers statiques et relaie `/api/`
@@ -128,6 +168,23 @@ Les migrations Prisma s'appliquent au démarrage de l'API (`prisma migrate deplo
 
 ---
 
+## Langue
+
+L'anglais est la langue du site. On bascule en français uniquement si
+`navigator.languages` contient un tag français. Un sélecteur EN/FR dans
+l'en-tête permet de forcer l'un ou l'autre ; le choix est mémorisé et gagne sur
+le navigateur.
+
+Tous les libellés du site public vivent dans `web/src/lib/i18n.jsx`, deux
+dictionnaires à plat. Ajouter une langue : ajouter une entrée dans `LANGS` et un
+dictionnaire. L'administration, réservée au staff, est restée en français.
+
+Les adresses sont anglaises — `/events/:slug`, `/leaderboard`, `/stats`,
+`/artists`, `/me`, `/players/:id` — et les anciennes adresses françaises
+redirigent, pour ne pas casser les liens déjà partagés.
+
+---
+
 ## Choisir l'identité visuelle
 
 Trois directions complètes sont livrées, chacune décrite en tokens dans
@@ -140,9 +197,8 @@ Trois directions complètes sont livrées, chacune décrite en tokens dans
 - **Affiche** — le placard collé avant la compète : outremer et ocre sur papier
   os, noms en très gros, aplats sans ombre.
 
-Le sélecteur en haut à droite bascule entre les trois. Une fois votre choix
-arrêté, fixez `data-theme` dans `web/index.html` et supprimez le composant
-`ThemeSwitcher` dans `web/src/components/Layout.jsx`.
+`data-theme` est fixé sur `loop` dans `web/index.html`. Les feuilles de style ne
+connaissent que les variables : changer d'identité, c'est changer cet attribut.
 
 ---
 
@@ -152,13 +208,18 @@ arrêté, fixez `data-theme` dans `web/index.html` et supprimez le composant
 server/
   prisma/schema.prisma      modèle de données
   prisma/seed.js            jeu de démonstration
+  scripts/link-artist-photos.js   appariement des photos, en CLI
   src/lib/scoring.js        barème (pur, testé)
   src/lib/auth.js           OAuth2 Discord + session JWT en cookie httpOnly
-  src/routes/               auth · public · predictions · admin
+  src/lib/photos.js         lecture du dossier de photos, appariement
+  src/routes/               auth · public · stats · predictions · admin · photos
 web/
+  src/lib/i18n.jsx          dictionnaires EN/FR, détection du navigateur
   src/styles/themes.css     les trois directions esthétiques
-  src/components/           RankingBoard · BracketBoard · Layout
-  src/pages/                Home · EventPage · Leaderboard · Profile · Artists · Admin
+  src/styles/board.css      géométrie de l'arbre, cartes de glisser-déposer
+  src/components/           RankingBoard · BracketBoard · Layout · ArtistFigure
+  src/pages/                Home · EventPage · Leaderboard · PlayerStats ·
+                            Profile · Artists · Admin
 ```
 
 ---
@@ -172,7 +233,8 @@ web/
 - Fermeture automatique des phases par tâche planifiée — pour l'instant `locksAt`
   est vérifié à l'enregistrement.
 - Page de détail d'un pronostic scoré : le détail ligne à ligne est déjà stocké
-  dans `Prediction.breakdown`, il ne reste qu'à l'afficher.
+  dans `Prediction.breakdown`, il ne reste qu'à l'afficher sur `/players/:id`.
+- Traduction de l'administration, si elle doit sortir du cercle francophone.
 
 ---
 

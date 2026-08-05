@@ -1,10 +1,4 @@
-FROM node:20-slim
-
-# Prisma a besoin d'OpenSSL pour charger son moteur de requêtes.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-
+FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
@@ -13,9 +7,8 @@ RUN npm ci --omit=dev || npm install --omit=dev
 COPY prisma ./prisma
 RUN npx prisma generate
 
-COPY src ./src
+COPY . .
 
-ENV NODE_ENV=production
 EXPOSE 4000
-
-CMD ["npm", "start"]
+# Les migrations s'appliquent au démarrage : un déploiement = un git pull.
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]

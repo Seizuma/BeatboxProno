@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
+import { useI18n } from '../lib/i18n.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 
@@ -11,6 +12,7 @@ const key = (round, slot) => `${round}:${slot}`;
 export default function EventPage() {
   const { slug } = useParams();
   const { user } = useSession();
+  const { t, date } = useI18n();
 
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -38,7 +40,7 @@ export default function EventPage() {
   );
 
   if (error) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
-  if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>Chargement…</p>;
+  if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
 
   const { event } = data;
   const state = draft[activeId] ?? { orders: {}, picks: {}, podium: [] };
@@ -69,7 +71,7 @@ export default function EventPage() {
       const res = await api.put(`/predictions/categories/${activeId}`, payload);
       setFlash({
         ok: true,
-        text: res.note ?? (submit ? 'Pronostic déposé.' : 'Brouillon enregistré.'),
+        text: res.note ?? t(submit ? 'event.saved.submit' : 'event.saved.draft'),
       });
     } catch (e) {
       setFlash({ ok: false, text: e.message });
@@ -79,11 +81,11 @@ export default function EventPage() {
   }
 
   return (
-    <div className="stack" style={{ paddingTop: 'clamp(2rem, 5vw, 3.5rem)' }}>
+    <div className="stack" style={{ paddingTop: 'clamp(2rem, 5vw, 3.5rem)', gap: '1.75rem' }}>
       <header style={{ paddingBottom: '0.5rem' }}>
         <p className="silkscreen">
           {event.location ?? '—'}
-          {event.startsAt && ` · ${new Date(event.startsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+          {event.startsAt && ` · ${date(event.startsAt)}`}
         </p>
         <h1 className="hero__title" style={{ fontSize: 'clamp(2.2rem, 5.5vw, 4rem)' }}>
           {event.name} <em>{event.year}</em>
@@ -91,7 +93,10 @@ export default function EventPage() {
         {event.description && <p className="muted" style={{ maxWidth: '60ch' }}>{event.description}</p>}
       </header>
 
-      <nav className="row" style={{ gap: '0.4rem', borderBottom: 'var(--frame)', paddingBottom: '0.75rem' }}>
+      <nav
+        className="row"
+        style={{ gap: '0.4rem', borderBottom: 'var(--frame)', paddingBottom: '0.75rem' }}
+      >
         {event.categories.map((c) => (
           <button
             key={c.id}
@@ -103,12 +108,7 @@ export default function EventPage() {
         ))}
       </nav>
 
-      {!user && (
-        <p className="notice">
-          Connectez-vous avec Discord pour enregistrer un pronostic. Vous pouvez déjà tout
-          parcourir et préparer vos choix, ils seront perdus au rechargement.
-        </p>
-      )}
+      {!user && <p className="notice">{t('event.signin')}</p>}
 
       {category && (
         <CategoryEditor
@@ -123,18 +123,18 @@ export default function EventPage() {
       {user && !eventClosed && (
         <div className="actionbar">
           <button className="btn" onClick={() => save(false)} disabled={saving}>
-            Enregistrer le brouillon
+            {t('event.save.draft')}
           </button>
           <button className="btn btn--primary" onClick={() => save(true)} disabled={saving}>
-            Déposer le pronostic
+            {t('event.save.submit')}
           </button>
           {flash && (
-            <span className={flash.ok ? 'data' : 'data'} style={{ color: flash.ok ? 'var(--ok)' : 'var(--accent)' }}>
+            <span className="data" style={{ color: flash.ok ? 'var(--ok)' : 'var(--accent)' }}>
               {flash.text}
             </span>
           )}
           <span className="faint" style={{ fontSize: '0.8rem', marginLeft: 'auto' }}>
-            Modifiable tant que la phase n'est pas fermée.
+            {t('event.editable')}
           </span>
         </div>
       )}
@@ -143,6 +143,7 @@ export default function EventPage() {
 }
 
 function CategoryEditor({ category, state, update, phaseLocked, locked }) {
+  const { t } = useI18n();
   const contenders = category.contenders;
 
   // Le classement de la dernière phase de qualification sert à composer l'arbre.
@@ -152,7 +153,7 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
   const seedFromRanking = qualifyingPhase ? state.orders[qualifyingPhase.id] ?? [] : [];
 
   return (
-    <div className="stack">
+    <div className="stack" style={{ gap: '1.5rem' }}>
       {category.phases.map((phase) => {
         const isLocked = locked || phaseLocked(phase);
 
@@ -164,9 +165,9 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
                 <h2>{phase.name}</h2>
               </div>
               <div className="row" style={{ gap: '0.35rem' }}>
-                <span className="tag">{PHASE_RULE[phase.type]}</span>
-                {phase.resolved && <span className="tag tag--done">Résultat connu</span>}
-                {isLocked && !phase.resolved && <span className="tag">Fermée</span>}
+                <span className="tag">{t(`rule.${phase.type}`)}</span>
+                {phase.resolved && <span className="tag tag--done">{t('event.phase.resolved')}</span>}
+                {isLocked && !phase.resolved && <span className="tag">{t('event.phase.closed')}</span>}
               </div>
             </div>
 
@@ -200,11 +201,9 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
       {category.kind !== 'LEGACY' && (
         <section className="panel stack">
           <div>
-            <p className="eyebrow">14 points en jeu</p>
-            <h2>Top 4 final</h2>
-            <p className="muted" style={{ fontSize: '0.88rem' }}>
-              5 points pour la première place, puis 4, 3 et 2.
-            </p>
+            <p className="eyebrow">{t('event.podium.eyebrow')}</p>
+            <h2>{t('event.podium.title')}</h2>
+            <p className="muted" style={{ fontSize: '0.88rem' }}>{t('event.podium.lede')}</p>
           </div>
 
           <div className="podium">
@@ -222,12 +221,15 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
                     }}
                     style={{ width: '100%', maxWidth: '22rem' }}
                   >
-                    <option value="">Aucun choix</option>
+                    <option value="">{t('event.podium.empty')}</option>
                     {contenders.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                  <span className="podium__value"> vaut {[0, 5, 4, 3, 2][rank]} points</span>
+                  <span className="podium__value">
+                    {' '}
+                    {t('event.podium.value', { n: [0, 5, 4, 3, 2][rank] })}
+                  </span>
                 </span>
               </div>
             ))}
@@ -237,14 +239,6 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
     </div>
   );
 }
-
-const PHASE_RULE = {
-  SEEDING: 'Écart de placement seul',
-  WILDCARD: '+1 par qualifié, +1 à 5 par écart',
-  ELIMINATION: '+1 par qualifié, +1 à 5 par écart',
-  BRACKET: '+2 affiche, +2 vainqueur, +2 score',
-  LEGACY: '+2 affiche, +2 vainqueur, +2 score',
-};
 
 /** Reconstruit le brouillon local à partir des pronostics déjà enregistrés. */
 function hydrate({ event, myPredictions }) {

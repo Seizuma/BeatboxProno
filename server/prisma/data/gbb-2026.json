@@ -1,0 +1,818 @@
+{
+  "source": "https://beatbox.fandom.com/wiki/Grand_Beatbox_Battle_2026",
+  "note": "Producer, Studio Competition et Showcase Wildcard sont volontairement exclus.",
+  "event": {
+    "name": "Grand Beatbox Battle",
+    "year": 2026,
+    "slug": "grand-beatbox-battle-2026",
+    "location": "Torwar Arena, Varsovie, Pologne",
+    "startsAt": "2026-09-24T10:00:00Z",
+    "endsAt": "2026-09-26T22:00:00Z",
+    "status": "OPEN",
+    "description": "16e édition du Grand Beatbox Battle, organisée par Swissbeatbox. Cinq catégories retenues pour les pronostics."
+  },
+  "artists": [
+    {
+      "name": "PACMax",
+      "country": "FR"
+    },
+    {
+      "name": "BlackRoll",
+      "country": "IT"
+    },
+    {
+      "name": "RIVER'",
+      "country": "FR"
+    },
+    {
+      "name": "patbox",
+      "country": "FR"
+    },
+    {
+      "name": "Bookie Blanco",
+      "country": "FR"
+    },
+    {
+      "name": "King Inertia",
+      "country": "US"
+    },
+    {
+      "name": "Waali",
+      "country": "CL"
+    },
+    {
+      "name": "D-low",
+      "country": "GB"
+    },
+    {
+      "name": "FootboxG",
+      "country": "BE"
+    },
+    {
+      "name": "KAJI",
+      "country": "JP"
+    },
+    {
+      "name": "Marvelous",
+      "country": "ID"
+    },
+    {
+      "name": "ABX",
+      "country": "IN"
+    },
+    {
+      "name": "Stitch",
+      "country": "MY"
+    },
+    {
+      "name": "G-Wizz",
+      "country": "BE"
+    },
+    {
+      "name": "H-Has",
+      "country": "KR"
+    },
+    {
+      "name": "EXALLOS",
+      "country": "CO"
+    },
+    {
+      "name": "Remix",
+      "country": "ZA"
+    },
+    {
+      "name": "SE-MA",
+      "country": "JP"
+    },
+    {
+      "name": "DYU-TAR",
+      "country": "JP"
+    },
+    {
+      "name": "Alem",
+      "country": "FR"
+    },
+    {
+      "name": "Alexinho",
+      "country": "FR"
+    },
+    {
+      "name": "Frosty",
+      "country": "GB"
+    },
+    {
+      "name": "Darren",
+      "country": "JP"
+    },
+    {
+      "name": "Riku Matsushima",
+      "country": "JP"
+    },
+    {
+      "name": "OSY",
+      "country": "FR"
+    },
+    {
+      "name": "Tunecinoo",
+      "country": "TN"
+    },
+    {
+      "name": "The-O",
+      "country": "HK"
+    },
+    {
+      "name": "HiccuP",
+      "country": "HK"
+    },
+    {
+      "name": "Julard",
+      "country": "FR"
+    },
+    {
+      "name": "Martin Benati",
+      "country": "FR"
+    },
+    {
+      "name": "Lennard",
+      "country": "DE"
+    },
+    {
+      "name": "MOKBAY",
+      "country": "JP"
+    },
+    {
+      "name": "Raje",
+      "country": "IN"
+    },
+    {
+      "name": "TiONEB",
+      "country": "FR"
+    },
+    {
+      "name": "Sora'",
+      "country": "JP"
+    },
+    {
+      "name": "MAHIRO",
+      "country": "JP"
+    },
+    {
+      "name": "Nils",
+      "country": "ES"
+    },
+    {
+      "name": "HIRONA",
+      "country": "JP"
+    },
+    {
+      "name": "RyoTracks",
+      "country": "JP"
+    },
+    {
+      "name": "TRIP",
+      "country": "JP"
+    },
+    {
+      "name": "RYOYO",
+      "country": "JP"
+    },
+    {
+      "name": "Osis",
+      "country": "IE"
+    },
+    {
+      "name": "Kawai Senpai",
+      "country": "IN"
+    },
+    {
+      "name": "Vinzayn",
+      "country": "IN"
+    },
+    {
+      "name": "Ani",
+      "country": "IN"
+    },
+    {
+      "name": "MDA",
+      "country": "IN"
+    },
+    {
+      "name": "clutch.",
+      "country": "US"
+    },
+    {
+      "name": "Jovial",
+      "country": "US"
+    },
+    {
+      "name": "Rahul",
+      "country": "US"
+    },
+    {
+      "name": "ZVD",
+      "country": "US"
+    },
+    {
+      "name": "Codfish",
+      "country": "AU"
+    },
+    {
+      "name": "WING",
+      "country": "KR"
+    }
+  ],
+  "categories": [
+    {
+      "name": "Solo",
+      "kind": "SOLO",
+      "position": 0,
+      "contenders": [
+        {
+          "name": "PACMax",
+          "artists": [
+            "PACMax"
+          ],
+          "seed": 1,
+          "wildcard": false,
+          "qualification": "GBB 2025 — champion Solo"
+        },
+        {
+          "name": "BlackRoll",
+          "artists": [
+            "BlackRoll"
+          ],
+          "seed": 2,
+          "wildcard": false,
+          "qualification": "GBB 2025 — 3e place Solo"
+        },
+        {
+          "name": "RIVER'",
+          "artists": [
+            "RIVER'"
+          ],
+          "seed": 3,
+          "wildcard": false,
+          "qualification": "GBB 2025 — champion 7 To Smoke"
+        },
+        {
+          "name": "patbox",
+          "artists": [
+            "patbox"
+          ],
+          "seed": 4,
+          "wildcard": false,
+          "qualification": "Florida Beatbox Battle 2026 — champion"
+        },
+        {
+          "name": "Bookie Blanco",
+          "artists": [
+            "Bookie Blanco"
+          ],
+          "seed": 5,
+          "wildcard": false,
+          "qualification": "BeatCity Japan 2026 — champion Solo"
+        },
+        {
+          "name": "King Inertia",
+          "artists": [
+            "King Inertia"
+          ],
+          "seed": 6,
+          "wildcard": false,
+          "qualification": "German Beatbox Championship 2026 — champion global"
+        },
+        {
+          "name": "Waali",
+          "artists": [
+            "Waali"
+          ],
+          "seed": 7,
+          "wildcard": false,
+          "qualification": "Great North Battle 2026 — champion"
+        },
+        {
+          "name": "À confirmer — Maestro Beatbox America",
+          "artists": [],
+          "seed": 8,
+          "wildcard": false,
+          "qualification": "Maestro Beatbox America 2026 — champion"
+        },
+        {
+          "name": "À confirmer — Africa & MENA",
+          "artists": [],
+          "seed": 9,
+          "wildcard": false,
+          "qualification": "Africa & MENA Region Qualifier 2026 — champion"
+        },
+        {
+          "name": "À confirmer — APAC",
+          "artists": [],
+          "seed": 10,
+          "wildcard": false,
+          "qualification": "APAC Region Qualifier 2026 — champion"
+        },
+        {
+          "name": "D-low",
+          "artists": [
+            "D-low"
+          ],
+          "seed": 11,
+          "wildcard": true,
+          "qualification": "Wildcard 1"
+        },
+        {
+          "name": "FootboxG",
+          "artists": [
+            "FootboxG"
+          ],
+          "seed": 12,
+          "wildcard": true,
+          "qualification": "Wildcard 2"
+        },
+        {
+          "name": "KAJI",
+          "artists": [
+            "KAJI"
+          ],
+          "seed": 13,
+          "wildcard": true,
+          "qualification": "Wildcard 3"
+        },
+        {
+          "name": "Marvelous",
+          "artists": [
+            "Marvelous"
+          ],
+          "seed": 14,
+          "wildcard": true,
+          "qualification": "Wildcard 4"
+        },
+        {
+          "name": "ABX",
+          "artists": [
+            "ABX"
+          ],
+          "seed": 15,
+          "wildcard": true,
+          "qualification": "Wildcard 6"
+        },
+        {
+          "name": "Stitch",
+          "artists": [
+            "Stitch"
+          ],
+          "seed": 16,
+          "wildcard": true,
+          "qualification": "Wildcard 7"
+        },
+        {
+          "name": "G-Wizz",
+          "artists": [
+            "G-Wizz"
+          ],
+          "seed": 17,
+          "wildcard": true,
+          "qualification": "Wildcard 8"
+        },
+        {
+          "name": "H-Has",
+          "artists": [
+            "H-Has"
+          ],
+          "seed": 18,
+          "wildcard": true,
+          "qualification": "Wildcard 9"
+        },
+        {
+          "name": "EXALLOS",
+          "artists": [
+            "EXALLOS"
+          ],
+          "seed": 19,
+          "wildcard": true,
+          "qualification": "Wildcard 10 — repêché après la qualification de King Inertia via GBC26"
+        },
+        {
+          "name": "Remix",
+          "artists": [
+            "Remix"
+          ],
+          "seed": 20,
+          "wildcard": true,
+          "qualification": "Comeback Wildcard"
+        }
+      ],
+      "phases": [
+        {
+          "name": "Éliminations",
+          "type": "ELIMINATION",
+          "qualifierCount": 8,
+          "position": 0
+        },
+        {
+          "name": "Bracket",
+          "type": "BRACKET",
+          "position": 1,
+          "battles": [
+            {
+              "round": "QUARTER",
+              "slot": 0
+            },
+            {
+              "round": "QUARTER",
+              "slot": 1
+            },
+            {
+              "round": "QUARTER",
+              "slot": 2
+            },
+            {
+              "round": "QUARTER",
+              "slot": 3
+            },
+            {
+              "round": "SEMI",
+              "slot": 0
+            },
+            {
+              "round": "SEMI",
+              "slot": 1
+            },
+            {
+              "round": "SMALL_FINAL",
+              "slot": 0
+            },
+            {
+              "round": "FINAL",
+              "slot": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tag Team",
+      "kind": "TAG_TEAM",
+      "position": 1,
+      "contenders": [
+        {
+          "name": "Fresh Tonic",
+          "artists": [
+            "Bookie Blanco",
+            "PACMax"
+          ],
+          "seed": 1,
+          "wildcard": false,
+          "qualification": "GBB 2025 — 3e place Tag Team"
+        },
+        {
+          "name": "UMA",
+          "artists": [
+            "SE-MA",
+            "DYU-TAR"
+          ],
+          "seed": 2,
+          "wildcard": false,
+          "qualification": "BeatCity Japan 2026 — champions Tag Team"
+        },
+        {
+          "name": "Uniteam",
+          "artists": [
+            "Alem",
+            "Alexinho"
+          ],
+          "seed": 3,
+          "wildcard": true,
+          "qualification": "Wildcard 1"
+        },
+        {
+          "name": "Kotcha",
+          "artists": [
+            "D-low",
+            "Frosty"
+          ],
+          "seed": 4,
+          "wildcard": true,
+          "qualification": "Wildcard 2"
+        },
+        {
+          "name": "Dari",
+          "artists": [
+            "Darren",
+            "Riku Matsushima"
+          ],
+          "seed": 5,
+          "wildcard": true,
+          "qualification": "Wildcard 3"
+        },
+        {
+          "name": "LesPti'Hlou",
+          "artists": [
+            "OSY",
+            "Tunecinoo"
+          ],
+          "seed": 6,
+          "wildcard": true,
+          "qualification": "Wildcard 4"
+        },
+        {
+          "name": "SARSHIANS",
+          "artists": [
+            "The-O",
+            "HiccuP"
+          ],
+          "seed": 7,
+          "wildcard": true,
+          "qualification": "Wildcard 5"
+        },
+        {
+          "name": "LEME⋊LA",
+          "artists": [
+            "Julard",
+            "patbox"
+          ],
+          "seed": 8,
+          "wildcard": true,
+          "qualification": "Wildcard 6"
+        }
+      ],
+      "phases": [
+        {
+          "name": "Éliminations",
+          "type": "ELIMINATION",
+          "qualifierCount": 4,
+          "position": 0
+        },
+        {
+          "name": "Bracket",
+          "type": "BRACKET",
+          "position": 1,
+          "battles": [
+            {
+              "round": "SEMI",
+              "slot": 0
+            },
+            {
+              "round": "SEMI",
+              "slot": 1
+            },
+            {
+              "round": "SMALL_FINAL",
+              "slot": 0
+            },
+            {
+              "round": "FINAL",
+              "slot": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Loopstation",
+      "kind": "LOOPSTATION",
+      "position": 2,
+      "contenders": [
+        {
+          "name": "Martin Benati",
+          "artists": [
+            "Martin Benati"
+          ],
+          "seed": 1,
+          "wildcard": false,
+          "qualification": "GBB 2025 — champion Loopstation"
+        },
+        {
+          "name": "Lennard",
+          "artists": [
+            "Lennard"
+          ],
+          "seed": 2,
+          "wildcard": false,
+          "qualification": "SBX Kickback Battle 2025 — champion"
+        },
+        {
+          "name": "MOKBAY",
+          "artists": [
+            "MOKBAY"
+          ],
+          "seed": 3,
+          "wildcard": false,
+          "qualification": "BeatCity Japan 2026 — champion Loopstation"
+        },
+        {
+          "name": "Raje",
+          "artists": [
+            "Raje"
+          ],
+          "seed": 4,
+          "wildcard": true,
+          "qualification": "Wildcard 1"
+        },
+        {
+          "name": "TiONEB",
+          "artists": [
+            "TiONEB"
+          ],
+          "seed": 5,
+          "wildcard": true,
+          "qualification": "Wildcard 2"
+        },
+        {
+          "name": "Sora'",
+          "artists": [
+            "Sora'"
+          ],
+          "seed": 6,
+          "wildcard": true,
+          "qualification": "Wildcard 3"
+        },
+        {
+          "name": "MAHIRO",
+          "artists": [
+            "MAHIRO"
+          ],
+          "seed": 7,
+          "wildcard": true,
+          "qualification": "Wildcard 4"
+        },
+        {
+          "name": "Nils",
+          "artists": [
+            "Nils"
+          ],
+          "seed": 8,
+          "wildcard": true,
+          "qualification": "Wildcard 5"
+        }
+      ],
+      "phases": [
+        {
+          "name": "Bracket",
+          "type": "BRACKET",
+          "position": 0,
+          "battles": [
+            {
+              "round": "QUARTER",
+              "slot": 0,
+              "contenderA": "Martin Benati",
+              "contenderB": "Nils"
+            },
+            {
+              "round": "QUARTER",
+              "slot": 1,
+              "contenderA": "Raje",
+              "contenderB": "TiONEB"
+            },
+            {
+              "round": "QUARTER",
+              "slot": 2,
+              "contenderA": "MOKBAY",
+              "contenderB": "Sora'"
+            },
+            {
+              "round": "QUARTER",
+              "slot": 3,
+              "contenderA": "Lennard",
+              "contenderB": "MAHIRO"
+            },
+            {
+              "round": "SEMI",
+              "slot": 0
+            },
+            {
+              "round": "SEMI",
+              "slot": 1
+            },
+            {
+              "round": "SMALL_FINAL",
+              "slot": 0
+            },
+            {
+              "round": "FINAL",
+              "slot": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Crew",
+      "kind": "CREW",
+      "position": 3,
+      "contenders": [
+        {
+          "name": "NOVEL VINTAGE",
+          "artists": [
+            "HIRONA",
+            "RyoTracks",
+            "TRIP",
+            "RYOYO"
+          ],
+          "seed": 1,
+          "wildcard": false,
+          "qualification": "BeatCity Japan 2026 — champions Crew"
+        },
+        {
+          "name": "Verbal Damage",
+          "artists": [
+            "D-low",
+            "Osis",
+            "Frosty"
+          ],
+          "seed": 2,
+          "wildcard": true,
+          "qualification": "Wildcard 1"
+        },
+        {
+          "name": "The Young Drug",
+          "artists": [
+            "Kawai Senpai",
+            "Vinzayn",
+            "Ani",
+            "MDA"
+          ],
+          "seed": 3,
+          "wildcard": true,
+          "qualification": "Wildcard 2"
+        },
+        {
+          "name": "Double Team",
+          "artists": [
+            "clutch.",
+            "Jovial",
+            "Rahul",
+            "ZVD"
+          ],
+          "seed": 4,
+          "wildcard": true,
+          "qualification": "Wildcard 3"
+        }
+      ],
+      "phases": [
+        {
+          "name": "Élimination",
+          "type": "ELIMINATION",
+          "qualifierCount": 4,
+          "position": 0
+        },
+        {
+          "name": "Finales",
+          "type": "BRACKET",
+          "position": 1,
+          "battles": [
+            {
+              "round": "SMALL_FINAL",
+              "slot": 0
+            },
+            {
+              "round": "FINAL",
+              "slot": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Legacy",
+      "kind": "LEGACY",
+      "position": 4,
+      "contenders": [
+        {
+          "name": "Codfish",
+          "artists": [
+            "Codfish"
+          ],
+          "seed": 1,
+          "wildcard": false,
+          "qualification": "Legacy Battle"
+        },
+        {
+          "name": "WING",
+          "artists": [
+            "WING"
+          ],
+          "seed": 2,
+          "wildcard": false,
+          "qualification": "Legacy Battle"
+        }
+      ],
+      "phases": [
+        {
+          "name": "Legacy battles",
+          "type": "LEGACY",
+          "position": 0,
+          "battles": [
+            {
+              "round": "LEGACY",
+              "slot": 0,
+              "label": "Battle 1",
+              "contenderA": "Codfish",
+              "contenderB": "WING"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -19,7 +19,9 @@ adminRouter.post('/artists', async (req, res) => {
     name: z.string().min(1),
     country: z.string().optional().nullable(),
     aliases: z.array(z.string()).default([]),
-    imageUrl: z.string().url().optional().nullable(),
+    // Les photos servies depuis /api/media/artists sont des chemins relatifs :
+    // exiger une URL absolue les refuserait.
+    imageUrl: z.string().min(1).optional().nullable(),
     bio: z.string().optional().nullable(),
   });
   const data = schema.parse(req.body);
