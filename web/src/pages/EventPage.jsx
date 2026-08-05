@@ -79,13 +79,15 @@ export default function EventPage() {
   }
 
   return (
-    <div className="stack" style={{ paddingTop: '2.5rem' }}>
-      <header>
-        <p className="eyebrow">
+    <div className="stack" style={{ paddingTop: 'clamp(2rem, 5vw, 3.5rem)' }}>
+      <header style={{ paddingBottom: '0.5rem' }}>
+        <p className="silkscreen">
           {event.location ?? '—'}
           {event.startsAt && ` · ${new Date(event.startsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`}
         </p>
-        <h1>{event.name} {event.year}</h1>
+        <h1 className="hero__title" style={{ fontSize: 'clamp(2.2rem, 5.5vw, 4rem)' }}>
+          {event.name} <em>{event.year}</em>
+        </h1>
         {event.description && <p className="muted" style={{ maxWidth: '60ch' }}>{event.description}</p>}
       </header>
 

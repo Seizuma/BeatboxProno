@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
+import DiscordButton from '../components/DiscordButton.jsx';
 
 export default function Profile() {
   const { id } = useParams();
@@ -21,7 +22,7 @@ export default function Profile() {
     return (
       <div className="empty" style={{ marginTop: '3rem' }}>
         <p>Connectez-vous pour retrouver vos pronostics.</p>
-        <a className="btn btn--primary" href={api.loginUrl}>Se connecter avec Discord</a>
+        <DiscordButton />
       </div>
     );
   }

@@ -51,7 +51,8 @@ h3 { font-size: calc(1.1rem * var(--display-scale)); }
 
 /* --- Trame ---------------------------------------------------------------- */
 
-.shell { max-width: 1120px; margin: 0 auto; padding: 0 1.25rem 5rem; }
+.shell { max-width: 1240px; margin: 0 auto; padding: 0 1.5rem 6rem; }
+.bleed { margin-inline: calc(50% - 50vw); padding-inline: max(1.5rem, calc(50vw - 620px)); }
 .stack { display: flex; flex-direction: column; gap: 1.25rem; }
 .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
 .spread { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
@@ -76,7 +77,7 @@ h3 { font-size: calc(1.1rem * var(--display-scale)); }
   z-index: 20;
 }
 .masthead__inner {
-  max-width: 1120px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0.75rem 1.25rem;
   display: flex;
@@ -168,22 +169,164 @@ label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin-bottom
 
 /* --- Cartes événement ----------------------------------------------------- */
 
-.event-card {
-  display: block;
+/* --- Rails d'événement ---------------------------------------------------- */
+
+.rail {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 9rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(1rem, 3vw, 2.5rem);
   text-decoration: none;
-  background: var(--surface);
-  border: var(--frame);
-  border-radius: var(--radius-lg);
-  padding: 1.1rem;
-  transition: box-shadow 0.12s ease, transform 0.12s ease;
+  padding: clamp(1.1rem, 2.5vw, 1.9rem) 0;
+  border-top: var(--border-w) solid var(--line);
+  transition: background 0.14s ease;
 }
-.event-card:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
-.event-card__year {
+.rail:last-of-type { border-bottom: var(--border-w) solid var(--line); }
+.rail:hover { background: var(--surface); }
+.rail:hover .rail__year { color: var(--accent); }
+.rail__year {
   font-family: var(--font-display);
-  font-size: calc(2.4rem * var(--display-scale));
-  line-height: 0.9;
-  color: var(--accent);
+  font-weight: var(--display-weight);
+  font-size: clamp(2.6rem, 6vw, 4.4rem);
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+  color: var(--ink-faint);
+  transition: color 0.14s ease;
+  font-variant-numeric: tabular-nums;
 }
+.rail__title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-tracking);
+  font-size: clamp(1.15rem, 2.4vw, 1.7rem);
+  line-height: 1.1;
+  margin: 0;
+}
+.rail__meta { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.rail__aside { text-align: right; }
+@media (max-width: 720px) {
+  .rail { grid-template-columns: 4.5rem minmax(0, 1fr); }
+  .rail__aside { grid-column: 2; text-align: left; margin-top: 0.4rem; }
+}
+
+/* --- Le hero : bandeau asymétrique, pas une colonne centrée --------------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(1.5rem, 5vw, 4rem);
+  align-items: end;
+  padding: clamp(3rem, 8vw, 6rem) 0 clamp(2.5rem, 6vw, 4rem);
+  border-bottom: var(--border-w) solid var(--line);
+}
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; align-items: start; } }
+
+.hero__title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-transform);
+  font-size: clamp(2.9rem, 7.5vw, 5.6rem);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  margin: 0.6rem 0 0;
+  text-wrap: balance;
+}
+.hero__title em { font-style: normal; color: var(--accent); }
+.hero__lede {
+  color: var(--ink-soft);
+  font-size: clamp(0.95rem, 1.4vw, 1.08rem);
+  max-width: 42ch;
+  margin: 1.4rem 0 0;
+}
+
+/* --- La grille de pads : la signature du panneau -------------------------- */
+
+.pads {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.pad {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  padding: 0.65rem;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: var(--ink-soft);
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.pad__index {
+  font-family: var(--font-data);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+.pad__label {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-tracking);
+  font-size: 0.92rem;
+  line-height: 1.05;
+}
+.pad--lit { color: var(--ink); border-color: var(--accent); }
+.pad--lit .pad__index { color: var(--accent); }
+.pad:hover { background: var(--surface-2); color: var(--ink); }
+.pad--empty { opacity: 0.32; box-shadow: none; }
+
+/* --- Sérigraphie et repères matériels ------------------------------------ */
+
+.silkscreen {
+  font-family: var(--font-data);
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.railstripe {
+  height: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--line) 0 14px,
+    transparent 14px 28px
+  );
+}
+
+/* --- Afficheur --------------------------------------------------------- */
+
+.readout {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.3rem 0.65rem;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.readout__value { font-size: 1.05rem; color: var(--alt); }
+.readout__unit { font-size: 0.6rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
+
+/* --- Bouton Discord ------------------------------------------------------ */
+
+.btn--discord {
+  background: #5865f2;
+  border-color: #5865f2;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn--discord:hover:not(:disabled) { background: #4752c4; border-color: #4752c4; }
+.btn--discord svg { width: 1.05em; height: 1.05em; fill: currentColor; }
 
 /* --- Le classement à composer --------------------------------------------- */
 

@@ -173,3 +173,28 @@ web/
   est vérifié à l'enregistrement.
 - Page de détail d'un pronostic scoré : le détail ligne à ligne est déjà stocké
   dans `Prediction.breakdown`, il ne reste qu'à l'afficher.
+
+---
+
+## Première installation : générer la migration
+
+Le dépôt ne contient pas de dossier `prisma/migrations`. Il faut le créer **une
+seule fois**, puis le committer : ensuite, chaque déploiement applique les
+migrations tout seul au démarrage de l'API.
+
+```bash
+docker compose up -d db          # la base seule
+
+cd server
+npm install                      # génère aussi package-lock.json
+DATABASE_URL="postgresql://bbp:VOTRE_MDP@127.0.0.1:5432/bbp?schema=public" \
+  npx prisma migrate dev --name init
+
+cd ..
+git add server/package-lock.json web/package-lock.json server/prisma/migrations
+git commit -m "Ajout des lockfiles et de la migration initiale"
+
+docker compose up -d --build     # le reste de la pile
+```
+
+Remplacez `VOTRE_MDP` par le `POSTGRES_PASSWORD` de votre `.env`.

@@ -3,7 +3,9 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+# npm ci exige un package-lock.json. Committez-le pour des builds reproductibles ;
+# sans lui, on retombe sur npm install.
+RUN npm ci --omit=dev || npm install --omit=dev
 
 COPY prisma ./prisma
 RUN npx prisma generate
