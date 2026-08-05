@@ -24,8 +24,17 @@ function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 }
 
-/** Anime tout déplacement de position des noeuds enregistrés. */
-function useFlip(skipId) {
+/**
+ * Anime tout déplacement de position des noeuds enregistrés.
+ *
+ * `orderKey` doit résumer l'ordre visuel affiché (un `join('|')` des ids
+ * suffit). C'est la dépendance de l'effet : sans elle, React relance la
+ * mesure et réinitialise la transition de chaque carte à chaque rendu — y
+ * compris les dizaines de rendus par seconde déclenchés par le simple
+ * déplacement du doigt pendant un glissement, ce qui hache l'animation.
+ * Avec elle, l'effet ne s'exécute que lorsque l'ordre a réellement bougé.
+ */
+function useFlip(orderKey, skipId) {
   const nodes = useRef(new Map());
   const previous = useRef(new Map());
 
@@ -54,7 +63,8 @@ function useFlip(skipId) {
       });
     }
     previous.current = next;
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderKey, skipId]);
 
   const register = useCallback(
     (id) => (el) => {
@@ -65,6 +75,13 @@ function useFlip(skipId) {
   );
 
   return { register, nodes };
+}
+
+/** Égalité par valeur, pour éviter un rendu quand la cible n'a pas changé. */
+function sameTarget(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.list === b.list && a.index === b.index;
 }
 
 export default function RankingBoard({ phase, contenders, order, onChange, locked }) {
@@ -85,8 +102,6 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
   const poolZone = useRef(null);
   const rows = useRef(new Map()); // id → élément de ligne, pour le test de survol
 
-  const { register } = useFlip(drag?.id);
-
   /* --- Ordre affiché : l'ordre réel, plus l'aperçu du dépôt en cours ------ */
 
   const preview = useMemo(() => {
@@ -96,6 +111,11 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
     const at = Math.max(0, Math.min(target.index, base.length));
     return [...base.slice(0, at), drag.id, ...base.slice(at)];
   }, [order, drag, target]);
+
+  // La colonne « à placer » dérive elle aussi de `preview` (elle liste les
+  // contenders qui n'y figurent pas) : une seule clé suffit pour les deux
+  // colonnes, l'effet se redéclenche dès que l'une ou l'autre bouge.
+  const { register } = useFlip(preview.join(','), drag?.id);
 
   const ranked = preview.map((id) => byId.get(id)).filter(Boolean);
   const pool = contenders.filter((c) => !preview.includes(c.id));
@@ -175,7 +195,14 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
       event.preventDefault();
       const { clientX: x, clientY: y } = event;
       setDrag((d) => (d ? { ...d, x, y } : d));
-      setTarget(latest.current.resolveTarget(x, y));
+      // resolveTarget renvoie un objet neuf à chaque appel : sans ce filtre,
+      // le simple fait de bouger la souris de quelques pixels sans jamais
+      // franchir la ligne médiane d'une autre carte redéclenche quand même un
+      // rendu, et donc l'effet de mesure des positions.
+      setTarget((prev) => {
+        const next = latest.current.resolveTarget(x, y);
+        return sameTarget(prev, next) ? prev : next;
+      });
 
       // Défilement automatique près des bords de la fenêtre.
       if (y < EDGE) window.scrollBy(0, -Math.ceil((EDGE - y) / 6));
