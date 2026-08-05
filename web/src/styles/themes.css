@@ -1,0 +1,126 @@
+/* ===========================================================================
+   TROIS DIRECTIONS ESTHÉTIQUES
+   Chacune est un jeu de tokens complet. Le reste de l'app ne connaît que les
+   variables : changer d'identité = changer l'attribut data-theme sur <html>.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. FICHE — la feuille de notation du juge.
+   Papier gris-vert de bloc technique, réglure bleue, tampon encreur rouge.
+   Les scores se lisent comme des bâtons cochés à la main.
+   --------------------------------------------------------------------------- */
+[data-theme='fiche'] {
+  --bg: #dfe3dd;
+  --surface: #fbfbf8;
+  --surface-2: #f0f1eb;
+  --ink: #16181a;
+  --ink-soft: #4c524e;
+  --ink-faint: #868d86;
+  --line: #c3cabf;
+  --rule: #9fb4ce;
+  --accent: #b3282b;
+  --accent-ink: #fbfbf8;
+  --alt: #2f4b7c;
+  --ok: #3f6b46;
+
+  --radius: 2px;
+  --radius-lg: 3px;
+  --border-w: 1px;
+  --frame: 1px solid var(--line);
+  --shadow: 0 1px 0 rgba(22, 24, 26, 0.06);
+  --shadow-lift: 0 2px 0 var(--line);
+
+  --font-display: 'Archivo Narrow', 'Arial Narrow', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-data: 'Courier Prime', 'Courier New', monospace;
+
+  --display-transform: uppercase;
+  --display-tracking: 0.06em;
+  --display-weight: 700;
+  --display-scale: 1;
+  --panel-texture: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgba(159, 180, 206, 0.35) 27px,
+    rgba(159, 180, 206, 0.35) 28px
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   2. LOOP — la face avant d'une loopstation.
+   Panneau graphite mat, sérigraphie crème, laiton et vert d'écran LCD.
+   Les choix s'allument comme des pads : lueur basse, jamais fluo.
+   --------------------------------------------------------------------------- */
+[data-theme='loop'] {
+  --bg: #1b1d1e;
+  --surface: #26292b;
+  --surface-2: #2f3335;
+  --ink: #d9d4c7;
+  --ink-soft: #9a978d;
+  --ink-faint: #6d6b64;
+  --line: #3c4143;
+  --rule: #3c4143;
+  --accent: #b98a2e;
+  --accent-ink: #1b1d1e;
+  --alt: #8ca894;
+  --ok: #8ca894;
+
+  --radius: 4px;
+  --radius-lg: 8px;
+  --border-w: 1px;
+  --frame: 1px solid var(--line);
+  --shadow: inset 0 1px 0 rgba(217, 212, 199, 0.05), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lift: inset 0 1px 0 rgba(217, 212, 199, 0.09), 0 6px 16px rgba(0, 0, 0, 0.5);
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-data: 'IBM Plex Mono', monospace;
+
+  --display-transform: none;
+  --display-tracking: -0.02em;
+  --display-weight: 700;
+  --display-scale: 1;
+  --panel-texture: repeating-linear-gradient(
+    115deg,
+    rgba(217, 212, 199, 0.016) 0 2px,
+    transparent 2px 4px
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   3. AFFICHE — le placard collé sur les murs avant la compète.
+   Outremer, ocre, papier os. Les noms sont énormes, les places sont des
+   chiffres qui débordent du cadre. Aplats, aucune ombre.
+   --------------------------------------------------------------------------- */
+[data-theme='affiche'] {
+  --bg: #efebe1;
+  --surface: #ffffff;
+  --surface-2: #e5e0d3;
+  --ink: #111114;
+  --ink-soft: #4a4a52;
+  --ink-faint: #8a8a93;
+  --line: #111114;
+  --rule: #cdc7b8;
+  --accent: #232fb4;
+  --accent-ink: #efebe1;
+  --alt: #e0a020;
+  --ok: #1d6b3f;
+
+  --radius: 0px;
+  --radius-lg: 0px;
+  --border-w: 2px;
+  --frame: 2px solid var(--line);
+  --shadow: none;
+  --shadow-lift: 4px 4px 0 var(--ink);
+
+  --font-display: 'Anton', 'Arial Black', sans-serif;
+  --font-body: 'Work Sans', system-ui, sans-serif;
+  --font-data: 'Space Mono', monospace;
+
+  --display-transform: uppercase;
+  --display-tracking: -0.01em;
+  --display-weight: 400;
+  --display-scale: 1.18;
+  --panel-texture: none;
+}

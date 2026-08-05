@@ -1,0 +1,286 @@
+// ---------------------------------------------------------------------------
+// Beatbox Pronos — modèle de données
+// ---------------------------------------------------------------------------
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Comptes -----------------------------------------------------------------
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+model User {
+  id          String   @id @default(cuid())
+  discordId   String   @unique
+  username    String
+  globalName  String?
+  avatarUrl   String?
+  role        Role     @default(USER)
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  predictions Prediction[]
+}
+
+// --- Référentiel artistes -----------------------------------------------------
+
+model Artist {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  name      String
+  country   String?
+  aliases   String[] @default([])
+  imageUrl  String?
+  bio       String?
+  createdAt DateTime @default(now())
+
+  entries   ContenderArtist[]
+}
+
+// --- Événements ---------------------------------------------------------------
+
+enum EventStatus {
+  DRAFT      // invisible du public
+  OPEN       // pronostics ouverts
+  LIVE       // en cours, phases verrouillées au fur et à mesure
+  FINISHED   // tout est résolu et scoré
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  name        String
+  year        Int
+  location    String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  coverUrl    String?
+  description String?
+  status      EventStatus @default(DRAFT)
+  createdAt   DateTime    @default(now())
+
+  categories  Category[]
+  predictions Prediction[]
+}
+
+enum CategoryKind {
+  SOLO         // éliminations -> bracket
+  TAG_TEAM     // éliminations -> bracket
+  LOOPSTATION  // bracket direct
+  CREW         // élimination -> grande + petite finale
+  LEGACY       // battles isolées
+}
+
+model Category {
+  id        String       @id @default(cuid())
+  eventId   String
+  event     Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind      CategoryKind
+  name      String       // "Solo", "Tag Team", "Loopstation"...
+  slug      String
+  position  Int          @default(0)
+
+  contenders  Contender[]
+  phases      Phase[]
+  predictions Prediction[]
+  podium      PodiumSlot[]
+
+  @@unique([eventId, slug])
+}
+
+/// Un « Contender » est un inscrit dans une catégorie : un artiste seul (Solo),
+/// un duo (Tag Team) ou un crew. On passe toujours par lui, jamais par l'artiste
+/// directement, pour que les stats par artiste restent calculables.
+model Contender {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name       String   // "Alexinho", "Colaps & Zekka", "Berywam"
+  seed       Int?     // seeding officiel d'entrée
+  wildcard   Boolean  @default(false)
+  imageUrl   String?
+
+  artists    ContenderArtist[]
+
+  phaseEntries      PhaseEntry[]
+  battlesAsA        Battle[] @relation("BattleA")
+  battlesAsB        Battle[] @relation("BattleB")
+  battlesAsWinner   Battle[] @relation("BattleWinner")
+  predictedRanks    PredictedRank[]
+  predictedPicks    PredictedBattle[] @relation("PredA")
+  predictedPicksB   PredictedBattle[] @relation("PredB")
+  predictedWinners  PredictedBattle[] @relation("PredWinner")
+  predictedPodium   PredictedPodium[]
+  officialPodium    PodiumSlot[]
+}
+
+model ContenderArtist {
+  contenderId String
+  artistId    String
+  contender   Contender @relation(fields: [contenderId], references: [id], onDelete: Cascade)
+  artist      Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([contenderId, artistId])
+}
+
+// --- Phases -------------------------------------------------------------------
+
+enum PhaseType {
+  SEEDING      // classement seul -> uniquement points d'écart
+  WILDCARD     // classement + qualifiés
+  ELIMINATION  // classement + qualifiés
+  BRACKET      // arbre de battles
+  LEGACY       // battles isolées, pas d'arbre
+}
+
+model Phase {
+  id             String    @id @default(cuid())
+  categoryId     String
+  category       Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  type           PhaseType
+  name           String    // "Wildcard", "Éliminations", "Bracket"
+  position       Int       @default(0)
+  qualifierCount Int?      // nb de qualifiés attendus (WILDCARD / ELIMINATION)
+  locksAt        DateTime? // fermeture des pronostics
+  resolved       Boolean   @default(false)
+
+  entries         PhaseEntry[]
+  battles         Battle[]
+  predictedRanks  PredictedRank[]
+  predictedBattles PredictedBattle[]
+}
+
+/// Résultat officiel d'un contender sur une phase de classement.
+model PhaseEntry {
+  id          String    @id @default(cuid())
+  phaseId     String
+  phase       Phase     @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  contenderId String
+  contender   Contender @relation(fields: [contenderId], references: [id], onDelete: Cascade)
+  rank        Int?      // classement officiel, null tant que non joué
+  qualified   Boolean   @default(false)
+
+  @@unique([phaseId, contenderId])
+}
+
+enum RoundType {
+  ROUND_OF_16
+  QUARTER
+  SEMI
+  SMALL_FINAL
+  FINAL
+  LEGACY
+}
+
+model Battle {
+  id           String    @id @default(cuid())
+  phaseId      String
+  phase        Phase     @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  round        RoundType
+  slot         Int       // position dans le tour (0,1,2,3...)
+  label        String?   // "Legacy : Alem vs NaPoM"
+
+  contenderAId String?
+  contenderA   Contender? @relation("BattleA", fields: [contenderAId], references: [id])
+  contenderBId String?
+  contenderB   Contender? @relation("BattleB", fields: [contenderBId], references: [id])
+
+  winnerId     String?
+  winner       Contender? @relation("BattleWinner", fields: [winnerId], references: [id])
+  scoreA       Int?       // votes juges (ex. 3)
+  scoreB       Int?       // (ex. 0)
+  played       Boolean    @default(false)
+
+  @@unique([phaseId, round, slot])
+}
+
+/// Podium officiel d'une catégorie (top 4).
+model PodiumSlot {
+  id          String    @id @default(cuid())
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  rank        Int       // 1..4
+  contenderId String
+  contender   Contender @relation(fields: [contenderId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, rank])
+}
+
+// --- Pronostics ---------------------------------------------------------------
+
+model Prediction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  submitted   Boolean  @default(false)
+  points      Int      @default(0)
+  breakdown   Json?    // détail du calcul, affiché sur la fiche de résultat
+  scoredAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ranks   PredictedRank[]
+  battles PredictedBattle[]
+  podium  PredictedPodium[]
+
+  @@unique([userId, categoryId])
+}
+
+model PredictedRank {
+  id           String     @id @default(cuid())
+  predictionId String
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  phaseId      String
+  phase        Phase      @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  contenderId  String
+  contender    Contender  @relation(fields: [contenderId], references: [id], onDelete: Cascade)
+  rank         Int
+
+  @@unique([predictionId, phaseId, contenderId])
+}
+
+model PredictedBattle {
+  id           String     @id @default(cuid())
+  predictionId String
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  phaseId      String
+  phase        Phase      @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  round        RoundType
+  slot         Int
+
+  contenderAId String?
+  contenderA   Contender? @relation("PredA", fields: [contenderAId], references: [id])
+  contenderBId String?
+  contenderB   Contender? @relation("PredB", fields: [contenderBId], references: [id])
+  winnerId     String?
+  winner       Contender? @relation("PredWinner", fields: [winnerId], references: [id])
+  scoreA       Int?
+  scoreB       Int?
+
+  @@unique([predictionId, phaseId, round, slot])
+}
+
+model PredictedPodium {
+  id           String     @id @default(cuid())
+  predictionId String
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  rank         Int        // 1..4
+  contenderId  String
+  contender    Contender  @relation(fields: [contenderId], references: [id], onDelete: Cascade)
+
+  @@unique([predictionId, rank])
+}
