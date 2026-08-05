@@ -1,4 +1,10 @@
 FROM node:20-alpine
+
+# Prisma a besoin d'OpenSSL pour son moteur ; Alpine ne l'installe pas par
+# défaut. Sans ça, le moteur Prisma répond des erreurs illisibles au démarrage
+# au lieu de simplement fonctionner.
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 COPY package*.json ./
