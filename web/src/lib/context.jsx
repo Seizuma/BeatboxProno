@@ -3,7 +3,7 @@ import { api } from './api.js';
 
 // --- Session ------------------------------------------------------------------
 
-const SessionContext = createContext({ user: null, loading: true, refresh: () => {} });
+const SessionContext = createContext({ user: null, loading: true, refresh: () => { } });
 
 export function SessionProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -39,20 +39,22 @@ export const isStaff = (user) => Boolean(user && ['ADMIN', 'MODERATOR'].includes
 
 // --- Thème --------------------------------------------------------------------
 
-// Loop est la direction retenue. Les deux autres restent disponibles :
-// changez la valeur par défaut ci-dessous et data-theme dans index.html.
+// P411 est l'identité du site : le télétexte des résultats sportifs.
+// Il n'y a plus qu'un thème — les anciens (fiche/loop/affiche) sont retirés
+// de themes.css. La liste reste un tableau pour rouvrir la porte un jour.
 export const THEMES = [
-  { id: 'fiche', name: 'Fiche', hint: 'La feuille de notation du juge', swatch: '#b3282b', bg: '#dfe3dd' },
-  { id: 'loop', name: 'Loop', hint: 'La face avant d’une loopstation', swatch: '#b98a2e', bg: '#1b1d1e' },
-  { id: 'affiche', name: 'Affiche', hint: 'Le placard collé avant la compète', swatch: '#232fb4', bg: '#efebe1' },
+  { id: 'p411', name: 'Page 411', hint: 'Le télétexte des résultats sportifs', swatch: '#ffe400', bg: '#0b0b0b' },
 ];
 
-const ThemeContext = createContext({ theme: 'fiche', setTheme: () => {} });
+const ThemeContext = createContext({ theme: 'p411', setTheme: () => { } });
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem('bbp-theme') ?? 'loop'
-  );
+  const [theme, setTheme] = useState(() => {
+    // Les visiteurs d'avant la refonte ont un ancien identifiant mémorisé :
+    // on le migre silencieusement vers le seul thème existant.
+    const saved = localStorage.getItem('bbp-theme');
+    return THEMES.some((t) => t.id === saved) ? saved : 'p411';
+  });
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

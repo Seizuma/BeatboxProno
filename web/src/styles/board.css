@@ -1,7 +1,8 @@
 /* ===========================================================================
-   PLATEAUX DE PRONOSTIC
-   Chargée après app.css : à spécificité égale, c'est cette feuille qui gagne.
-   Aucune couleur en dur — tout passe par les tokens de themes.css.
+   P411 — LES PLATEAUX
+   Le classement à composer, l'arbre de battles, les photos, les stats.
+   Chargée après app.css. Mêmes règles : huit couleurs, zéro arrondi,
+   zéro ombre — le relief n'existe pas, la hiérarchie passe par la couleur.
    =========================================================================== */
 
 .visually-hidden {
@@ -16,73 +17,52 @@
   border: 0;
 }
 
-/* --- Marque et sélecteur de langue ---------------------------------------- */
-
-.wordmark__name {
-  font-weight: var(--display-weight);
-  letter-spacing: -0.03em;
-}
-.wordmark__name em {
-  font-style: normal;
-  color: var(--ink-faint);
-}
-.wordmark:hover .wordmark__name em {
-  color: var(--accent);
-}
-
-.langswitch {
-  display: inline-flex;
-  border: var(--frame);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin-left: 0.5rem;
-}
-.langswitch button {
-  font-family: var(--font-data);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  padding: 0.25rem 0.45rem;
-  border: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.langswitch button + button {
-  border-left: var(--border-w) solid var(--line);
-}
-.langswitch button:hover {
-  color: var(--ink);
-  background: var(--surface-2);
-}
-.langswitch button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-/* --- Photos --------------------------------------------------------------- */
+/* --- Photos : le tube ne connaît pas le dégradé, on pixelise ------------- */
 
 .figure {
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: var(--radius);
-  border: var(--border-w) solid var(--line);
-  background: var(--surface-2);
+  border: 2px solid var(--c);
+  background: #000;
   object-fit: cover;
   overflow: hidden;
   font-family: var(--font-data);
-  color: var(--ink-faint);
+  color: var(--c);
   line-height: 1;
+  image-rendering: pixelated;
+  filter: contrast(1.2) saturate(1.35);
 }
-.figure--empty {
-  letter-spacing: 0.02em;
-}
-.figure--xs { width: 1.6rem; height: 1.6rem; font-size: 0.58rem; }
-.figure--sm { width: 2.1rem; height: 2.1rem; font-size: 0.68rem; }
-.figure--md { width: 3.2rem; height: 3.2rem; font-size: 0.9rem; }
-.figure--lg { width: 6rem;   height: 6rem;   font-size: 1.5rem; }
 
-/* --- Le classement à composer --------------------------------------------- */
+.figure--empty {
+  filter: none;
+}
+
+.figure--xs {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.7rem;
+}
+
+.figure--sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.85rem;
+}
+
+.figure--md {
+  width: 3.2rem;
+  height: 3.2rem;
+  font-size: 1.1rem;
+}
+
+.figure--lg {
+  width: 6rem;
+  height: 6rem;
+  font-size: 1.8rem;
+}
+
+/* --- Le classement à composer -------------------------------------------- */
 
 .ladder {
   display: grid;
@@ -90,20 +70,20 @@
   grid-template-columns: 1.15fr 1fr;
   align-items: start;
 }
+
 @media (max-width: 820px) {
-  .ladder { grid-template-columns: 1fr; }
+  .ladder {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ladder__col {
   border: var(--frame);
-  border-radius: var(--radius-lg);
-  background: var(--surface-2);
   padding: 0.7rem;
-  transition: box-shadow 160ms ease, border-color 160ms ease;
 }
+
 .ladder__col--active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--y);
 }
 
 .ladder__head {
@@ -111,37 +91,38 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.6rem;
-  padding-bottom: 0.55rem;
-  margin-bottom: 0.55rem;
-  border-bottom: var(--border-w) solid var(--line);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
 }
+
 .ladder__count {
-  font-size: 0.68rem;
-  color: var(--ink-faint);
+  color: var(--g);
+  font-size: 0.95rem;
   white-space: nowrap;
 }
 
-.ladder__list { min-height: 3.5rem; }
+.ladder__list {
+  min-height: 3.2rem;
+}
 
 .ladder__hint {
   margin: 0;
-  padding: 1.1rem 0.6rem;
+  padding: 1rem 0.6rem;
   text-align: center;
-  font-size: 0.85rem;
   color: var(--ink-faint);
 }
 
 .ladder__drop {
-  border: 1px dashed var(--accent);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  margin-bottom: 0.4rem;
+  border: 2px dashed var(--y);
+  color: var(--y);
+  padding: 0.6rem;
+  margin-bottom: 0.35rem;
   text-align: center;
   font-family: var(--font-data);
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--accent);
+  letter-spacing: 0.12em;
+  font-size: 0.95rem;
 }
 
 .ladder__foot {
@@ -149,36 +130,56 @@
   align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
-  padding-top: 0.6rem;
-  margin-top: 0.5rem;
-  border-top: var(--border-w) solid var(--line);
+  padding-top: 0.55rem;
+  margin-top: 0.45rem;
+  border-top: 1px solid var(--line);
 }
+
 .ladder__tip {
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   margin-left: auto;
 }
 
-/* Les cartons. C'est la pièce qu'on manipule : elle doit avoir du poids. */
+/* Les cartons : des lignes de page, pas des cartes. */
 
 .card {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.4rem 0.5rem;
-  border: var(--frame);
-  border-radius: var(--radius);
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--line);
   background: var(--surface);
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.35rem;
   will-change: transform;
 }
-.card:last-child { margin-bottom: 0; }
-.card--ranked { border-left: 3px solid var(--line); }
-.card--qualified { border-left-color: var(--ok); }
-.card--qualified .card__rank { color: var(--ok); }
+
+.card:last-child {
+  margin-bottom: 0;
+}
+
+.card:hover {
+  background: var(--surface-2);
+}
+
+.card--ranked {
+  border-left: 4px solid var(--line);
+}
+
+/* Qualifié : la ligne s'écrit en vert, comme un résultat acquis. */
+.card--qualified {
+  border-left-color: var(--g);
+}
+
+.card--qualified .card__rank {
+  color: var(--g);
+}
+
+.card--qualified .card__name {
+  color: var(--g);
+}
 
 .card--ghosted {
-  opacity: 0.32;
-  filter: saturate(0.4);
+  opacity: 0.3;
 }
 
 .card__grip {
@@ -186,56 +187,73 @@
   width: 1.5rem;
   align-self: stretch;
   border: 0;
-  background: transparent;
+  background: none;
   color: var(--ink-faint);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   cursor: grab;
   padding: 0;
-  touch-action: none; /* indispensable : sans ça le doigt fait défiler la page */
+  touch-action: none;
+  /* indispensable : sans ça le doigt fait défiler la page */
 }
-.card__grip:hover:not(:disabled) { color: var(--accent); }
-.card__grip:disabled { cursor: default; opacity: 0.35; }
-body.is-dragging .card__grip { cursor: grabbing; }
+
+.card__grip:hover:not(:disabled) {
+  color: var(--y);
+}
+
+.card__grip:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+body.is-dragging .card__grip {
+  cursor: grabbing;
+}
 
 .card__rank {
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: calc(1.3rem * var(--display-scale));
-  min-width: 1.7rem;
-  text-align: center;
-  color: var(--accent);
+  font-family: var(--font-data);
+  font-size: 1.5rem;
+  min-width: 1.9rem;
+  text-align: right;
+  color: var(--y);
   line-height: 1;
-  font-variant-numeric: tabular-nums;
 }
+
 .card__seed {
   font-family: var(--font-data);
-  font-size: 0.64rem;
-  min-width: 1.7rem;
-  text-align: center;
-  color: var(--ink-faint);
+  font-size: 0.9rem;
+  min-width: 1.9rem;
+  text-align: right;
+  color: var(--m);
 }
+
 .card__name {
   flex: 1;
-  font-weight: 500;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-transform: uppercase;
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
 }
+
 .card__drop {
   flex: none;
   border: 0;
-  background: transparent;
+  background: none;
   color: var(--ink-faint);
-  font-size: 1rem;
+  font-size: 1.1rem;
   line-height: 1;
-  padding: 0.2rem 0.35rem;
+  padding: 0.15rem 0.35rem;
   cursor: pointer;
-  border-radius: var(--radius);
 }
-.card__drop:hover:not(:disabled) { color: var(--accent); background: var(--surface-2); }
 
-/* Le carton qui suit le doigt. */
+.card__drop:hover:not(:disabled) {
+  color: #000;
+  background: var(--r);
+}
+
+/* Le carton qui suit le doigt : inversion vidéo, comme un caractère saisi. */
 .card--flying {
   position: fixed;
   top: 0;
@@ -243,14 +261,23 @@ body.is-dragging .card__grip { cursor: grabbing; }
   z-index: 60;
   margin: 0;
   pointer-events: none;
-  box-shadow: var(--shadow-lift);
-  border-color: var(--accent);
+  background: var(--y);
+  border-color: var(--y);
+  color: #000;
   transform-origin: 0 0;
-  animation: card-lift 140ms ease-out both;
 }
-@keyframes card-lift {
-  from { opacity: 0.6; }
-  to   { opacity: 1; }
+
+.card--flying .card__rank,
+.card--flying .card__grip {
+  color: #000;
+}
+
+.card--flying .card__name {
+  color: #000;
+}
+
+.card--flying .figure {
+  border-color: #000;
 }
 
 body.is-dragging {
@@ -259,34 +286,36 @@ body.is-dragging {
   -webkit-user-select: none;
 }
 
+/* La ligne de coupe : rouge, comme tout ce qui élimine. */
 .cutline {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.55rem 0;
+  margin: 0.5rem 0;
 }
+
 .cutline__rule {
   flex: 1;
-  border-top: 2px dashed var(--accent);
+  border-top: 2px dashed var(--r);
 }
+
 .cutline__label {
   font-family: var(--font-data);
-  font-size: 0.62rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--accent);
+  letter-spacing: 0.14em;
+  color: var(--r);
   white-space: nowrap;
 }
 
 /* --- L'arbre --------------------------------------------------------------
-   Les colonnes s'étirent sur toute la hauteur et répartissent leurs affiches
-   en space-around. Une colonne de n affiches place la i-ème à (2i+1)/2n de la
-   hauteur : exactement le milieu des deux affiches qui l'alimentent au tour
-   précédent. La pyramide sort de là, sans une seule marge calculée à la main.
+   La géométrie pyramidale est inchangée : chaque colonne s'étire et répartit
+   ses affiches en space-around, chaque battle tombe à mi-hauteur des deux qui
+   l'alimentent. Seuls les traits changent : filets 1px, angles droits.
    -------------------------------------------------------------------------- */
 
 .bracket {
-  --gutter: 2.75rem;
+  --gutter: 2.5rem;
   display: flex;
   gap: var(--gutter);
   align-items: stretch;
@@ -294,8 +323,12 @@ body.is-dragging {
   padding: 0.25rem 0 0.75rem;
   min-height: 22rem;
 }
+
 @media (max-width: 720px) {
-  .bracket { --gutter: 1.5rem; min-height: 0; }
+  .bracket {
+    --gutter: 1.4rem;
+    min-height: 0;
+  }
 }
 
 .bracket__round {
@@ -307,13 +340,15 @@ body.is-dragging {
 
 .bracket__title {
   font-family: var(--font-data);
-  font-size: 0.66rem;
-  letter-spacing: 0.14em;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-faint);
-  padding-bottom: 0.5rem;
-  border-bottom: var(--frame);
-  margin: 0 0 0.5rem;
+  background: var(--b);
+  color: var(--y);
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0 0.45em;
+  margin: 0 0 0.55rem;
 }
 
 .bracket__col {
@@ -332,67 +367,68 @@ body.is-dragging {
   position: relative;
 }
 
-/* Le noeud porte les connecteurs ; la carte garde son overflow. */
-.bracket__node { position: relative; }
+.bracket__node {
+  position: relative;
+}
 
-/* Trait sortant, à mi-hauteur de l'affiche. */
-.bracket__pair > .bracket__node::after {
+.bracket__pair>.bracket__node::after {
   content: '';
   position: absolute;
   top: 50%;
   right: calc(var(--gutter) / -2);
   width: calc(var(--gutter) / 2);
-  border-top: var(--border-w) solid var(--line);
+  border-top: 1px solid var(--c);
 }
-/* Barre verticale qui réunit les deux affiches de la paire. */
+
 .bracket__pair::after {
   content: '';
   position: absolute;
   top: 25%;
   bottom: 25%;
   right: calc(var(--gutter) / -2);
-  border-right: var(--border-w) solid var(--line);
+  border-right: 1px solid var(--c);
 }
-/* Trait entrant sur la colonne alimentée. */
-.bracket__col--fed > .bracket__node::before,
-.bracket__col--fed > .bracket__pair > .bracket__node::before {
+
+.bracket__col--fed>.bracket__node::before,
+.bracket__col--fed>.bracket__pair>.bracket__node::before {
   content: '';
   position: absolute;
   top: 50%;
   left: calc(var(--gutter) / -2);
   width: calc(var(--gutter) / 2);
-  border-top: var(--border-w) solid var(--line);
+  border-top: 1px solid var(--c);
 }
+
 @media (max-width: 720px) {
+
   .bracket__pair::after,
-  .bracket__pair > .bracket__node::after,
-  .bracket__col--fed > .bracket__node::before,
-  .bracket__col--fed > .bracket__pair > .bracket__node::before { display: none; }
+  .bracket__pair>.bracket__node::after,
+  .bracket__col--fed>.bracket__node::before,
+  .bracket__col--fed>.bracket__pair>.bracket__node::before {
+    display: none;
+  }
 }
 
 /* --- L'affiche ------------------------------------------------------------ */
 
 .bracket .battle {
   border: var(--frame);
-  border-radius: var(--radius);
   background: var(--surface);
   margin: 0;
-  overflow: hidden;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
+
 .bracket .battle--called {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  box-shadow: var(--shadow);
+  border-color: var(--y);
 }
 
 .battle__label {
   font-family: var(--font-data);
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--m);
   margin: 0;
-  padding: 0.35rem 0.55rem 0;
+  padding: 0.3rem 0.55rem 0;
 }
 
 .bracket .battle__side {
@@ -401,39 +437,41 @@ body.is-dragging {
   gap: 0.5rem;
   width: 100%;
   text-align: left;
-  padding: 0.4rem 0.55rem;
+  padding: 0.35rem 0.55rem;
   border: 0;
-  background: transparent;
-  color: var(--ink);
+  background: none;
+  color: var(--w);
   font: inherit;
   cursor: pointer;
-  position: relative;
-  transition: background 160ms ease, padding-left 160ms ease;
 }
+
 .bracket .battle__side:hover:not(:disabled) {
   background: var(--surface-2);
-  padding-left: 0.75rem;
 }
-.bracket .battle__side:disabled { cursor: default; color: var(--ink-faint); }
 
+.bracket .battle__side:disabled {
+  cursor: default;
+  color: var(--ink-faint);
+}
+
+/* Le vainqueur pronostiqué : inversion vidéo bleu/jaune, le marquage
+   télétexte d'une ligne de résultat. Le chevron pointe le choix. */
 .bracket .battle__side--won {
-  background: var(--surface-2);
-  font-weight: 600;
+  background: var(--b);
+  color: var(--y);
 }
-/* Le liseré du vainqueur se déroule depuis le bord gauche. */
-.bracket .battle__side--won::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--accent);
-  animation: won-in 220ms ease-out both;
+
+.bracket .battle__side--won .battle__name::before {
+  content: '► ';
 }
-@keyframes won-in {
-  from { transform: scaleY(0); }
-  to   { transform: scaleY(1); }
+
+.bracket .battle__side--won .battle__seed {
+  color: var(--y);
 }
-.bracket .battle__side--won .figure { border-color: var(--accent); }
+
+.bracket .battle__side--won .figure {
+  border-color: var(--y);
+}
 
 .bracket .battle__name {
   flex: 1;
@@ -441,14 +479,15 @@ body.is-dragging {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
+
 .bracket .battle__seed {
   font-family: var(--font-data);
-  font-size: 0.62rem;
-  color: var(--ink-faint);
-  border: 0;
-  padding: 0;
-  min-width: 1.2rem;
+  font-size: 0.85rem;
+  color: var(--m);
+  min-width: 1.4rem;
   text-align: right;
 }
 
@@ -456,19 +495,20 @@ body.is-dragging {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.35rem 0.55rem;
-  border-top: var(--border-w) solid var(--line);
-  background: var(--surface-2);
+  padding: 0.3rem 0.55rem;
+  border-top: 1px solid var(--line);
 }
+
 .bracket .battle__foot label {
   margin: 0;
-  font-family: var(--font-data);
-  font-size: 0.62rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  font-size: 0.8rem;
 }
-.bracket .battle__foot select { flex: 1; min-width: 0; }
+
+.bracket .battle__foot select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.35rem;
+}
 
 /* --- Fiches artistes ------------------------------------------------------ */
 
@@ -478,45 +518,51 @@ body.is-dragging {
   gap: 0.75rem;
   padding: 0.6rem;
   border: var(--frame);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  text-decoration: none;
-  transition: transform 160ms ease, border-color 160ms ease;
+  color: var(--w);
 }
+
 .artist-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
+  background: var(--surface-2);
+  border-color: var(--c);
 }
-.artist-card h3 { font-size: calc(0.98rem * var(--display-scale)); }
-.artist-card p { margin: 0.15rem 0 0; font-size: 0.7rem; }
+
+.artist-card:hover h3 {
+  color: var(--c);
+}
+
+.artist-card h3 {
+  font-size: 1.1rem;
+}
+
+.artist-card p {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+}
 
 /* --- Statistiques --------------------------------------------------------- */
 
+/* La jauge : des blocs pleins, pas une barre lisse — le tube dessine par
+   cellules de caractères. */
 .meter {
   display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--surface-2);
-  overflow: hidden;
+  height: 0.65rem;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 7px, var(--screen) 7px 9px),
+    var(--line);
   margin-top: 0.25rem;
+  position: relative;
 }
-.meter > span {
+
+.meter>span {
   display: block;
   height: 100%;
-  background: var(--accent);
-  transform-origin: 0 50%;
-  animation: meter-in 520ms cubic-bezier(.2,.9,.25,1) both;
-}
-@keyframes meter-in {
-  from { transform: scaleX(0); }
+  background:
+    repeating-linear-gradient(90deg, transparent 0 7px, var(--screen) 7px 9px),
+    var(--g);
 }
 
-.stat-row { display: flex; align-items: center; gap: 0.55rem; }
-
-@media (prefers-reduced-motion: reduce) {
-  .card, .meter > span, .bracket .battle__side, .bracket .battle__side--won::before,
-  .artist-card, .ladder__col {
-    animation: none !important;
-    transition: none !important;
-  }
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
 }

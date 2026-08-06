@@ -1,126 +1,78 @@
 /* ===========================================================================
-   TROIS DIRECTIONS ESTHÉTIQUES
-   Chacune est un jeu de tokens complet. Le reste de l'app ne connaît que les
-   variables : changer d'identité = changer l'attribut data-theme sur <html>.
+   P411 — LE SYSTÈME
+   Le télétexte des résultats sportifs, 1985. Avant internet, les scores se
+   lisaient page 411 du téléviseur : six couleurs pures sur écran noir, une
+   grille de caractères, aucun gris, aucune ombre, aucun arrondi.
+
+   Les trois règles qui font tenir l'ensemble :
+   1. AUCUNE couleur en dehors des huit ci-dessous. Pas de nuance, pas de
+      transparence décorative. Le télétexte ne connaît pas le dégradé.
+   2. AUCUN border-radius, AUCUNE box-shadow. La profondeur n'existe pas.
+   3. Chaque couleur a un rôle fixe (voir plus bas) : on ne choisit pas une
+      couleur parce qu'elle est jolie, on la choisit parce que c'est la sienne.
+
+   Les anciens thèmes (fiche / loop / affiche) sont retirés : ils décrivaient
+   un autre système. Ce fichier est la seule source de vérité chromatique.
    =========================================================================== */
 
-/* ---------------------------------------------------------------------------
-   1. FICHE — la feuille de notation du juge.
-   Papier gris-vert de bloc technique, réglure bleue, tampon encreur rouge.
-   Les scores se lisent comme des bâtons cochés à la main.
-   --------------------------------------------------------------------------- */
-[data-theme='fiche'] {
-  --bg: #dfe3dd;
-  --surface: #fbfbf8;
-  --surface-2: #f0f1eb;
-  --ink: #16181a;
-  --ink-soft: #4c524e;
-  --ink-faint: #868d86;
-  --line: #c3cabf;
-  --rule: #9fb4ce;
-  --accent: #b3282b;
-  --accent-ink: #fbfbf8;
-  --alt: #2f4b7c;
-  --ok: #3f6b46;
+:root,
+[data-theme='p411'] {
+  /* ---- La palette : les couleurs du décodeur, et rien d'autre ---- */
+  --screen: #0b0b0b;
+  /* le fond du tube */
+  --w: #e8e8e8;
+  /* blanc cassé du phosphore */
+  --y: #ffe400;
+  /* jaune */
+  --c: #00e8e8;
+  /* cyan */
+  --g: #00d648;
+  /* vert */
+  --m: #ff3ce8;
+  /* magenta */
+  --r: #ff2222;
+  /* rouge */
+  --b: #1414d8;
+  /* bleu — le seul autorisé en fond de bloc */
 
-  --radius: 2px;
-  --radius-lg: 3px;
-  --border-w: 1px;
-  --frame: 1px solid var(--line);
-  --shadow: 0 1px 0 rgba(22, 24, 26, 0.06);
-  --shadow-lift: 0 2px 0 var(--line);
+  /* ---- Les rôles ----
+     jaune    : l'action et la sélection — ce que l'utilisateur touche
+     cyan     : la navigation et les liens — ce qui mène ailleurs
+     vert     : les points et les réussites — ce qui rapporte
+     magenta  : les méta-informations — seeds, pays, dates, légendes
+     rouge    : les alertes et la ligne de coupe — ce qui élimine
+     bleu     : les bandeaux de section — le fond des titres, jamais du texte
+     blanc    : le contenu — les noms, les phrases                        */
 
-  --font-display: 'Archivo Narrow', 'Arial Narrow', sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-data: 'Courier Prime', 'Courier New', monospace;
+  /* ---- Tokens sémantiques (référencés par app.css, board.css et le JSX) ---- */
+  --surface: var(--screen);
+  --surface-2: #131313;
+  /* la seule "nuance" tolérée : le survol */
+  --ink: var(--w);
+  --ink-faint: #8a8a8a;
+  --line: #3a3a3a;
+  /* les filets discrets des tableaux */
+  --accent: var(--y);
+  /* requis par le JSX */
+  --accent-ink: #000000;
+  --ok: var(--g);
+  /* requis par le JSX */
 
-  --display-transform: uppercase;
-  --display-tracking: 0.06em;
-  --display-weight: 700;
+  /* ---- Typographie : une seule fonte, comme un seul générateur de caractères ---- */
+  --font-display: 'VT323', monospace;
+  --font-body: 'VT323', monospace;
+  --font-data: 'VT323', monospace;
   --display-scale: 1;
-  --panel-texture: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 27px,
-    rgba(159, 180, 206, 0.35) 27px,
-    rgba(159, 180, 206, 0.35) 28px
-  );
-}
-
-/* ---------------------------------------------------------------------------
-   2. LOOP — la face avant d'une loopstation.
-   Panneau graphite mat, sérigraphie crème, laiton et vert d'écran LCD.
-   Les choix s'allument comme des pads : lueur basse, jamais fluo.
-   --------------------------------------------------------------------------- */
-[data-theme='loop'] {
-  --bg: #1b1d1e;
-  --surface: #26292b;
-  --surface-2: #2f3335;
-  --ink: #d9d4c7;
-  --ink-soft: #9a978d;
-  --ink-faint: #6d6b64;
-  --line: #3c4143;
-  --rule: #3c4143;
-  --accent: #b98a2e;
-  --accent-ink: #1b1d1e;
-  --alt: #8ca894;
-  --ok: #8ca894;
-
-  --radius: 4px;
-  --radius-lg: 8px;
-  --border-w: 1px;
-  --frame: 1px solid var(--line);
-  --shadow: inset 0 1px 0 rgba(217, 212, 199, 0.05), 0 2px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lift: inset 0 1px 0 rgba(217, 212, 199, 0.09), 0 6px 16px rgba(0, 0, 0, 0.5);
-
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
-  --font-data: 'IBM Plex Mono', monospace;
-
-  --display-transform: none;
-  --display-tracking: -0.02em;
-  --display-weight: 700;
-  --display-scale: 1;
-  --panel-texture: repeating-linear-gradient(
-    115deg,
-    rgba(217, 212, 199, 0.016) 0 2px,
-    transparent 2px 4px
-  );
-}
-
-/* ---------------------------------------------------------------------------
-   3. AFFICHE — le placard collé sur les murs avant la compète.
-   Outremer, ocre, papier os. Les noms sont énormes, les places sont des
-   chiffres qui débordent du cadre. Aplats, aucune ombre.
-   --------------------------------------------------------------------------- */
-[data-theme='affiche'] {
-  --bg: #efebe1;
-  --surface: #ffffff;
-  --surface-2: #e5e0d3;
-  --ink: #111114;
-  --ink-soft: #4a4a52;
-  --ink-faint: #8a8a93;
-  --line: #111114;
-  --rule: #cdc7b8;
-  --accent: #232fb4;
-  --accent-ink: #efebe1;
-  --alt: #e0a020;
-  --ok: #1d6b3f;
-
-  --radius: 0px;
-  --radius-lg: 0px;
-  --border-w: 2px;
-  --frame: 2px solid var(--line);
-  --shadow: none;
-  --shadow-lift: 4px 4px 0 var(--ink);
-
-  --font-display: 'Anton', 'Arial Black', sans-serif;
-  --font-body: 'Work Sans', system-ui, sans-serif;
-  --font-data: 'Space Mono', monospace;
-
-  --display-transform: uppercase;
-  --display-tracking: -0.01em;
+  /* requis par le JSX */
   --display-weight: 400;
-  --display-scale: 1.18;
-  --panel-texture: none;
+  /* VT323 n'a qu'une graisse */
+
+  /* ---- Formes : le tube cathodique ne connaît pas l'arrondi ---- */
+  --radius: 0;
+  --radius-lg: 0;
+  --border-w: 2px;
+  --frame: var(--border-w) solid var(--line);
+  /* requis par le JSX */
+  --shadow: none;
+  --shadow-lift: none;
 }
