@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../lib/i18n.jsx';
 import { contenderPhoto } from '../lib/media.js';
 import ArtistFigure from './ArtistFigure.jsx';
 
 const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
 const DISPLAY_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+// L'ordre dans lequel les affiches se déduisent les unes des autres : la petite
+// finale a besoin des demies, la finale aussi.
+const RESOLVE_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
 
 /** Splits de votes proposés — 3 juges, ou 5 pour les grosses finales. */
 const SCORES = [
@@ -23,8 +26,13 @@ const key = (round, slot) => `${round}:${slot}`;
 /**
  * L'arbre. Chaque colonne occupe toute la hauteur et répartit ses affiches en
  * `space-around` : avec deux fois moins d'affiches qu'au tour précédent, chaque
- * battle se retrouve exactement à mi-hauteur des deux qui l'alimentent. C'est
- * la pyramide, obtenue par la géométrie du flex plutôt qu'à coups de marges.
+ * battle se retrouve exactement à mi-hauteur des deux qui l'alimentent.
+ *
+ * L'affiche d'une battle n'est JAMAIS lue depuis le pronostic enregistré : elle
+ * se recalcule à chaque rendu depuis le classement pronostiqué et les vainqueurs
+ * des tours précédents. Le pronostic ne mémorise qu'un choix (vainqueur, score),
+ * pas la structure du tableau — sinon modifier son top 8 après avoir enregistré
+ * laisserait l'arbre figé sur l'ancienne disposition.
  *
  * @param {object[]} phaseBattles  squelette officiel {round, slot, contenderAId, contenderBId, label}
  * @param {object}   picks         { "ROUND:SLOT": {contenderAId, contenderBId, winnerId, scoreA, scoreB} }
@@ -47,77 +55,141 @@ export default function BracketBoard({
     return DISPLAY_ORDER.filter((r) => present.includes(r));
   }, [phaseBattles]);
 
-  const firstMainRound = MAIN_LINE.find((r) => rounds.includes(r));
+  const battlesOf = useMemo(() => {
+    const map = {};
+    for (const b of phaseBattles) (map[b.round] ??= []).push(b);
+    for (const list of Object.values(map)) list.sort((x, y) => x.slot - y.slot);
+    return map;
+  }, [phaseBattles]);
 
-  const battlesOf = (round) =>
-    phaseBattles.filter((b) => b.round === round).sort((x, y) => x.slot - y.slot);
+  /* -------------------------------------------------------------------------
+     La résolution de l'arbre, en une passe, du premier tour vers la finale.
 
-  /** Qui s'affronte dans cette battle, d'après l'officiel puis d'après les picks. */
-  function participants(battle) {
-    if (battle.contenderAId || battle.contenderBId) {
-      return [battle.contenderAId, battle.contenderBId];
+     Pour chaque affiche on établit dans cet ordre :
+       1. la paire officielle si l'organisateur l'a déjà publiée ;
+       2. sinon la paire déduite — classement pronostiqué au premier tour,
+          vainqueurs pronostiqués ensuite ;
+       3. le vainqueur choisi, mais seulement s'il fait toujours partie de la
+          paire. Sinon il tombe, et le score avec lui : un choix qui portait sur
+          une affiche qui n'existe plus n'a plus de sens.
+     ------------------------------------------------------------------------- */
+  const resolved = useMemo(() => {
+    const out = new Map();
+    const firstMainRound = MAIN_LINE.find((r) => rounds.includes(r));
+    const hasSemi = rounds.includes('SEMI');
+
+    const pairOf = (round, slot) => out.get(key(round, slot)) ?? null;
+
+    for (const round of RESOLVE_ORDER) {
+      for (const battle of battlesOf[round] ?? []) {
+        let a = null;
+        let b = null;
+
+        if (battle.contenderAId || battle.contenderBId) {
+          // 1. L'organisateur a publié l'affiche : elle fait foi.
+          a = battle.contenderAId ?? null;
+          b = battle.contenderBId ?? null;
+        } else if (round === firstMainRound && seedFromRanking.length) {
+          // 2a. Premier tour : on apparie le classement 1-8, 2-7, 3-6, 4-5.
+          const size = (battlesOf[round]?.length ?? 0) * 2;
+          const pool = seedFromRanking.slice(0, size);
+          a = pool[battle.slot] ?? null;
+          b = pool[size - 1 - battle.slot] ?? null;
+        } else if (round === 'SMALL_FINAL' && hasSemi) {
+          // 2b. Petite finale : les perdants des demies.
+          [a, b] = [0, 1].map((slot) => {
+            const semi = pairOf('SEMI', slot);
+            if (!semi?.winnerId) return null;
+            return semi.winnerId === semi.a ? semi.b : semi.a;
+          });
+        } else if (round === 'SMALL_FINAL' && seedFromRanking.length) {
+          // 2c. Format sans demies : les places 3 et 4 du classement.
+          a = seedFromRanking[2] ?? null;
+          b = seedFromRanking[3] ?? null;
+        } else if (round === 'FINAL' && !hasSemi && seedFromRanking.length) {
+          a = seedFromRanking[0] ?? null;
+          b = seedFromRanking[1] ?? null;
+        } else {
+          // 2d. Tour suivant : les vainqueurs pronostiqués du tour précédent.
+          const prev = MAIN_LINE[MAIN_LINE.indexOf(round) - 1];
+          if (prev) {
+            a = pairOf(prev, battle.slot * 2)?.winnerId ?? null;
+            b = pairOf(prev, battle.slot * 2 + 1)?.winnerId ?? null;
+          }
+        }
+
+        // 3. Le choix enregistré ne survit que s'il porte sur cette affiche.
+        const pick = picks[key(round, battle.slot)];
+        const stillValid = pick?.winnerId && (pick.winnerId === a || pick.winnerId === b);
+        const winnerId = stillValid ? pick.winnerId : null;
+
+        out.set(key(round, battle.slot), {
+          round,
+          slot: battle.slot,
+          a,
+          b,
+          winnerId,
+          scoreA: winnerId ? pick?.scoreA ?? null : null,
+          scoreB: winnerId ? pick?.scoreB ?? null : null,
+        });
+      }
+    }
+    return out;
+  }, [battlesOf, rounds, picks, seedFromRanking]);
+
+  /* -------------------------------------------------------------------------
+     Remonter le ménage au parent. L'affichage est déjà correct sans cela, mais
+     sans ce nettoyage le pronostic enregistré garderait des choix orphelins :
+     des vainqueurs désignés sur des affiches qui n'existent plus.
+     ------------------------------------------------------------------------- */
+  const lastPushed = useRef(null);
+
+  useEffect(() => {
+    if (locked) return;
+
+    const next = {};
+    for (const [k, r] of resolved) {
+      if (!r.a && !r.b) continue; // affiche encore indéterminée : rien à retenir
+      next[k] = {
+        phaseId: phase.id,
+        round: r.round,
+        slot: r.slot,
+        contenderAId: r.a,
+        contenderBId: r.b,
+        winnerId: r.winnerId,
+        scoreA: r.scoreA,
+        scoreB: r.scoreB,
+      };
     }
 
-    const pick = picks[key(battle.round, battle.slot)];
-    if (pick?.contenderAId || pick?.contenderBId) {
-      return [pick.contenderAId, pick.contenderBId];
-    }
+    // Comparaison insensible à l'ordre des clés : le pronostic rechargé depuis
+    // le serveur arrive dans l'ordre de la base, pas dans celui de l'arbre.
+    const stable = (obj) =>
+      JSON.stringify(Object.keys(obj).sort().map((k) => [k, obj[k]]));
 
-    // Premier tour : on apparie le classement pronostiqué 1-8, 2-7, 3-6, 4-5.
-    if (battle.round === firstMainRound && seedFromRanking.length) {
-      const size = phaseBattles.filter((b) => b.round === battle.round).length * 2;
-      const pool = seedFromRanking.slice(0, size);
-      return [pool[battle.slot] ?? null, pool[size - 1 - battle.slot] ?? null];
-    }
+    const signature = stable(next);
+    // Deux garde-fous contre la boucle : on ne remonte que si le contenu diffère
+    // vraiment de ce qu'on a déjà en état, et jamais deux fois la même valeur.
+    if (signature === stable(picks) || signature === lastPushed.current) return;
+    lastPushed.current = signature;
+    onChange(next);
+  }, [resolved, picks, onChange, phase.id, locked]);
 
-    // Petite finale : les places 3 et 4 du classement pronostiqué (format crew).
-    if (battle.round === 'SMALL_FINAL' && !rounds.includes('SEMI') && seedFromRanking.length) {
-      return [seedFromRanking[2] ?? null, seedFromRanking[3] ?? null];
-    }
-    if (battle.round === 'FINAL' && !rounds.includes('SEMI') && seedFromRanking.length) {
-      return [seedFromRanking[0] ?? null, seedFromRanking[1] ?? null];
-    }
-
-    // Tour suivant : les vainqueurs pronostiqués du tour précédent.
-    const prevIndex = MAIN_LINE.indexOf(battle.round) - 1;
-    if (battle.round === 'SMALL_FINAL' && rounds.includes('SEMI')) {
-      return [0, 1].map((s) => {
-        const semi = picks[key('SEMI', s)];
-        if (!semi?.winnerId) return null;
-        const [a, b] = resolvedPair('SEMI', s);
-        return semi.winnerId === a ? b : a; // le perdant
-      });
-    }
-    if (prevIndex >= 0) {
-      const prev = MAIN_LINE[prevIndex];
-      return [
-        picks[key(prev, battle.slot * 2)]?.winnerId ?? null,
-        picks[key(prev, battle.slot * 2 + 1)]?.winnerId ?? null,
-      ];
-    }
-    return [null, null];
-  }
-
-  function resolvedPair(round, slot) {
-    const b = phaseBattles.find((x) => x.round === round && x.slot === slot);
-    return b ? participants(b) : [null, null];
-  }
-
-  function setPick(battle, patch) {
-    const [a, b] = participants(battle);
-    const k = key(battle.round, battle.slot);
+  function setPick(round, slot, patch) {
+    const r = resolved.get(key(round, slot));
+    if (!r) return;
     onChange({
       ...picks,
-      [k]: {
+      [key(round, slot)]: {
         phaseId: phase.id,
-        round: battle.round,
-        slot: battle.slot,
-        contenderAId: a,
-        contenderBId: b,
-        ...picks[k],
+        round,
+        slot,
+        contenderAId: r.a,
+        contenderBId: r.b,
+        winnerId: r.winnerId,
+        scoreA: r.scoreA,
+        scoreB: r.scoreB,
         ...patch,
-        // on resynchronise toujours l'affiche courante
-        ...(a || b ? { contenderAId: a, contenderBId: b } : {}),
       },
     });
   }
@@ -127,36 +199,36 @@ export default function BracketBoard({
     const map = {};
     rounds.forEach((round, i) => {
       const next = rounds[i + 1];
-      const mine = battlesOf(round).length;
-      const theirs = next ? battlesOf(next).length : 0;
+      const mine = battlesOf[round]?.length ?? 0;
+      const theirs = next ? battlesOf[next]?.length ?? 0 : 0;
       map[round] = {
         paired: Boolean(next) && mine >= 2 && mine === theirs * 2,
         fed: i > 0 && map[rounds[i - 1]]?.paired,
       };
     });
     return map;
-  }, [rounds, phaseBattles]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rounds, battlesOf]);
 
   function renderBattle(battle) {
-    const [aId, bId] = participants(battle);
-    const pick = picks[key(battle.round, battle.slot)] ?? {};
-    const ready = Boolean(aId && bId);
+    const r = resolved.get(key(battle.round, battle.slot));
+    if (!r) return null;
+    const ready = Boolean(r.a && r.b);
 
     return (
       <div className="bracket__node" key={battle.id ?? key(battle.round, battle.slot)}>
-        <div className={`battle${pick.winnerId ? ' battle--called' : ''}`}>
+        <div className={`battle${r.winnerId ? ' battle--called' : ''}`}>
           {battle.label && <p className="battle__label">{battle.label}</p>}
 
-          {[aId, bId].map((id, side) => {
+          {[r.a, r.b].map((id, side) => {
             const c = byId.get(id);
-            const won = pick.winnerId && pick.winnerId === id;
+            const won = r.winnerId && r.winnerId === id;
             return (
               <button
                 key={side}
                 type="button"
                 className={`battle__side${won ? ' battle__side--won' : ''}`}
                 disabled={locked || !ready}
-                onClick={() => setPick(battle, { winnerId: id })}
+                onClick={() => setPick(battle.round, battle.slot, { winnerId: id })}
               >
                 <ArtistFigure src={contenderPhoto(c)} name={c?.name} size="xs" />
                 <span className="battle__name">
@@ -175,10 +247,13 @@ export default function BracketBoard({
               <select
                 id={`sc-${phase.id}-${battle.round}-${battle.slot}`}
                 disabled={locked}
-                value={pick.scoreA == null ? '' : `${pick.scoreA}-${pick.scoreB}`}
+                value={r.scoreA == null ? '' : `${r.scoreA}-${r.scoreB}`}
                 onChange={(e) => {
                   const found = SCORES.find((s) => `${s.a}-${s.b}` === e.target.value);
-                  setPick(battle, { scoreA: found?.a ?? null, scoreB: found?.b ?? null });
+                  setPick(battle.round, battle.slot, {
+                    scoreA: found?.a ?? null,
+                    scoreB: found?.b ?? null,
+                  });
                 }}
               >
                 {SCORES.map((s) => (
@@ -187,12 +262,12 @@ export default function BracketBoard({
                   </option>
                 ))}
               </select>
-              {pick.winnerId && (
+              {r.winnerId && (
                 <button
                   type="button"
                   className="btn btn--small btn--ghost"
                   disabled={locked}
-                  onClick={() => setPick(battle, { winnerId: null })}
+                  onClick={() => setPick(battle.round, battle.slot, { winnerId: null })}
                 >
                   {t('bracket.clear')}
                 </button>
@@ -207,7 +282,7 @@ export default function BracketBoard({
   return (
     <div className="bracket">
       {rounds.map((round) => {
-        const battles = battlesOf(round);
+        const battles = battlesOf[round] ?? [];
         const { paired, fed } = pairing[round] ?? {};
 
         const pairs = [];
@@ -222,10 +297,10 @@ export default function BracketBoard({
             <div className={`bracket__col${fed ? ' bracket__col--fed' : ''}`}>
               {paired
                 ? pairs.map((pair, i) => (
-                    <div className="bracket__pair" key={i}>
-                      {pair.map(renderBattle)}
-                    </div>
-                  ))
+                  <div className="bracket__pair" key={i}>
+                    {pair.map(renderBattle)}
+                  </div>
+                ))
                 : battles.map(renderBattle)}
             </div>
           </section>
