@@ -143,6 +143,192 @@ adminRouter.post('/phases/:phaseId/battles', async (req, res) => {
   res.status(201).json({ battle });
 });
 
+// --- Formats de compétition ---------------------------------------------------
+
+/**
+ * La forme d'un tableau, par taille. Chaque entrée dit combien d'affiches
+ * compte chaque tour — c'est tout ce qu'il faut pour engendrer le squelette,
+ * puisque le reste (qui affronte qui) se déduit du classement pronostiqué.
+ */
+export const BRACKET_FORMATS = {
+  TOP_16: { label: 'Top 16', size: 16, rounds: [['ROUND_OF_16', 8], ['QUARTER', 4], ['SEMI', 2], ['FINAL', 1]] },
+  TOP_8: { label: 'Top 8', size: 8, rounds: [['QUARTER', 4], ['SEMI', 2], ['FINAL', 1]] },
+  TOP_4: { label: 'Top 4', size: 4, rounds: [['SEMI', 2], ['FINAL', 1]] },
+  TOP_2: { label: 'Finale seule', size: 2, rounds: [['FINAL', 1]] },
+};
+
+export const CATEGORY_KINDS = {
+  SOLO: 'Solo',
+  TAG_TEAM: 'Tag Team',
+  LOOPSTATION: 'Loopstation',
+  CREW: 'Crew',
+  LEGACY: 'Legacy',
+};
+
+/** Le catalogue, pour que l'interface n'ait pas à dupliquer ces constantes. */
+adminRouter.get('/formats', (_req, res) => {
+  res.json({
+    brackets: Object.entries(BRACKET_FORMATS).map(([id, f]) => ({
+      id,
+      label: f.label,
+      size: f.size,
+      rounds: f.rounds.map(([round, count]) => ({ round, count })),
+    })),
+    kinds: Object.entries(CATEGORY_KINDS).map(([id, label]) => ({ id, label })),
+  });
+});
+
+/**
+ * Monte la structure d'un événement d'un seul geste : catégories, phases et
+ * squelette d'affiches. C'est ce que faisait le script de seed, en formulaire.
+ *
+ * Body : { categories: [{ kind, name?, format, wildcard?, wildcardCount?,
+ *                         smallFinal?, legacyBattles? }], mode: 'add'|'replace' }
+ *
+ * `replace` refuse de partir si des pronostics existent déjà sur la catégorie :
+ * supprimer une catégorie emporte les pronostics de tout le monde avec elle.
+ */
+adminRouter.post('/events/:eventId/format', async (req, res) => {
+  const schema = z.object({
+    mode: z.enum(['add', 'replace']).default('add'),
+    force: z.boolean().default(false),
+    categories: z
+      .array(
+        z.object({
+          kind: z.enum(['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'LEGACY']),
+          name: z.string().min(1).optional(),
+          format: z.enum(['TOP_16', 'TOP_8', 'TOP_4', 'TOP_2']).default('TOP_8'),
+          wildcard: z.boolean().default(false),
+          wildcardCount: z.number().int().min(2).max(200).nullable().optional(),
+          smallFinal: z.boolean().default(false),
+          legacyBattles: z.number().int().min(1).max(16).default(4),
+        })
+      )
+      .min(1),
+  });
+  const { categories, mode, force } = schema.parse(req.body);
+
+  const event = await prisma.event.findUnique({ where: { id: req.params.eventId } });
+  if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
+
+  const existing = await prisma.category.findMany({
+    where: { eventId: event.id },
+    include: { _count: { select: { predictions: true } } },
+  });
+
+  // Garde-fou : on ne détruit pas des pronostics déposés sans le dire.
+  if (mode === 'replace' && !force) {
+    const atRisk = existing.filter((c) => c._count.predictions > 0);
+    if (atRisk.length) {
+      return res.status(409).json({
+        error:
+          `Des pronostics existent déjà sur : ${atRisk.map((c) => c.name).join(', ')}. ` +
+          `Remplacer les effacerait. Relancez avec force:true si c'est bien l'intention.`,
+        categories: atRisk.map((c) => ({ id: c.id, name: c.name, predictions: c._count.predictions })),
+      });
+    }
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    if (mode === 'replace') {
+      await tx.category.deleteMany({ where: { eventId: event.id } });
+    }
+
+    const out = [];
+    for (const [index, spec] of categories.entries()) {
+      const name = spec.name ?? CATEGORY_KINDS[spec.kind];
+      const bracket = BRACKET_FORMATS[spec.format];
+
+      const category = await tx.category.create({
+        data: {
+          eventId: event.id,
+          name,
+          slug: slugify(name),
+          kind: spec.kind,
+          position: index,
+        },
+      });
+
+      let position = 0;
+
+      // Phase de qualification, si l'événement en a une.
+      if (spec.wildcard) {
+        await tx.phase.create({
+          data: {
+            categoryId: category.id,
+            name: 'Wildcards',
+            type: 'ELIMINATION',
+            position: position++,
+            qualifierCount: spec.wildcardCount ?? bracket.size,
+          },
+        });
+      }
+
+      // Le tableau lui-même.
+      const rounds =
+        spec.kind === 'LEGACY'
+          ? [['LEGACY', spec.legacyBattles]]
+          : [
+            ...bracket.rounds.filter(([r]) => r !== 'FINAL'),
+            ...(spec.smallFinal && bracket.rounds.some(([r]) => r === 'SEMI')
+              ? [['SMALL_FINAL', 1]]
+              : []),
+            ['FINAL', 1],
+          ];
+
+      const phase = await tx.phase.create({
+        data: {
+          categoryId: category.id,
+          name: spec.kind === 'LEGACY' ? 'Legacy' : `Tableau — ${bracket.label}`,
+          type: spec.kind === 'LEGACY' ? 'LEGACY' : 'BRACKET',
+          position: position++,
+        },
+      });
+
+      // Le squelette : des affiches vides, que le classement pronostiqué
+      // viendra remplir côté joueur.
+      const battles = rounds.flatMap(([round, count]) =>
+        Array.from({ length: count }, (_, slot) => ({ phaseId: phase.id, round, slot }))
+      );
+      await tx.battle.createMany({ data: battles });
+
+      out.push({ id: category.id, name, battles: battles.length });
+    }
+    return out;
+  });
+
+  res.status(201).json({ categories: created });
+});
+
+adminRouter.patch('/categories/:id', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).optional(),
+    position: z.number().int().optional(),
+  });
+  const data = schema.parse(req.body);
+  const category = await prisma.category.update({
+    where: { id: req.params.id },
+    data: { ...data, ...(data.name ? { slug: slugify(data.name) } : {}) },
+  });
+  res.json({ category });
+});
+
+adminRouter.delete('/categories/:id', onlyAdmin, async (req, res) => {
+  const count = await prisma.prediction.count({ where: { categoryId: req.params.id } });
+  if (count > 0 && req.query.force !== 'true') {
+    return res.status(409).json({
+      error: `${count} pronostic(s) portent sur cette catégorie. Ajoutez ?force=true pour confirmer.`,
+    });
+  }
+  await prisma.category.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
+adminRouter.delete('/phases/:id', onlyAdmin, async (req, res) => {
+  await prisma.phase.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
 // --- Saisie des résultats -----------------------------------------------------
 
 /** Classement officiel d'une phase. Résout la phase et relance le scoring. */
@@ -189,6 +375,61 @@ adminRouter.put('/battles/:id/result', async (req, res) => {
   });
   const count = await rescoreCategory(battle.phase.categoryId);
   res.json({ battle, rescored: count });
+});
+
+/**
+ * Publie toutes les affiches d'une phase en une fois. L'ancien enregistrement
+ * battle par battle relançait le calcul de toute la catégorie à chaque clic :
+ * huitièmes complets = 8 recalculs pour un seul résultat utile. Ici on écrit
+ * tout, puis on recalcule une fois.
+ */
+adminRouter.put('/phases/:phaseId/battles', async (req, res) => {
+  const schema = z.object({
+    resolved: z.boolean().optional(),
+    battles: z.array(
+      z.object({
+        id: z.string(),
+        contenderAId: z.string().nullable().optional(),
+        contenderBId: z.string().nullable().optional(),
+        winnerId: z.string().nullable().optional(),
+        scoreA: z.number().int().min(0).max(5).nullable().optional(),
+        scoreB: z.number().int().min(0).max(5).nullable().optional(),
+        played: z.boolean().optional(),
+      })
+    ),
+  });
+  const { battles, resolved } = schema.parse(req.body);
+
+  const phase = await prisma.phase.findUnique({
+    where: { id: req.params.phaseId },
+    include: { battles: { select: { id: true } } },
+  });
+  if (!phase) return res.status(404).json({ error: 'Phase introuvable.' });
+
+  // On n'écrit que dans les affiches qui appartiennent bien à cette phase.
+  const mine = new Set(phase.battles.map((b) => b.id));
+  const rejected = battles.filter((b) => !mine.has(b.id)).length;
+  const todo = battles.filter((b) => mine.has(b.id));
+
+  await prisma.$transaction([
+    ...todo.map(({ id, ...data }) =>
+      prisma.battle.update({
+        where: { id },
+        data: {
+          ...data,
+          // Une affiche est « jouée » dès qu'elle a un vainqueur, sauf mention
+          // contraire explicite.
+          played: data.played ?? Boolean(data.winnerId),
+        },
+      })
+    ),
+    ...(resolved === undefined
+      ? []
+      : [prisma.phase.update({ where: { id: phase.id }, data: { resolved } })]),
+  ]);
+
+  const count = await rescoreCategory(phase.categoryId);
+  res.json({ ok: true, updated: todo.length, rejected, rescored: count });
 });
 
 /** Top 4 officiel d'une catégorie. */

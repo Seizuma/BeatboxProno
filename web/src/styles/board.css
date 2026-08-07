@@ -566,3 +566,37 @@ body.is-dragging {
   align-items: center;
   gap: 0.55rem;
 }
+
+/* --- Blocs repliables (saisie des résultats) ------------------------------ */
+
+details.panel>summary {
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+details.panel>summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Le chevron dit l'état sans dépendre du marqueur natif du navigateur. */
+details.panel>summary::before {
+  content: '▶';
+  color: var(--c);
+  font-size: 0.8rem;
+  transition: none;
+}
+
+details.panel[open]>summary::before {
+  content: '▼';
+}
+
+details.panel>summary:hover::before {
+  color: var(--y);
+}
+
+details.panel>summary .eyebrow {
+  margin: 0;
+}
