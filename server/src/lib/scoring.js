@@ -16,15 +16,13 @@
  *   +2 si le vainqueur est le bon
  *   +2 si le score est le bon
  *
- * Top 4 final
- *   +5 / +4 / +3 / +2 pour les places 1 / 2 / 3 / 4 (soit 14 au total)
+ * Il n'y a pas de pari sur le classement final : tout se joue sur les phases.
  */
 
 export const GAP_MAX_BONUS = 5;
 export const BATTLE_HAPPENED = 2;
 export const BATTLE_WINNER = 2;
 export const BATTLE_SCORE = 2;
-export const PODIUM_POINTS = { 1: 5, 2: 4, 3: 3, 4: 2 };
 export const QUALIFIED_POINT = 1;
 
 /** Écart 0 → 5 pts, 1 → 4, 2 → 3, 3 → 2, 4 → 1, ≥5 → 0. */
@@ -173,36 +171,9 @@ function isSameScore(pick, match) {
 }
 
 /**
- * Score du top 4 final.
- * @param {Array<{rank:number, contenderId:string}>} predicted
- * @param {Array<{rank:number, contenderId:string}>} official
- */
-export function scorePodium(predicted, official) {
-  const officialByRank = new Map(official.map((s) => [s.rank, s.contenderId]));
-  const lines = [];
-  let total = 0;
-
-  for (const pick of predicted) {
-    const points =
-      officialByRank.get(pick.rank) === pick.contenderId
-        ? PODIUM_POINTS[pick.rank] ?? 0
-        : 0;
-    total += points;
-    lines.push({
-      rank: pick.rank,
-      contenderId: pick.contenderId,
-      officialContenderId: officialByRank.get(pick.rank) ?? null,
-      points,
-    });
-  }
-
-  return { total, lines };
-}
-
-/**
  * Assemble le score complet d'un pronostic de catégorie.
- * @param {object} prediction  ranks[], battles[], podium[]
- * @param {object} category    phases[] (avec entries[] et battles[]), podium[]
+ * @param {object} prediction  ranks[], battles[]
+ * @param {object} category    phases[] (avec entries[] et battles[])
  */
 export function scorePrediction(prediction, category) {
   const sections = [];
@@ -237,17 +208,6 @@ export function scorePrediction(prediction, category) {
         ...result,
       });
     }
-  }
-
-  if (category.podium?.length) {
-    const result = scorePodium(prediction.podium, category.podium);
-    total += result.total;
-    sections.push({
-      phaseId: null,
-      phaseName: 'Top 4 final',
-      phaseType: 'PODIUM',
-      ...result,
-    });
   }
 
   return { total, sections };

@@ -18,7 +18,7 @@ export default function EventPage() {
   const [error, setError] = useState(null);
   const [activeId, setActiveId] = useState(null);
 
-  // Brouillon local : { [categoryId]: { orders: {phaseId: [ids]}, picks: {phaseId: {..}}, podium: [ids] } }
+  // Brouillon local : { [categoryId]: { orders: {phaseId: [ids]}, picks: {phaseId: {..}} } }
   const [draft, setDraft] = useState({});
   const [flash, setFlash] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -43,7 +43,7 @@ export default function EventPage() {
   if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
 
   const { event } = data;
-  const state = draft[activeId] ?? { orders: {}, picks: {}, podium: [] };
+  const state = draft[activeId] ?? { orders: {}, picks: {} };
   const eventClosed = event.status === 'FINISHED';
 
   const update = (patch) =>
@@ -64,9 +64,6 @@ export default function EventPage() {
         battles: Object.values(state.picks).flatMap((byBattle) =>
           Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
         ),
-        podium: state.podium
-          .map((contenderId, i) => ({ rank: i + 1, contenderId }))
-          .filter((p) => p.contenderId),
       };
       const res = await api.put(`/predictions/categories/${activeId}`, payload);
       setFlash({
@@ -198,44 +195,6 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
         );
       })}
 
-      {category.kind !== 'LEGACY' && (
-        <section className="panel stack">
-          <div>
-            <p className="eyebrow">{t('event.podium.eyebrow')}</p>
-            <h2>{t('event.podium.title')}</h2>
-            <p className="muted" style={{ fontSize: '0.88rem' }}>{t('event.podium.lede')}</p>
-          </div>
-
-          <div className="podium">
-            {[1, 2, 3, 4].map((rank) => (
-              <div className="podium__row" key={rank}>
-                <span className="podium__place">{rank}</span>
-                <span>
-                  <select
-                    disabled={locked}
-                    value={state.podium[rank - 1] ?? ''}
-                    onChange={(e) => {
-                      const next = [...state.podium];
-                      next[rank - 1] = e.target.value || undefined;
-                      update({ podium: next });
-                    }}
-                    style={{ width: '100%', maxWidth: '22rem' }}
-                  >
-                    <option value="">{t('event.podium.empty')}</option>
-                    {contenders.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <span className="podium__value">
-                    {' '}
-                    {t('event.podium.value', { n: [0, 5, 4, 3, 2][rank] })}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -247,7 +206,6 @@ function hydrate({ event, myPredictions }) {
     const saved = myPredictions.find((p) => p.categoryId === category.id);
     const orders = {};
     const picks = {};
-    let podium = [];
 
     if (saved) {
       for (const r of [...saved.ranks].sort((a, b) => a.rank - b.rank)) {
@@ -265,9 +223,8 @@ function hydrate({ event, myPredictions }) {
           scoreB: b.scoreB,
         };
       }
-      podium = [...saved.podium].sort((a, b) => a.rank - b.rank).map((p) => p.contenderId);
     }
-    draft[category.id] = { orders, picks, podium };
+    draft[category.id] = { orders, picks };
   }
   return draft;
 }

@@ -25,10 +25,6 @@ const payloadSchema = z.object({
       })
     )
     .default([]),
-  podium: z
-    .array(z.object({ rank: z.number().int().min(1).max(4), contenderId: z.string() }))
-    .max(4)
-    .default([]),
 });
 
 /** Une phase est fermée dès qu'elle est résolue ou que sa date de fermeture est passée. */
@@ -70,7 +66,6 @@ predictionRouter.put('/categories/:categoryId', async (req, res) => {
 
   const ranks = body.ranks.filter(keepRank);
   const battles = body.battles.filter(keepBattle);
-  const podium = body.podium.filter((p) => validContenders.has(p.contenderId));
 
   const rejected =
     body.ranks.length - ranks.length + (body.battles.length - battles.length);
@@ -92,6 +87,8 @@ predictionRouter.put('/categories/:categoryId', async (req, res) => {
     const openIds = [...openPhases.keys()];
     await tx.predictedRank.deleteMany({ where: { predictionId: record.id, phaseId: { in: openIds } } });
     await tx.predictedBattle.deleteMany({ where: { predictionId: record.id, phaseId: { in: openIds } } });
+    // Le classement final n'est plus un pari. On purge ce qu'un pronostic
+    // déposé avant la refonte pourrait encore traîner.
     await tx.predictedPodium.deleteMany({ where: { predictionId: record.id } });
 
     if (ranks.length) {
@@ -114,15 +111,10 @@ predictionRouter.put('/categories/:categoryId', async (req, res) => {
         })),
       });
     }
-    if (podium.length) {
-      await tx.predictedPodium.createMany({
-        data: podium.map((p) => ({ ...p, predictionId: record.id })),
-      });
-    }
 
     return tx.prediction.findUnique({
       where: { id: record.id },
-      include: { ranks: true, battles: true, podium: true },
+      include: { ranks: true, battles: true },
     });
   });
 

@@ -59,11 +59,14 @@ statsRouter.get('/stats', async (req, res) => {
       },
     }),
 
-    prisma.predictedPodium.groupBy({
-      by: ['contenderId'],
-      where: { rank: 1, prediction: predictionWhere },
+    // Les favoris se lisent maintenant dans l'arbre : qui est donné vainqueur
+    // de la finale. Plus fiable que l'ancien podium, puisque c'est un choix que
+    // le pronostiqueur doit défendre tour après tour.
+    prisma.predictedBattle.groupBy({
+      by: ['winnerId'],
+      where: { round: 'FINAL', winnerId: { not: null }, prediction: predictionWhere },
       _count: { _all: true },
-      orderBy: { _count: { contenderId: 'desc' } },
+      orderBy: { _count: { winnerId: 'desc' } },
       take: 6,
     }),
   ]);
@@ -119,21 +122,21 @@ statsRouter.get('/stats', async (req, res) => {
 
   // --- Les favoris du public -----------------------------------------------
 
-  const favouriteIds = favouriteRows.map((f) => f.contenderId);
+  const favouriteIds = favouriteRows.map((f) => f.winnerId).filter(Boolean);
   const contenders = favouriteIds.length
     ? await prisma.contender.findMany({
-        where: { id: { in: favouriteIds } },
-        include: {
-          category: { select: { name: true, event: { select: { name: true, year: true } } } },
-          artists: { include: { artist: { select: { imageUrl: true } } } },
-        },
-      })
+      where: { id: { in: favouriteIds } },
+      include: {
+        category: { select: { name: true, event: { select: { name: true, year: true } } } },
+        artists: { include: { artist: { select: { imageUrl: true } } } },
+      },
+    })
     : [];
   const contenderById = new Map(contenders.map((c) => [c.id, c]));
 
   const favourites = favouriteRows
     .map((f) => {
-      const c = contenderById.get(f.contenderId);
+      const c = contenderById.get(f.winnerId);
       if (!c) return null;
       return {
         contenderId: c.id,

@@ -43,19 +43,11 @@ publicRouter.get('/events/:slug', async (req, res) => {
   });
   if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
 
-  const podiums = await prisma.podiumSlot.findMany({
-    where: { categoryId: { in: event.categories.map((c) => c.id) } },
-    orderBy: { rank: 'asc' },
-  });
-  for (const c of event.categories) {
-    c.podium = podiums.filter((p) => p.categoryId === c.id);
-  }
-
   let myPredictions = [];
   if (req.user) {
     myPredictions = await prisma.prediction.findMany({
       where: { userId: req.user.id, eventId: event.id },
-      include: { ranks: true, battles: true, podium: true },
+      include: { ranks: true, battles: true },
     });
   }
 
@@ -157,7 +149,7 @@ publicRouter.get('/artists/:slug', async (req, res) => {
 
   const contenderIds = artist.entries.map((e) => e.contenderId);
 
-  const [battles, predictedWins, podiumSlots, predictedPodium] = await Promise.all([
+  const [battles, predictedWins, podiumSlots] = await Promise.all([
     prisma.battle.findMany({
       where: {
         played: true,
@@ -165,12 +157,8 @@ publicRouter.get('/artists/:slug', async (req, res) => {
       },
     }),
     prisma.predictedBattle.count({ where: { winnerId: { in: contenderIds } } }),
+    // Le palmarès réel de l'artiste — ses vrais podiums, pas un pari.
     prisma.podiumSlot.findMany({ where: { contenderId: { in: contenderIds } } }),
-    prisma.predictedPodium.groupBy({
-      by: ['rank'],
-      where: { contenderId: { in: contenderIds } },
-      _count: { _all: true },
-    }),
   ]);
 
   const wins = battles.filter((b) => contenderIds.includes(b.winnerId)).length;
@@ -189,7 +177,7 @@ publicRouter.get('/artists/:slug', async (req, res) => {
         b.phaseId === pick.phaseId &&
         b.round === pick.round &&
         [b.contenderAId, b.contenderBId].sort().join() ===
-          [pick.contenderAId, pick.contenderBId].sort().join()
+        [pick.contenderAId, pick.contenderBId].sort().join()
     );
     if (hit && hit.winnerId === pick.winnerId) correct += 1;
   }
@@ -208,7 +196,6 @@ publicRouter.get('/artists/:slug', async (req, res) => {
       timesPickedToWinBattle: predictedWins,
       pickedAndRight: correct,
       accuracy: picks.length ? Math.round((correct / picks.length) * 100) : null,
-      podiumPicks: predictedPodium.map((p) => ({ rank: p.rank, count: p._count._all })),
       _playedBattles: playedIds.size,
     },
   });

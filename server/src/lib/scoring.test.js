@@ -4,7 +4,7 @@ import {
   gapPoints,
   scoreRankingPhase,
   scoreBattlePhase,
-  scorePodium,
+  scorePrediction,
 } from './scoring.js';
 
 test('les points d écart suivent 5,4,3,2,1,0', () => {
@@ -61,28 +61,36 @@ test('une affiche inexistante ne rapporte rien', () => {
   assert.equal(scoreBattlePhase(predicted, official).total, 0);
 });
 
-test('un top 4 parfait vaut 14 points', () => {
-  const podium = [
-    { rank: 1, contenderId: 'a' },
-    { rank: 2, contenderId: 'b' },
-    { rank: 3, contenderId: 'c' },
-    { rank: 4, contenderId: 'd' },
-  ];
-  assert.equal(scorePodium(podium, podium).total, 14);
-});
-
-test('un podium dans le desordre ne paie que les places exactes', () => {
-  const predicted = [
-    { rank: 1, contenderId: 'b' },
-    { rank: 2, contenderId: 'a' },
-    { rank: 3, contenderId: 'c' },
-    { rank: 4, contenderId: 'd' },
-  ];
-  const official = [
-    { rank: 1, contenderId: 'a' },
-    { rank: 2, contenderId: 'b' },
-    { rank: 3, contenderId: 'c' },
-    { rank: 4, contenderId: 'd' },
-  ];
-  assert.equal(scorePodium(predicted, official).total, 5); // 3 + 2
+test('le classement final n est plus une source de points', () => {
+  // Un pronostic peut encore contenir un podium hérité d'avant la refonte :
+  // il doit être ignoré, pas compté.
+  const category = {
+    phases: [
+      {
+        id: 'p1',
+        name: 'Finale',
+        type: 'BRACKET',
+        resolved: true,
+        battles: [
+          { round: 'FINAL', slot: 0, contenderAId: 'a', contenderBId: 'b', winnerId: 'a', played: true },
+        ],
+      },
+    ],
+    podium: [
+      { rank: 1, contenderId: 'a' },
+      { rank: 2, contenderId: 'b' },
+    ],
+  };
+  const prediction = {
+    ranks: [],
+    battles: [{ phaseId: 'p1', round: 'FINAL', slot: 0, contenderAId: 'a', contenderBId: 'b', winnerId: 'a' }],
+    podium: [
+      { rank: 1, contenderId: 'a' },
+      { rank: 2, contenderId: 'b' },
+    ],
+  };
+  const { total, sections } = scorePrediction(prediction, category);
+  assert.equal(total, 4); // +2 l'affiche a eu lieu, +2 le bon vainqueur. Rien pour le podium.
+  assert.equal(sections.length, 1);
+  assert.equal(sections.some((s) => s.phaseType === 'PODIUM'), false);
 });
