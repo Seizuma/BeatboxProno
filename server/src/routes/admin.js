@@ -1,457 +1,280 @@
-import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
-import { useSession, isStaff } from '../lib/context.jsx';
-import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
+import { Router } from 'express';
+import { z } from 'zod';
+import { prisma } from '../lib/prisma.js';
+import { requireRole } from '../lib/auth.js';
+import { scorePrediction } from '../lib/scoring.js';
 
-const TABS = [
-  ['events', 'Événements'],
-  ['artists', 'Artistes'],
-  ['results', 'Résultats'],
-  ['people', 'Comptes'],
-];
+export const adminRouter = Router();
+adminRouter.use(requireRole('ADMIN', 'MODERATOR'));
 
-export default function Admin() {
-  const { user, loading } = useSession();
-  const [tab, setTab] = useState('events');
-
-  if (loading) return <p className="faint" style={{ marginTop: '2rem' }}>Chargement…</p>;
-  if (!isStaff(user)) {
-    return (
-      <div className="empty" style={{ marginTop: '3rem' }}>
-        Cette section est réservée aux comptes autorisés. Demandez un accès à un administrateur.
-      </div>
-    );
-  }
-
-  return (
-    <div className="stack" style={{ paddingTop: '2.5rem' }}>
-      <header>
-        <p className="eyebrow">Connecté en tant que {user.role.toLowerCase()}</p>
-        <h1>Administration</h1>
-      </header>
-
-      <nav className="row" style={{ borderBottom: 'var(--frame)', paddingBottom: '0.75rem', gap: '0.4rem' }}>
-        {TABS.map(([id, label]) => (
-          <button key={id} className={`btn${tab === id ? ' btn--primary' : ''}`} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === 'events' && <EventsAdmin />}
-      {tab === 'artists' && <ArtistsAdmin />}
-      {tab === 'results' && <ResultsAdmin />}
-      {tab === 'people' && <PeopleAdmin currentUser={user} />}
-    </div>
-  );
-}
-
-function useFlash() {
-  const [flash, setFlash] = useState(null);
-  const run = async (fn, okText) => {
-    try {
-      await fn();
-      setFlash({ ok: true, text: okText });
-    } catch (e) {
-      setFlash({ ok: false, text: e.message });
-    }
-  };
-  const node = flash && (
-    <p className={`notice${flash.ok ? ' notice--ok' : ''}`}>{flash.text}</p>
-  );
-  return [node, run];
-}
-
-// --- Événements ---------------------------------------------------------------
-
-function EventsAdmin() {
-  const [events, setEvents] = useState([]);
-  const [form, setForm] = useState({ name: '', year: new Date().getFullYear(), location: '' });
-  const [flash, run] = useFlash();
-
-  const reload = () => api.get('/events').then(({ events }) => setEvents(events));
-  useEffect(() => { reload(); }, []);
-
-  return (
-    <div className="stack">
-      {flash}
-
-      <section className="panel stack">
-        <h2>Créer un événement</h2>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div className="field">
-            <label htmlFor="ev-name">Nom</label>
-            <input id="ev-name" type="text" value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Grand Beatbox Battle" />
-          </div>
-          <div className="field">
-            <label htmlFor="ev-year">Année</label>
-            <input id="ev-year" type="number" value={form.year}
-              onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} style={{ width: '6rem' }} />
-          </div>
-          <div className="field">
-            <label htmlFor="ev-loc">Lieu</label>
-            <input id="ev-loc" type="text" value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Tokyo, Japon" />
-          </div>
-          <button
-            className="btn btn--primary"
-            disabled={!form.name}
-            onClick={() =>
-              run(async () => {
-                await api.post('/admin/events', form);
-                setForm({ name: '', year: new Date().getFullYear(), location: '' });
-                await reload();
-              }, 'Événement créé en brouillon.')
-            }
-          >
-            Créer
-          </button>
-        </div>
-      </section>
-
-      <section className="stack">
-        <h2>Événements existants</h2>
-        <div className="panel panel--flush">
-          <table>
-            <thead>
-              <tr><th>Nom</th><th>Catégories</th><th>Statut</th><th></th></tr>
-            </thead>
-            <tbody>
-              {events.map((ev) => (
-                <tr key={ev.id}>
-                  <td>{ev.name} {ev.year}</td>
-                  <td className="muted">{ev.categories.map((c) => c.name).join(', ') || '—'}</td>
-                  <td>
-                    <select
-                      value={ev.status}
-                      onChange={(e) =>
-                        run(async () => {
-                          await api.patch(`/admin/events/${ev.id}`, { status: e.target.value });
-                          await reload();
-                        }, 'Statut mis à jour.')
-                      }
-                    >
-                      <option value="DRAFT">Brouillon</option>
-                      <option value="OPEN">Pronostics ouverts</option>
-                      <option value="LIVE">En cours</option>
-                      <option value="FINISHED">Terminé</option>
-                    </select>
-                  </td>
-                  <td className="num">
-                    <button
-                      className="btn btn--small"
-                      onClick={() => run(() => api.post(`/admin/events/${ev.id}/rescore`), 'Scores recalculés.')}
-                    >
-                      Recalculer les scores
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="faint" style={{ fontSize: '0.85rem' }}>
-          Catégories, participants et phases se créent via l'API <code className="data">/api/admin</code> ou
-          le script de seed — c'est la partie la plus verbeuse, un formulaire dédié se greffe ici.
-        </p>
-      </section>
-    </div>
-  );
-}
+const onlyAdmin = requireRole('ADMIN');
+const slugify = (s) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // --- Artistes -----------------------------------------------------------------
 
-function ArtistsAdmin() {
-  const [artists, setArtists] = useState([]);
-  const [form, setForm] = useState({ name: '', country: '' });
-  const [flash, run] = useFlash();
+adminRouter.post('/artists', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    country: z.string().optional().nullable(),
+    aliases: z.array(z.string()).default([]),
+    // Les photos servies depuis /api/media/artists sont des chemins relatifs :
+    // exiger une URL absolue les refuserait.
+    imageUrl: z.string().min(1).optional().nullable(),
+    bio: z.string().optional().nullable(),
+  });
+  const data = schema.parse(req.body);
+  const artist = await prisma.artist.create({
+    data: { ...data, slug: slugify(data.name) },
+  });
+  res.status(201).json({ artist });
+});
 
-  const reload = () => api.get('/artists').then(({ artists }) => setArtists(artists));
-  useEffect(() => { reload(); }, []);
+adminRouter.patch('/artists/:id', async (req, res) => {
+  const artist = await prisma.artist.update({ where: { id: req.params.id }, data: req.body });
+  res.json({ artist });
+});
 
-  return (
-    <div className="stack">
-      {flash}
-      <ArtistPhotosPanel onDone={reload} />
-      <section className="panel stack">
-        <h2>Ajouter un artiste</h2>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div className="field">
-            <label htmlFor="ar-name">Nom de scène</label>
-            <input id="ar-name" type="text" value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="field">
-            <label htmlFor="ar-country">Pays</label>
-            <input id="ar-country" type="text" value={form.country} style={{ width: '6rem' }}
-              onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="FR" />
-          </div>
-          <button
-            className="btn btn--primary"
-            disabled={!form.name}
-            onClick={() =>
-              run(async () => {
-                await api.post('/admin/artists', { ...form, aliases: [] });
-                setForm({ name: '', country: '' });
-                await reload();
-              }, 'Artiste ajouté.')
-            }
-          >
-            Ajouter
-          </button>
-        </div>
-        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-          Un artiste créé ici est réutilisable sur tous les événements suivants.
-        </p>
-      </section>
+adminRouter.delete('/artists/:id', onlyAdmin, async (req, res) => {
+  await prisma.artist.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
 
-      <div className="panel panel--flush">
-        <table>
-          <thead><tr><th>Nom</th><th>Pays</th><th></th></tr></thead>
-          <tbody>
-            {artists.map((a) => (
-              <tr key={a.id}>
-                <td>{a.name}</td>
-                <td className="muted">{a.country ?? '—'}</td>
-                <td className="num">
-                  <button
-                    className="btn btn--small"
-                    onClick={() =>
-                      run(async () => { await api.del(`/admin/artists/${a.id}`); await reload(); }, 'Artiste supprimé.')
-                    }
-                  >
-                    Supprimer
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+// --- Événements ---------------------------------------------------------------
 
-// --- Résultats ----------------------------------------------------------------
+adminRouter.post('/events', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    year: z.number().int(),
+    location: z.string().optional().nullable(),
+    startsAt: z.coerce.date().optional().nullable(),
+    endsAt: z.coerce.date().optional().nullable(),
+    description: z.string().optional().nullable(),
+    coverUrl: z.string().url().optional().nullable(),
+  });
+  const data = schema.parse(req.body);
+  const event = await prisma.event.create({
+    data: { ...data, slug: slugify(`${data.name}-${data.year}`) },
+  });
+  res.status(201).json({ event });
+});
 
-function ResultsAdmin() {
-  const [events, setEvents] = useState([]);
-  const [slug, setSlug] = useState('');
-  const [detail, setDetail] = useState(null);
-  const [flash, run] = useFlash();
+adminRouter.patch('/events/:id', async (req, res) => {
+  const event = await prisma.event.update({ where: { id: req.params.id }, data: req.body });
+  res.json({ event });
+});
 
-  useEffect(() => { api.get('/events').then(({ events }) => { setEvents(events); setSlug(events[0]?.slug ?? ''); }); }, []);
-  const reload = () => slug && api.get(`/events/${slug}`).then(setDetail);
-  useEffect(() => { setDetail(null); reload(); }, [slug]);
+adminRouter.delete('/events/:id', onlyAdmin, async (req, res) => {
+  await prisma.event.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
 
-  return (
-    <div className="stack">
-      {flash}
-      <div className="field">
-        <label htmlFor="res-ev">Événement</label>
-        <select id="res-ev" value={slug} onChange={(e) => setSlug(e.target.value)}>
-          {events.map((ev) => <option key={ev.id} value={ev.slug}>{ev.name} {ev.year}</option>)}
-        </select>
-      </div>
+// --- Catégories, contenders, phases -------------------------------------------
 
-      {!detail && <p className="faint">Chargement…</p>}
+adminRouter.post('/events/:eventId/categories', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    kind: z.enum(['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'LEGACY']),
+    position: z.number().int().default(0),
+  });
+  const data = schema.parse(req.body);
+  const category = await prisma.category.create({
+    data: { ...data, slug: slugify(data.name), eventId: req.params.eventId },
+  });
+  res.status(201).json({ category });
+});
 
-      {detail?.event.categories.map((cat) => (
-        <section className="panel stack" key={cat.id}>
-          <div className="spread">
-            <h2>{cat.name}</h2>
-            <button
-              className="btn btn--small"
-              onClick={() => run(() => api.post(`/admin/categories/${cat.id}/rescore`), 'Scores recalculés.')}
-            >
-              Recalculer
-            </button>
-          </div>
+adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    seed: z.number().int().nullable().optional(),
+    wildcard: z.boolean().default(false),
+    artistIds: z.array(z.string()).default([]),
+    imageUrl: z.string().url().nullable().optional(),
+  });
+  const { artistIds, ...data } = schema.parse(req.body);
+  const contender = await prisma.contender.create({
+    data: {
+      ...data,
+      categoryId: req.params.categoryId,
+      artists: { create: artistIds.map((artistId) => ({ artistId })) },
+    },
+    include: { artists: { include: { artist: true } } },
+  });
+  res.status(201).json({ contender });
+});
 
-          {cat.phases.map((phase) => (
-            <div key={phase.id} className="stack" style={{ gap: '0.6rem' }}>
-              <h3>{phase.name}</h3>
+adminRouter.delete('/contenders/:id', async (req, res) => {
+  await prisma.contender.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
 
-              {['BRACKET', 'LEGACY'].includes(phase.type) ? (
-                phase.battles.map((b) => (
-                  <BattleResult key={b.id} battle={b} contenders={cat.contenders} onDone={reload} run={run} />
-                ))
-              ) : (
-                <RankingResult phase={phase} contenders={cat.contenders} onDone={reload} run={run} />
-              )}
-            </div>
-          ))}
+adminRouter.post('/categories/:categoryId/phases', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    type: z.enum(['SEEDING', 'WILDCARD', 'ELIMINATION', 'BRACKET', 'LEGACY']),
+    position: z.number().int().default(0),
+    qualifierCount: z.number().int().nullable().optional(),
+    locksAt: z.coerce.date().nullable().optional(),
+  });
+  const phase = await prisma.phase.create({
+    data: { ...schema.parse(req.body), categoryId: req.params.categoryId },
+  });
+  res.status(201).json({ phase });
+});
 
-        </section>
-      ))}
-    </div>
-  );
-}
+adminRouter.patch('/phases/:id', async (req, res) => {
+  const phase = await prisma.phase.update({ where: { id: req.params.id }, data: req.body });
+  res.json({ phase });
+});
 
-function BattleResult({ battle, contenders, onDone, run }) {
-  const [state, setState] = useState({
-    contenderAId: battle.contenderAId ?? '',
-    contenderBId: battle.contenderBId ?? '',
-    winnerId: battle.winnerId ?? '',
-    score: battle.scoreA == null ? '' : `${battle.scoreA}-${battle.scoreB}`,
+adminRouter.post('/phases/:phaseId/battles', async (req, res) => {
+  const schema = z.object({
+    round: z.enum(['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY']),
+    slot: z.number().int().min(0),
+    label: z.string().nullable().optional(),
+    contenderAId: z.string().nullable().optional(),
+    contenderBId: z.string().nullable().optional(),
+  });
+  const battle = await prisma.battle.create({
+    data: { ...schema.parse(req.body), phaseId: req.params.phaseId },
+  });
+  res.status(201).json({ battle });
+});
+
+// --- Saisie des résultats -----------------------------------------------------
+
+/** Classement officiel d'une phase. Résout la phase et relance le scoring. */
+adminRouter.put('/phases/:phaseId/results', async (req, res) => {
+  const schema = z.object({
+    resolved: z.boolean().default(true),
+    entries: z.array(
+      z.object({
+        contenderId: z.string(),
+        rank: z.number().int().min(1),
+        qualified: z.boolean().default(false),
+      })
+    ),
+  });
+  const { entries, resolved } = schema.parse(req.body);
+
+  await prisma.$transaction([
+    prisma.phaseEntry.deleteMany({ where: { phaseId: req.params.phaseId } }),
+    prisma.phaseEntry.createMany({
+      data: entries.map((e) => ({ ...e, phaseId: req.params.phaseId })),
+    }),
+    prisma.phase.update({ where: { id: req.params.phaseId }, data: { resolved } }),
+  ]);
+
+  const phase = await prisma.phase.findUnique({ where: { id: req.params.phaseId } });
+  const count = await rescoreCategory(phase.categoryId);
+  res.json({ ok: true, rescored: count });
+});
+
+/** Résultat d'une battle. */
+adminRouter.put('/battles/:id/result', async (req, res) => {
+  const schema = z.object({
+    winnerId: z.string().nullable(),
+    scoreA: z.number().int().min(0).max(5).nullable().optional(),
+    scoreB: z.number().int().min(0).max(5).nullable().optional(),
+    played: z.boolean().default(true),
+    contenderAId: z.string().nullable().optional(),
+    contenderBId: z.string().nullable().optional(),
+  });
+  const battle = await prisma.battle.update({
+    where: { id: req.params.id },
+    data: schema.parse(req.body),
+    include: { phase: true },
+  });
+  const count = await rescoreCategory(battle.phase.categoryId);
+  res.json({ battle, rescored: count });
+});
+
+/** Top 4 officiel d'une catégorie. */
+adminRouter.put('/categories/:categoryId/podium', async (req, res) => {
+  const schema = z.object({
+    slots: z.array(z.object({ rank: z.number().int().min(1).max(4), contenderId: z.string() })),
+  });
+  const { slots } = schema.parse(req.body);
+
+  await prisma.$transaction([
+    prisma.podiumSlot.deleteMany({ where: { categoryId: req.params.categoryId } }),
+    prisma.podiumSlot.createMany({
+      data: slots.map((s) => ({ ...s, categoryId: req.params.categoryId })),
+    }),
+  ]);
+
+  const count = await rescoreCategory(req.params.categoryId);
+  res.json({ ok: true, rescored: count });
+});
+
+adminRouter.post('/categories/:categoryId/rescore', async (req, res) => {
+  const count = await rescoreCategory(req.params.categoryId);
+  res.json({ ok: true, rescored: count });
+});
+
+adminRouter.post('/events/:eventId/rescore', async (req, res) => {
+  const categories = await prisma.category.findMany({ where: { eventId: req.params.eventId } });
+  let total = 0;
+  for (const c of categories) total += await rescoreCategory(c.id);
+  res.json({ ok: true, rescored: total });
+});
+
+// --- Rôles --------------------------------------------------------------------
+
+adminRouter.get('/users', async (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  const users = await prisma.user.findMany({
+    where: q
+      ? { OR: [{ username: { contains: q, mode: 'insensitive' } }, { discordId: q }] }
+      : {},
+    orderBy: [{ role: 'asc' }, { username: 'asc' }],
+    take: 100,
+    select: { id: true, discordId: true, username: true, globalName: true, avatarUrl: true, role: true, createdAt: true },
+  });
+  res.json({ users });
+});
+
+adminRouter.patch('/users/:id/role', onlyAdmin, async (req, res) => {
+  const { role } = z.object({ role: z.enum(['USER', 'MODERATOR', 'ADMIN']) }).parse(req.body);
+  if (req.params.id === req.user.id && role !== 'ADMIN') {
+    return res.status(400).json({ error: 'Vous ne pouvez pas retirer votre propre rôle admin.' });
+  }
+  const user = await prisma.user.update({
+    where: { id: req.params.id },
+    data: { role },
+    select: { id: true, username: true, role: true },
+  });
+  res.json({ user });
+});
+
+// --- Recalcul -----------------------------------------------------------------
+
+export async function rescoreCategory(categoryId) {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    include: {
+      phases: { include: { entries: true, battles: true } },
+    },
+  });
+  if (!category) return 0;
+
+  category.podium = await prisma.podiumSlot.findMany({ where: { categoryId } });
+
+  const predictions = await prisma.prediction.findMany({
+    where: { categoryId, submitted: true },
+    include: { ranks: true, battles: true, podium: true },
   });
 
-  const options = [{ id: '', name: '— non défini —' }, ...contenders];
-
-  return (
-    <div className="row" style={{ borderTop: 'var(--frame)', paddingTop: '0.6rem' }}>
-      <span className="tag">{battle.round} #{battle.slot}</span>
-
-      {['contenderAId', 'contenderBId'].map((field) => (
-        <select key={field} value={state[field]} onChange={(e) => setState({ ...state, [field]: e.target.value })}>
-          {options.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      ))}
-
-      <select value={state.winnerId} onChange={(e) => setState({ ...state, winnerId: e.target.value })}>
-        <option value="">Vainqueur…</option>
-        {[state.contenderAId, state.contenderBId].filter(Boolean).map((id) => (
-          <option key={id} value={id}>{contenders.find((c) => c.id === id)?.name}</option>
-        ))}
-      </select>
-
-      <select value={state.score} onChange={(e) => setState({ ...state, score: e.target.value })}>
-        <option value="">Score…</option>
-        {['3-0', '2-1', '1-2', '0-3', '5-0', '4-1', '3-2'].map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-
-      <button
-        className="btn btn--small btn--primary"
-        onClick={() => {
-          const [a, b] = state.score ? state.score.split('-').map(Number) : [null, null];
-          run(async () => {
-            await api.put(`/admin/battles/${battle.id}/result`, {
-              contenderAId: state.contenderAId || null,
-              contenderBId: state.contenderBId || null,
-              winnerId: state.winnerId || null,
-              scoreA: a, scoreB: b, played: Boolean(state.winnerId),
-            });
-            await onDone();
-          }, 'Résultat enregistré, pronostics recalculés.');
-        }}
-      >
-        Enregistrer
-      </button>
-    </div>
-  );
-}
-
-function RankingResult({ phase, contenders, onDone, run }) {
-  const initial = contenders.map((c) => {
-    const e = phase.entries.find((x) => x.contenderId === c.id);
-    return { contenderId: c.id, name: c.name, rank: e?.rank ?? '', qualified: e?.qualified ?? false };
-  });
-  const [rows, setRows] = useState(initial);
-
-  return (
-    <div className="stack" style={{ gap: '0.35rem' }}>
-      {rows.map((r, i) => (
-        <div className="row" key={r.contenderId}>
-          <span style={{ minWidth: '12rem' }}>{r.name}</span>
-          <input
-            type="number" min="1" style={{ width: '5rem' }} value={r.rank}
-            aria-label={`Place de ${r.name}`}
-            onChange={(e) => {
-              const next = [...rows];
-              next[i] = { ...r, rank: e.target.value === '' ? '' : Number(e.target.value) };
-              setRows(next);
-            }}
-          />
-          <label style={{ margin: 0 }}>
-            <input
-              type="checkbox" checked={r.qualified}
-              onChange={(e) => {
-                const next = [...rows];
-                next[i] = { ...r, qualified: e.target.checked };
-                setRows(next);
-              }}
-            />{' '}
-            qualifié
-          </label>
-        </div>
-      ))}
-      <div>
-        <button
-          className="btn btn--small btn--primary"
-          onClick={() =>
-            run(async () => {
-              await api.put(`/admin/phases/${phase.id}/results`, {
-                resolved: true,
-                entries: rows.filter((r) => r.rank !== '').map(({ contenderId, rank, qualified }) => ({ contenderId, rank, qualified })),
-              });
-              await onDone();
-            }, 'Classement enregistré, pronostics recalculés.')
-          }
-        >
-          Publier le classement
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// --- Comptes ------------------------------------------------------------------
-
-function PeopleAdmin({ currentUser }) {
-  const [users, setUsers] = useState([]);
-  const [q, setQ] = useState('');
-  const [flash, run] = useFlash();
-
-  const reload = () => api.get(`/admin/users?q=${encodeURIComponent(q)}`).then(({ users }) => setUsers(users));
-  useEffect(() => { reload(); }, [q]);
-
-  return (
-    <div className="stack">
-      {flash}
-      <div className="field">
-        <label htmlFor="q">Chercher un compte Discord</label>
-        <input id="q" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="pseudo ou identifiant Discord" />
-      </div>
-
-      <div className="panel panel--flush">
-        <table>
-          <thead><tr><th>Compte</th><th>Identifiant Discord</th><th>Rôle</th></tr></thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <span className="row" style={{ gap: '0.5rem' }}>
-                    {u.avatarUrl && <img className="avatar" src={u.avatarUrl} alt="" />}
-                    {u.globalName ?? u.username}
-                  </span>
-                </td>
-                <td className="data faint">{u.discordId}</td>
-                <td>
-                  <select
-                    value={u.role}
-                    disabled={u.id === currentUser.id}
-                    onChange={(e) =>
-                      run(async () => {
-                        await api.patch(`/admin/users/${u.id}/role`, { role: e.target.value });
-                        await reload();
-                      }, 'Rôle mis à jour.')
-                    }
-                  >
-                    <option value="USER">Membre</option>
-                    <option value="MODERATOR">Modérateur</option>
-                    <option value="ADMIN">Administrateur</option>
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="faint" style={{ fontSize: '0.85rem' }}>
-        Un modérateur saisit les résultats et gère les événements. Un administrateur peut en plus
-        supprimer des éléments et distribuer les rôles.
-      </p>
-    </div>
-  );
+  let updated = 0;
+  for (const prediction of predictions) {
+    const { total, sections } = scorePrediction(prediction, category);
+    await prisma.prediction.update({
+      where: { id: prediction.id },
+      data: { points: total, breakdown: sections, scoredAt: new Date() },
+    });
+    updated += 1;
+  }
+  return updated;
 }

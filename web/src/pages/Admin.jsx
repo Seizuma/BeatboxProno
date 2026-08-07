@@ -283,7 +283,6 @@ function ResultsAdmin() {
             </div>
           ))}
 
-          <PodiumResult category={cat} onDone={reload} run={run} />
         </section>
       ))}
     </div>
@@ -391,46 +390,6 @@ function RankingResult({ phase, contenders, onDone, run }) {
           }
         >
           Publier le classement
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PodiumResult({ category, onDone, run }) {
-  const [slots, setSlots] = useState(() =>
-    [1, 2, 3, 4].map((rank) => category.podium?.find((p) => p.rank === rank)?.contenderId ?? '')
-  );
-
-  return (
-    <div className="stack" style={{ gap: '0.4rem', borderTop: 'var(--frame)', paddingTop: '0.8rem' }}>
-      <h3>Top 4 officiel</h3>
-      {slots.map((value, i) => (
-        <div className="row" key={i}>
-          <span className="podium__place" style={{ fontSize: '1.4rem', minWidth: '2rem' }}>{i + 1}</span>
-          <select
-            value={value}
-            aria-label={`Place ${i + 1}`}
-            onChange={(e) => { const next = [...slots]; next[i] = e.target.value; setSlots(next); }}
-          >
-            <option value="">—</option>
-            {category.contenders.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-      ))}
-      <div>
-        <button
-          className="btn btn--small btn--primary"
-          onClick={() =>
-            run(async () => {
-              await api.put(`/admin/categories/${category.id}/podium`, {
-                slots: slots.map((contenderId, i) => ({ rank: i + 1, contenderId })).filter((s) => s.contenderId),
-              });
-              await onDone();
-            }, 'Podium enregistré, pronostics recalculés.')
-          }
-        >
-          Publier le top 4
         </button>
       </div>
     </div>
