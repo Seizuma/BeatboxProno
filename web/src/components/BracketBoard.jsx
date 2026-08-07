@@ -55,6 +55,29 @@ export default function BracketBoard({
     return DISPLAY_ORDER.filter((r) => present.includes(r));
   }, [phaseBattles]);
 
+  /**
+   * Les colonnes du tableau. Un tour = une colonne, sauf les deux finales :
+   * elles partagent la dernière, la grande au centre face aux demies et la
+   * petite en dessous. C'est la disposition des tableaux de compétition — la
+   * petite finale n'est pas un tour de plus, c'est un match annexe.
+   */
+  const columns = useMemo(() => {
+    const present = new Set(rounds);
+    const cols = [];
+    for (const r of ['ROUND_OF_16', 'QUARTER', 'SEMI']) {
+      if (present.has(r)) cols.push({ key: r, main: r, extra: null });
+    }
+    if (present.has('FINAL') || present.has('SMALL_FINAL')) {
+      cols.push({
+        key: 'FINALS',
+        main: present.has('FINAL') ? 'FINAL' : 'SMALL_FINAL',
+        extra: present.has('FINAL') && present.has('SMALL_FINAL') ? 'SMALL_FINAL' : null,
+      });
+    }
+    if (present.has('LEGACY')) cols.push({ key: 'LEGACY', main: 'LEGACY', extra: null });
+    return cols;
+  }, [rounds]);
+
   const battlesOf = useMemo(() => {
     const map = {};
     for (const b of phaseBattles) (map[b.round] ??= []).push(b);
@@ -197,17 +220,17 @@ export default function BracketBoard({
   /** Une colonne se dessine par paires quand la suivante en compte moitié moins. */
   const pairing = useMemo(() => {
     const map = {};
-    rounds.forEach((round, i) => {
-      const next = rounds[i + 1];
-      const mine = battlesOf[round]?.length ?? 0;
-      const theirs = next ? battlesOf[next]?.length ?? 0 : 0;
-      map[round] = {
+    columns.forEach((col, i) => {
+      const next = columns[i + 1];
+      const mine = battlesOf[col.main]?.length ?? 0;
+      const theirs = next ? battlesOf[next.main]?.length ?? 0 : 0;
+      map[col.key] = {
         paired: Boolean(next) && mine >= 2 && mine === theirs * 2,
-        fed: i > 0 && map[rounds[i - 1]]?.paired,
+        fed: i > 0 && map[columns[i - 1].key]?.paired,
       };
     });
     return map;
-  }, [rounds, battlesOf]);
+  }, [columns, battlesOf]);
 
   function renderBattle(battle) {
     const r = resolved.get(key(battle.round, battle.slot));
@@ -281,9 +304,10 @@ export default function BracketBoard({
 
   return (
     <div className="bracket">
-      {rounds.map((round) => {
-        const battles = battlesOf[round] ?? [];
-        const { paired, fed } = pairing[round] ?? {};
+      {columns.map((col) => {
+        const battles = battlesOf[col.main] ?? [];
+        const extras = col.extra ? battlesOf[col.extra] ?? [] : [];
+        const { paired, fed } = pairing[col.key] ?? {};
 
         const pairs = [];
         if (paired) {
@@ -291,10 +315,16 @@ export default function BracketBoard({
         }
 
         return (
-          <section className="bracket__round" key={round}>
-            <h4 className="bracket__title">{t(`bracket.round.${round}`)}</h4>
+          <section className="bracket__round" key={col.key}>
+            <h4 className="bracket__title">{t(`bracket.round.${col.main}`)}</h4>
 
-            <div className={`bracket__col${fed ? ' bracket__col--fed' : ''}`}>
+            <div
+              className={
+                'bracket__col' +
+                (col.key === 'FINALS' ? ' bracket__col--finals' : '') +
+                (fed ? ' bracket__col--fed' : '')
+              }
+            >
               {paired
                 ? pairs.map((pair, i) => (
                   <div className="bracket__pair" key={i}>
@@ -302,6 +332,15 @@ export default function BracketBoard({
                   </div>
                 ))
                 : battles.map(renderBattle)}
+
+              {/* La petite finale : sous la grande, dans la même colonne, et
+                  sans trait de liaison — elle ne mène nulle part. */}
+              {extras.length > 0 && (
+                <div className="bracket__annex">
+                  <h5 className="bracket__subtitle">{t(`bracket.round.${col.extra}`)}</h5>
+                  {extras.map(renderBattle)}
+                </div>
+              )}
             </div>
           </section>
         );
