@@ -20,12 +20,9 @@ body {
   background: var(--screen);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 19px;
-  /* VT323 est étroite : on compense en taille */
-  line-height: 1.4;
-  letter-spacing: 0.03em;
-  -webkit-font-smoothing: none;
-  /* le phosphore ne s'anticrénelle pas */
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
 }
 
 /* Les lignes de balayage du tube : un voile fixe sur tout l'écran.
@@ -176,7 +173,7 @@ img {
 
 .wordmark__name {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -314,6 +311,9 @@ img {
    --------------------------------------------------------------------------- */
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
   font-family: var(--font-data);
   font-size: 1.05rem;
   text-transform: uppercase;
@@ -365,6 +365,15 @@ img {
 .btn--discord:hover {
   background: var(--w);
   border-color: var(--w);
+}
+
+/* Le SVG n'avait ni largeur ni hauteur : il s'étirait à toute la place
+   disponible. On le cale sur la hauteur du texte. */
+.btn--discord svg {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  fill: currentColor;
 }
 
 .btn:disabled {
@@ -478,24 +487,34 @@ select option {
    --------------------------------------------------------------------------- */
 
 .hero {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 2.5rem;
-  align-items: center;
-  padding: clamp(2rem, 6vw, 3.5rem) 0 1.5rem;
-}
-
-@media (max-width: 820px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem) 0 1.25rem;
+  border-bottom: var(--frame);
+  margin-bottom: 1.5rem;
 }
 
 .hero__title {
-  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  font-size: clamp(2rem, 5.5vw, 3.4rem);
   line-height: 0.95;
-  margin: 0.3rem 0 0.6rem;
+  margin: 0.2rem 0 0.4rem;
   color: var(--w);
+}
+
+/* Titre et accroche côte à côte dès qu'il y a la place : la liste des
+   événements doit rester visible sans faire défiler. */
+.hero__band {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem 2.5rem;
+  align-items: end;
+}
+
+@media (max-width: 760px) {
+  .hero__band {
+    grid-template-columns: 1fr;
+  }
 }
 
 .hero__title em {
@@ -504,9 +523,9 @@ select option {
 }
 
 .hero__lede {
-  max-width: 52ch;
+  max-width: 54ch;
   color: var(--ink-faint);
-  font-size: 1.05rem;
+  margin: 0;
 }
 
 /* Le compteur : les chiffres verts du décodeur. */
@@ -517,7 +536,7 @@ select option {
 }
 
 .readout__value {
-  font-family: var(--font-data);
+  font-family: var(--font-display);
   color: var(--g);
   font-size: 1.7rem;
   letter-spacing: 0.14em;
@@ -528,44 +547,6 @@ select option {
   text-transform: uppercase;
   font-size: 0.85rem;
   letter-spacing: 0.1em;
-}
-
-/* Les pads de catégories deviennent des lignes d'index de page. */
-.pads {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.pad {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  border: var(--frame);
-  padding: 0.5rem 0.7rem;
-  color: var(--w);
-}
-
-.pad--empty {
-  border-style: dashed;
-  min-height: 2.6rem;
-}
-
-.pad--lit:hover {
-  background: var(--surface-2);
-  border-color: var(--c);
-}
-
-.pad__index {
-  font-family: var(--font-data);
-  color: var(--y);
-  font-size: 1rem;
-}
-
-.pad__label {
-  text-transform: uppercase;
-  font-size: 1rem;
-  letter-spacing: 0.05em;
 }
 
 /* ---------------------------------------------------------------------------
@@ -586,12 +567,31 @@ select option {
   border-bottom: 1px solid var(--line);
 }
 
+/* Celui sur lequel on peut pronostiquer maintenant : encadré, pas noyé. */
+.rail--open {
+  border: var(--border-w) solid var(--y);
+  padding: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.rail--open:hover {
+  background: var(--surface-2);
+}
+
+.rail--open .rail__year {
+  color: var(--y);
+}
+
+.rail--open+.rail {
+  border-top: 1px solid var(--line);
+}
+
 .rail:hover {
   background: var(--surface-2);
 }
 
 .rail__year {
-  font-family: var(--font-data);
+  font-family: var(--font-display);
   color: var(--y);
   font-size: 1.8rem;
 }
@@ -660,7 +660,7 @@ td.num {
 }
 
 .rank-cell {
-  font-family: var(--font-data);
+  font-family: var(--font-display);
   color: var(--y);
   width: 2.5rem;
 }
@@ -695,7 +695,7 @@ td.num {
 }
 
 .podium__place {
-  font-family: var(--font-data);
+  font-family: var(--font-display);
   font-size: 2rem;
   color: var(--y);
   text-align: center;

@@ -17,25 +17,25 @@
 
 :root,
 [data-theme='p411'] {
-  /* ---- La palette : les couleurs du décodeur, et rien d'autre ---- */
-  --screen: #0b0b0b;
-  /* le fond du tube */
-  --w: #e8e8e8;
-  /* blanc cassé du phosphore */
-  --y: #ffe400;
-  /* jaune */
-  --c: #00e8e8;
-  /* cyan */
-  --g: #00d648;
-  /* vert */
-  --m: #ff3ce8;
-  /* magenta */
-  --r: #ff2222;
-  /* rouge */
-  --b: #1414d8;
-  /* bleu — le seul autorisé en fond de bloc */
+   /* ---- La palette : les couleurs du décodeur, et rien d'autre ---- */
+   --screen: #0b0b0b;
+   /* le fond du tube */
+   --w: #e8e8e8;
+   /* blanc cassé du phosphore */
+   --y: #ffe400;
+   /* jaune */
+   --c: #00e8e8;
+   /* cyan */
+   --g: #00d648;
+   /* vert */
+   --m: #ff3ce8;
+   /* magenta */
+   --r: #ff2222;
+   /* rouge */
+   --b: #1414d8;
+   /* bleu — le seul autorisé en fond de bloc */
 
-  /* ---- Les rôles ----
+   /* ---- Les rôles ----
      jaune    : l'action et la sélection — ce que l'utilisateur touche
      cyan     : la navigation et les liens — ce qui mène ailleurs
      vert     : les points et les réussites — ce qui rapporte
@@ -44,35 +44,38 @@
      bleu     : les bandeaux de section — le fond des titres, jamais du texte
      blanc    : le contenu — les noms, les phrases                        */
 
-  /* ---- Tokens sémantiques (référencés par app.css, board.css et le JSX) ---- */
-  --surface: var(--screen);
-  --surface-2: #131313;
-  /* la seule "nuance" tolérée : le survol */
-  --ink: var(--w);
-  --ink-faint: #8a8a8a;
-  --line: #3a3a3a;
-  /* les filets discrets des tableaux */
-  --accent: var(--y);
-  /* requis par le JSX */
-  --accent-ink: #000000;
-  --ok: var(--g);
-  /* requis par le JSX */
+   /* ---- Tokens sémantiques (référencés par app.css, board.css et le JSX) ---- */
+   --surface: var(--screen);
+   --surface-2: #131313;
+   /* la seule "nuance" tolérée : le survol */
+   --ink: var(--w);
+   --ink-faint: #8a8a8a;
+   --line: #3a3a3a;
+   /* les filets discrets des tableaux */
+   --accent: var(--y);
+   /* requis par le JSX */
+   --accent-ink: #000000;
+   --ok: var(--g);
+   /* requis par le JSX */
 
-  /* ---- Typographie : une seule fonte, comme un seul générateur de caractères ---- */
-  --font-display: 'VT323', monospace;
-  --font-body: 'VT323', monospace;
-  --font-data: 'VT323', monospace;
-  --display-scale: 1;
-  /* requis par le JSX */
-  --display-weight: 400;
-  /* VT323 n'a qu'une graisse */
+   /* ---- Typographie ----
+     Deux familles, une seule grille. VT323 garde la signature du tube, mais
+     uniquement là où sa taille la rend lisible : titres et grands nombres.
+     IBM Plex Mono prend tout le texte courant — même chasse fixe, mêmes
+     alignements, mais des lettres qui restent nettes à 14px.               */
+   --font-display: 'VT323', 'IBM Plex Mono', monospace;
+   --font-body: 'IBM Plex Mono', ui-monospace, monospace;
+   --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+   --display-scale: 1;
+   /* requis par le JSX */
+   --display-weight: 400;
 
-  /* ---- Formes : le tube cathodique ne connaît pas l'arrondi ---- */
-  --radius: 0;
-  --radius-lg: 0;
-  --border-w: 2px;
-  --frame: var(--border-w) solid var(--line);
-  /* requis par le JSX */
-  --shadow: none;
-  --shadow-lift: none;
+   /* ---- Formes : le tube cathodique ne connaît pas l'arrondi ---- */
+   --radius: 0;
+   --radius-lg: 0;
+   --border-w: 2px;
+   --frame: var(--border-w) solid var(--line);
+   /* requis par le JSX */
+   --shadow: none;
+   --shadow-lift: none;
 }
