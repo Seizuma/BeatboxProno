@@ -760,3 +760,80 @@ details.panel>summary .eyebrow {
   border-color: var(--m);
   color: var(--m);
 }
+
+/* --- Actions destructives --------------------------------------------------
+   Le rouge est déjà la couleur de ce qui élimine dans ce système (ligne de
+   coupe, alertes). Un bouton qui supprime doit s'y ranger, et ne pas
+   ressembler à un bouton ordinaire.
+   -------------------------------------------------------------------------- */
+
+.btn--danger {
+  border-color: var(--r);
+  color: var(--r);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--r);
+  color: #fff;
+}
+
+.btn--danger:disabled:hover {
+  background: none;
+  color: var(--r);
+}
+
+/* --- Comparaison de photos ------------------------------------------------- */
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 620px) {
+  .compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compare__side {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: var(--frame);
+  padding: 0.7rem;
+}
+
+.compare__side--new {
+  border-color: var(--y);
+}
+
+.compare__side figcaption {
+  margin: 0;
+  background: var(--b);
+  color: var(--y);
+  align-self: flex-start;
+  padding: 0 0.4em;
+}
+
+.compare__side--new figcaption {
+  background: var(--y);
+  color: #000;
+}
+
+/* Les deux images à la même taille : sans hauteur fixe, une photo carrée et une
+   photo portrait ne se comparent pas. */
+.compare__side img {
+  width: 100%;
+  height: clamp(180px, 34vh, 320px);
+  object-fit: cover;
+  border: 2px solid var(--line);
+  background: #000;
+  image-rendering: pixelated;
+  filter: contrast(1.15) saturate(1.25);
+}
+
+.compare__side--new img {
+  border-color: var(--y);
+}

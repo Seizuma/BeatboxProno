@@ -4,6 +4,8 @@ import { useSession, isStaff } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
+import ConfirmDelete from '../components/ConfirmDelete.jsx';
+import PhotoCompare from '../components/PhotoCompare.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -48,6 +50,32 @@ export default function Admin() {
   );
 }
 
+/**
+ * Toute suppression passe par ici. `ask(kind, id, done)` ouvre la fenêtre de
+ * bilan ; rien n'est envoyé au serveur tant que l'administrateur n'a pas relu
+ * ce que l'action emporte et cliqué. Les routes refusent de toute façon sans
+ * `?confirm=true` : l'interface et l'API tiennent la même ligne.
+ */
+function useConfirmDelete() {
+  const [pending, setPending] = useState(null);
+
+  const ask = (kind, id, onDone) => setPending({ kind, id, onDone });
+
+  const node = pending && (
+    <ConfirmDelete
+      kind={pending.kind}
+      id={pending.id}
+      onCancel={() => setPending(null)}
+      onConfirmed={async (result) => {
+        setPending(null);
+        await pending.onDone?.(result);
+      }}
+    />
+  );
+
+  return [node, ask];
+}
+
 function useFlash() {
   const [flash, setFlash] = useState(null);
   const run = async (fn, okText) => {
@@ -88,6 +116,7 @@ function StructureAdmin() {
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState({ name: '', year: new Date().getFullYear(), location: '' });
   const [flash, run] = useFlash();
+  const [confirmNode, askDelete] = useConfirmDelete();
 
   const reload = async () => {
     const { events } = await api.get('/events');
@@ -111,6 +140,7 @@ function StructureAdmin() {
   return (
     <div className="stack">
       {flash}
+      {confirmNode}
 
       <section className="panel stack">
         <h2>Créer un événement</h2>
@@ -152,7 +182,7 @@ function StructureAdmin() {
         <div className="panel panel--flush">
           <table>
             <thead>
-              <tr><th></th><th>Nom</th><th>Catégories</th><th>Statut</th><th className="num">Pronos</th></tr>
+              <tr><th></th><th>Nom</th><th>Catégories</th><th>Statut</th><th className="num">Pronos</th><th></th></tr>
             </thead>
             <tbody>
               {events.map((ev) => (
@@ -185,6 +215,20 @@ function StructureAdmin() {
                     </select>
                   </td>
                   <td className="num">{ev._count?.predictions ?? 0}</td>
+                  <td className="num">
+                    <button
+                      className="btn btn--small btn--danger"
+                      onClick={() =>
+                        askDelete('event', ev.id, async () => {
+                          if (selected === ev.id) setSelected('');
+                          await reload();
+                          await run(async () => { }, `${ev.name} ${ev.year} supprimé.`);
+                        })
+                      }
+                    >
+                      Supprimer
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -193,12 +237,14 @@ function StructureAdmin() {
       </section>
 
       {selected && !detail && <p className="faint">Chargement de la structure…</p>}
-      {selected && detail && <EventStructure event={detail.event} onDone={refresh} run={run} />}
+      {selected && detail && (
+        <EventStructure event={detail.event} onDone={refresh} run={run} askDelete={askDelete} />
+      )}
     </div>
   );
 }
 
-function EventStructure({ event, onDone, run }) {
+function EventStructure({ event, onDone, run, askDelete }) {
   const [building, setBuilding] = useState(false);
 
   return (
@@ -220,7 +266,7 @@ function EventStructure({ event, onDone, run }) {
       )}
 
       {event.categories.map((cat) => (
-        <CategoryPanel key={cat.id} category={cat} onDone={onDone} run={run} />
+        <CategoryPanel key={cat.id} category={cat} onDone={onDone} run={run} askDelete={askDelete} />
       ))}
 
       {building && (
@@ -235,7 +281,7 @@ function EventStructure({ event, onDone, run }) {
   );
 }
 
-function CategoryPanel({ category, onDone, run }) {
+function CategoryPanel({ category, onDone, run, askDelete }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -251,12 +297,12 @@ function CategoryPanel({ category, onDone, run }) {
             {open ? 'Réduire' : 'Participants'}
           </button>
           <button
-            className="btn btn--small btn--ghost"
+            className="btn btn--small btn--danger"
             onClick={() =>
-              run(async () => {
-                await api.del(`/admin/categories/${category.id}`);
+              askDelete('category', category.id, async () => {
                 await onDone();
-              }, 'Catégorie supprimée.')
+                await run(async () => { }, `${category.name} supprimée.`);
+              })
             }
           >
             Supprimer
@@ -274,13 +320,13 @@ function CategoryPanel({ category, onDone, run }) {
         ))}
       </div>
 
-      {open && <ContenderManager category={category} onDone={onDone} run={run} />}
+      {open && <ContenderManager category={category} onDone={onDone} run={run} askDelete={askDelete} />}
     </div>
   );
 }
 
 /** Ajout et retrait des participants — jusqu'ici réservé au script de seed. */
-function ContenderManager({ category, onDone, run }) {
+function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', seed: '', artistId: '' });
 
@@ -350,12 +396,12 @@ function ContenderManager({ category, onDone, run }) {
                     <td>{c.name}</td>
                     <td className="num">
                       <button
-                        className="btn btn--small btn--ghost"
+                        className="btn btn--small btn--danger"
                         onClick={() =>
-                          run(async () => {
-                            await api.del(`/admin/contenders/${c.id}`);
+                          askDelete('contender', c.id, async () => {
                             await onDone();
-                          }, 'Participant retiré.')
+                            await run(async () => { }, `${c.name} retiré.`);
+                          })
                         }
                       >
                         Retirer
@@ -544,6 +590,7 @@ function ArtistsAdmin() {
   const [form, setForm] = useState({ name: '', country: '' });
   const [q, setQ] = useState('');
   const [flash, run] = useFlash();
+  const [confirmNode, askDelete] = useConfirmDelete();
 
   const reload = () => api.get('/artists').then(({ artists }) => setArtists(artists));
   useEffect(() => { reload(); }, []);
@@ -553,6 +600,7 @@ function ArtistsAdmin() {
   return (
     <div className="stack">
       {flash}
+      {confirmNode}
       <ArtistPhotosPanel onDone={reload} />
 
       <section className="panel stack">
@@ -607,9 +655,17 @@ function ArtistsAdmin() {
                   <span className="row" style={{ gap: '0.35rem', justifyContent: 'flex-end' }}>
                     <PhotoUpload artist={a} onDone={reload} run={run} />
                     <button
-                      className="btn btn--small btn--ghost"
+                      className="btn btn--small btn--danger"
                       onClick={() =>
-                        run(async () => { await api.del(`/admin/artists/${a.id}`); await reload(); }, 'Artiste supprimé.')
+                        askDelete('artist', a.id, async (result) => {
+                          await reload();
+                          await run(
+                            async () => { },
+                            result?.removedContenders
+                              ? `${a.name} supprimé, ${result.removedContenders} participant(s) retiré(s) des événements.`
+                              : `${a.name} supprimé.`
+                          );
+                        })
                       }
                     >
                       Supprimer
@@ -634,6 +690,7 @@ function ArtistsAdmin() {
  */
 function PhotoUpload({ artist, onDone, run }) {
   const [busy, setBusy] = useState(false);
+  const [candidate, setCandidate] = useState(null);
   const inputId = `photo-${artist.id}`;
 
   const send = async (file) => {
@@ -644,11 +701,16 @@ function PhotoUpload({ artist, onDone, run }) {
         throw new Error(`${file.name} pèse ${(file.size / 1048576).toFixed(1)} Mo. Maximum : 8 Mo.`);
       });
     }
+
+    // Une photo existe déjà : on la met face à la nouvelle avant de trancher.
+    // Rien n'est envoyé tant que le choix n'est pas fait.
+    if (artist.imageUrl) return setCandidate(file);
+
     setBusy(true);
     await run(async () => {
       await api.upload(`/admin/photos/upload/${artist.id}`, file);
       await onDone();
-    }, `Photo de ${artist.name} mise à jour.`);
+    }, `Photo de ${artist.name} ajoutée.`);
     setBusy(false);
   };
 
@@ -680,6 +742,19 @@ function PhotoUpload({ artist, onDone, run }) {
         >
           ✕
         </button>
+      )}
+
+      {candidate && (
+        <PhotoCompare
+          artist={artist}
+          file={candidate}
+          onCancel={() => setCandidate(null)}
+          onReplaced={async () => {
+            setCandidate(null);
+            await onDone();
+            await run(async () => { }, `Photo de ${artist.name} remplacée.`);
+          }}
+        />
       )}
     </>
   );

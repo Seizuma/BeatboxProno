@@ -36,9 +36,174 @@ adminRouter.patch('/artists/:id', async (req, res) => {
   res.json({ artist });
 });
 
+// --- Ce qu'une suppression emporte --------------------------------------------
+
+/**
+ * Rien ne se supprime à l'aveugle. Chaque route de suppression commence par
+ * établir son bilan, le renvoie en 409 si l'administrateur n'a pas confirmé, et
+ * ne passe à l'acte qu'avec `?confirm=true`. L'interface s'appuie sur le même
+ * bilan pour afficher la fenêtre de confirmation : une seule source de vérité,
+ * pas deux formulations qui divergent.
+ */
+async function artistImpact(artistId) {
+  const artist = await prisma.artist.findUnique({
+    where: { id: artistId },
+    include: {
+      entries: {
+        include: {
+          contender: {
+            include: {
+              _count: { select: { artists: true } },
+              category: { include: { event: { select: { name: true, year: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!artist) return null;
+
+  const contenders = artist.entries.map((e) => ({
+    id: e.contender.id,
+    name: e.contender.name,
+    category: e.contender.category.name,
+    event: `${e.contender.category.event.name} ${e.contender.category.event.year}`,
+    // Un participant peut réunir plusieurs artistes (« Colaps & Zekka ») : il ne
+    // devient orphelin que si celui-ci était le dernier.
+    orphaned: e.contender._count.artists <= 1,
+  }));
+
+  return {
+    kind: 'artist',
+    name: artist.name,
+    imageUrl: artist.imageUrl,
+    contenders,
+    orphans: contenders.filter((c) => c.orphaned),
+    events: [...new Set(contenders.map((c) => c.event))],
+  };
+}
+
+async function eventImpact(eventId) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      categories: {
+        include: { _count: { select: { contenders: true, predictions: true, phases: true } } },
+      },
+      _count: { select: { predictions: true } },
+    },
+  });
+  if (!event) return null;
+
+  return {
+    kind: 'event',
+    name: `${event.name} ${event.year}`,
+    status: event.status,
+    predictions: event._count.predictions,
+    categories: event.categories.map((c) => ({
+      name: c.name,
+      contenders: c._count.contenders,
+      phases: c._count.phases,
+      predictions: c._count.predictions,
+    })),
+  };
+}
+
+async function categoryImpact(categoryId) {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    include: {
+      event: { select: { name: true, year: true } },
+      _count: { select: { contenders: true, phases: true, predictions: true } },
+    },
+  });
+  if (!category) return null;
+
+  return {
+    kind: 'category',
+    name: category.name,
+    event: `${category.event.name} ${category.event.year}`,
+    contenders: category._count.contenders,
+    phases: category._count.phases,
+    predictions: category._count.predictions,
+  };
+}
+
+async function contenderImpact(contenderId) {
+  const contender = await prisma.contender.findUnique({
+    where: { id: contenderId },
+    include: {
+      category: { include: { event: { select: { name: true, year: true } } } },
+      _count: {
+        select: { phaseEntries: true, predictedRanks: true, battlesAsA: true, battlesAsB: true },
+      },
+    },
+  });
+  if (!contender) return null;
+
+  return {
+    kind: 'contender',
+    name: contender.name,
+    category: contender.category.name,
+    event: `${contender.category.event.name} ${contender.category.event.year}`,
+    // Les affiches où il apparaît : les retirer laisse des trous dans l'arbre.
+    battles: contender._count.battlesAsA + contender._count.battlesAsB,
+    rankings: contender._count.phaseEntries,
+    predictedRanks: contender._count.predictedRanks,
+  };
+}
+
+const IMPACT_LOADERS = {
+  artist: artistImpact,
+  event: eventImpact,
+  category: categoryImpact,
+  contender: contenderImpact,
+};
+
+/** L'interface interroge ce bilan avant d'ouvrir sa fenêtre de confirmation. */
+adminRouter.get('/impact/:kind/:id', async (req, res) => {
+  const load = IMPACT_LOADERS[req.params.kind];
+  if (!load) return res.status(400).json({ error: `Type inconnu : ${req.params.kind}` });
+  const impact = await load(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Élément introuvable.' });
+  res.json({ impact });
+});
+
+/**
+ * Suppression d'un artiste.
+ *
+ * La cascade de la base ne retire que le lien participant↔artiste : le
+ * participant, lui, survivait sans plus personne derrière — d'où les fantômes
+ * restés dans les événements. On nettoie donc explicitement les participants
+ * dont c'était le dernier artiste, sauf demande contraire.
+ *
+ *   ?confirm=true    obligatoire dès qu'il y a le moindre impact
+ *   ?keep=true       conserve les participants orphelins (nom libre)
+ */
 adminRouter.delete('/artists/:id', onlyAdmin, async (req, res) => {
-  await prisma.artist.delete({ where: { id: req.params.id } });
-  res.json({ ok: true });
+  const impact = await artistImpact(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Artiste introuvable.' });
+
+  const hasImpact = impact.contenders.length > 0;
+  if (hasImpact && req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error: `${impact.name} est engagé sur ${impact.contenders.length} participation(s). Confirmez pour continuer.`,
+      impact,
+    });
+  }
+
+  const orphanIds = req.query.keep === 'true' ? [] : impact.orphans.map((c) => c.id);
+
+  await prisma.$transaction([
+    // D'abord les participants devenus vides, ensuite l'artiste : dans l'autre
+    // sens, la cascade aurait déjà effacé les liens qui les identifient.
+    ...(orphanIds.length
+      ? [prisma.contender.deleteMany({ where: { id: { in: orphanIds } } })]
+      : []),
+    prisma.artist.delete({ where: { id: req.params.id } }),
+  ]);
+
+  res.json({ ok: true, removedContenders: orphanIds.length, impact });
 });
 
 // --- Événements ---------------------------------------------------------------
@@ -66,8 +231,19 @@ adminRouter.patch('/events/:id', async (req, res) => {
 });
 
 adminRouter.delete('/events/:id', onlyAdmin, async (req, res) => {
+  const impact = await eventImpact(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Événement introuvable.' });
+
+  const hasImpact = impact.categories.length > 0 || impact.predictions > 0;
+  if (hasImpact && req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error: `Cet événement porte ${impact.categories.length} catégorie(s) et ${impact.predictions} pronostic(s). Confirmez pour continuer.`,
+      impact,
+    });
+  }
+
   await prisma.event.delete({ where: { id: req.params.id } });
-  res.json({ ok: true });
+  res.json({ ok: true, impact });
 });
 
 // --- Catégories, contenders, phases -------------------------------------------
@@ -106,8 +282,19 @@ adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
 });
 
 adminRouter.delete('/contenders/:id', async (req, res) => {
+  const impact = await contenderImpact(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Participant introuvable.' });
+
+  const hasImpact = impact.battles > 0 || impact.rankings > 0 || impact.predictedRanks > 0;
+  if (hasImpact && req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error: `${impact.name} apparaît dans ${impact.battles} affiche(s) et ${impact.predictedRanks} pronostic(s). Confirmez pour continuer.`,
+      impact,
+    });
+  }
+
   await prisma.contender.delete({ where: { id: req.params.id } });
-  res.json({ ok: true });
+  res.json({ ok: true, impact });
 });
 
 adminRouter.post('/categories/:categoryId/phases', async (req, res) => {
@@ -314,14 +501,19 @@ adminRouter.patch('/categories/:id', async (req, res) => {
 });
 
 adminRouter.delete('/categories/:id', onlyAdmin, async (req, res) => {
-  const count = await prisma.prediction.count({ where: { categoryId: req.params.id } });
-  if (count > 0 && req.query.force !== 'true') {
+  const impact = await categoryImpact(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Catégorie introuvable.' });
+
+  const hasImpact = impact.predictions > 0 || impact.contenders > 0;
+  if (hasImpact && req.query.confirm !== 'true') {
     return res.status(409).json({
-      error: `${count} pronostic(s) portent sur cette catégorie. Ajoutez ?force=true pour confirmer.`,
+      error: `Cette catégorie porte ${impact.contenders} participant(s) et ${impact.predictions} pronostic(s). Confirmez pour continuer.`,
+      impact,
     });
   }
+
   await prisma.category.delete({ where: { id: req.params.id } });
-  res.json({ ok: true });
+  res.json({ ok: true, impact });
 });
 
 adminRouter.delete('/phases/:id', onlyAdmin, async (req, res) => {
