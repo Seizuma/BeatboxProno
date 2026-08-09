@@ -107,7 +107,9 @@ export default function Home() {
         </section>
       )}
 
-      {/* Le reste du calendrier : archives et à-venir. */}
+      {/* Le reste du calendrier : archives, à-venir, et — pour le staff
+          seulement — les brouillons, signalés comme tels. L'API ne les envoie
+          jamais aux autres comptes. */}
       {rest.length > 0 && (
         <section>
           <div className="spread" style={{ marginBottom: '0.9rem' }}>
@@ -116,12 +118,17 @@ export default function Home() {
           </div>
 
           {rest.map((ev) => (
-            <Link className="rail" to={`/events/${ev.slug}`} key={ev.id}>
+            <Link
+              className={`rail${ev.status === 'DRAFT' ? ' rail--draft' : ''}`}
+              to={`/events/${ev.slug}`}
+              key={ev.id}
+            >
               <span className="rail__year">{ev.year}</span>
               <span>
                 <h3 className="rail__title">{ev.name}</h3>
                 <span className="rail__meta">
                   <span className={`tag ${STATUS_CLASS[ev.status] ?? ''}`}>{t(`status.${ev.status}`)}</span>
+                  {ev.status === 'DRAFT' && <span className="tag tag--draft">{t('home.draft.hint')}</span>}
                   {ev.categories.map((c) => (
                     <span className="tag" key={c.id}>{c.name}</span>
                   ))}

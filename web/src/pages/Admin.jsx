@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useSession, isStaff } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
+import Modal from '../components/Modal.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -197,22 +198,38 @@ function StructureAdmin() {
 }
 
 function EventStructure({ event, onDone, run }) {
+  const [building, setBuilding] = useState(false);
+
   return (
     <section className="stack">
       <div className="spread">
         <h2>Structure — {event.name} {event.year}</h2>
-        <span className="silkscreen">{event.categories.length} catégorie(s)</span>
+        <div className="row" style={{ gap: '0.6rem' }}>
+          <span className="silkscreen">{event.categories.length} catégorie(s)</span>
+          <button className="btn btn--primary btn--small" onClick={() => setBuilding(true)}>
+            Paramétrer le format
+          </button>
+        </div>
       </div>
 
       {event.categories.length === 0 && (
-        <p className="empty">Aucune catégorie. Composez le format ci-dessous.</p>
+        <p className="empty">
+          Aucune catégorie. Ouvrez « Paramétrer le format » pour composer l'événement.
+        </p>
       )}
 
       {event.categories.map((cat) => (
         <CategoryPanel key={cat.id} category={cat} onDone={onDone} run={run} />
       ))}
 
-      <FormatBuilder event={event} onDone={onDone} run={run} />
+      {building && (
+        <FormatBuilder
+          event={event}
+          run={run}
+          onClose={() => setBuilding(false)}
+          onDone={async () => { await onDone(); setBuilding(false); }}
+        />
+      )}
     </section>
   );
 }
@@ -358,7 +375,7 @@ function ContenderManager({ category, onDone, run }) {
  * taille du tableau pour chacune, et le serveur monte phases et squelette
  * d'affiches d'un seul geste.
  */
-function FormatBuilder({ event, onDone, run }) {
+function FormatBuilder({ event, onDone, onClose, run }) {
   const [catalog, setCatalog] = useState(null);
   const [picked, setPicked] = useState({});
   const [mode, setMode] = useState('add');
@@ -396,107 +413,124 @@ function FormatBuilder({ event, onDone, run }) {
       await onDone();
     }, 'Structure générée.');
 
-  if (!catalog) return <p className="faint">Chargement des formats…</p>;
+  const footer = (
+    <>
+      <div className="field">
+        <label htmlFor="fmt-mode">Mode</label>
+        <select id="fmt-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
+          <option value="add">Ajouter aux catégories existantes</option>
+          <option value="replace">Remplacer toute la structure</option>
+        </select>
+      </div>
+      <button className="btn btn--primary" disabled={chosen.length === 0} onClick={submit}>
+        Générer la structure
+      </button>
+      <button className="btn btn--ghost" onClick={onClose}>Annuler</button>
+      {mode === 'replace' && (
+        <span className="faint" style={{ fontSize: '0.82rem' }}>
+          Refusé si des pronostics existent déjà.
+        </span>
+      )}
+    </>
+  );
 
   return (
-    <div className="panel stack">
-      <div>
-        <h3>Composer le format</h3>
-        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-          Chaque catégorie cochée reçoit ses phases et son squelette d'affiches.
-          Les participants s'ajoutent ensuite, catégorie par catégorie.
-        </p>
-      </div>
+    <Modal
+      wide
+      title="Paramétrer le format"
+      subtitle={`${event.name} ${event.year}`}
+      onClose={onClose}
+      footer={catalog ? footer : null}
+    >
+      {!catalog ? (
+        <p className="faint">Chargement des formats…</p>
+      ) : (
+        <>
+          <p className="faint" style={{ fontSize: '0.88rem', margin: 0 }}>
+            Cochez les catégories de l'événement. Chacune reçoit ses phases et son
+            squelette d'affiches ; les participants s'ajoutent ensuite, catégorie
+            par catégorie.
+          </p>
 
-      <div className="row" style={{ gap: '0.4rem' }}>
-        {catalog.kinds.map((k) => (
-          <button
-            key={k.id}
-            className={`btn btn--small${picked[k.id] ? ' btn--primary' : ''}`}
-            onClick={() => toggle(k.id, k.label)}
-          >
-            {k.label}{existingKinds.has(k.id) ? ' ✓' : ''}
-          </button>
-        ))}
-      </div>
+          <div className="row" style={{ gap: '0.4rem' }}>
+            {catalog.kinds.map((k) => (
+              <button
+                key={k.id}
+                className={`btn btn--small${picked[k.id] ? ' btn--primary' : ''}`}
+                onClick={() => toggle(k.id, k.label)}
+              >
+                {k.label}{existingKinds.has(k.id) ? ' ✓' : ''}
+              </button>
+            ))}
+          </div>
 
-      {chosen.length > 0 && (
-        <div className="panel panel--flush">
-          <table>
-            <thead>
-              <tr><th>Catégorie</th><th>Tableau</th><th>Qualifications</th><th>3e place</th></tr>
-            </thead>
-            <tbody>
-              {chosen.map((c) => (
-                <tr key={c.kind}>
-                  <td>
-                    <input
-                      type="text" value={c.name} aria-label={`Nom de la catégorie ${c.kind}`}
-                      onChange={(e) => patch(c.kind, { name: e.target.value })}
-                      style={{ width: '10rem' }}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={c.format} aria-label={`Format de ${c.name}`}
-                      onChange={(e) => patch(c.kind, { format: e.target.value })}
-                    >
-                      {catalog.brackets.map((b) => (
-                        <option key={b.id} value={b.id}>{b.label}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <label style={{ margin: 0 }}>
-                      <input
-                        type="checkbox" checked={c.wildcard}
-                        onChange={(e) => patch(c.kind, { wildcard: e.target.checked })}
-                      />{' '}
-                      wildcards
-                    </label>
-                    {c.wildcard && (
-                      <input
-                        type="number" min="2" style={{ width: '5rem', marginLeft: '0.5rem' }}
-                        value={c.wildcardCount}
-                        aria-label={`Nombre de qualifiés pour ${c.name}`}
-                        placeholder={String(catalog.brackets.find((b) => b.id === c.format)?.size ?? '')}
-                        onChange={(e) => patch(c.kind, { wildcardCount: e.target.value })}
-                      />
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox" checked={c.smallFinal}
-                      disabled={c.format === 'TOP_2'}
-                      aria-label={`Petite finale pour ${c.name}`}
-                      onChange={(e) => patch(c.kind, { smallFinal: e.target.checked })}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {chosen.length > 0 && (
+            <div className="panel panel--flush">
+              <table>
+                <thead>
+                  <tr><th>Catégorie</th><th>Tableau</th><th>Qualifications</th><th>3e place</th></tr>
+                </thead>
+                <tbody>
+                  {chosen.map((c) => (
+                    <tr key={c.kind}>
+                      <td>
+                        <input
+                          type="text" value={c.name} aria-label={`Nom de la catégorie ${c.kind}`}
+                          onChange={(e) => patch(c.kind, { name: e.target.value })}
+                          style={{ width: '10rem' }}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          value={c.format} aria-label={`Format de ${c.name}`}
+                          onChange={(e) => patch(c.kind, { format: e.target.value })}
+                        >
+                          {catalog.brackets.map((b) => (
+                            <option key={b.id} value={b.id}>{b.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <label style={{ margin: 0 }}>
+                          <input
+                            type="checkbox" checked={c.wildcard}
+                            onChange={(e) => patch(c.kind, { wildcard: e.target.checked })}
+                          />{' '}
+                          wildcards
+                        </label>
+                        {c.wildcard && (
+                          <input
+                            type="number" min="2" style={{ width: '5rem', marginLeft: '0.5rem' }}
+                            value={c.wildcardCount}
+                            aria-label={`Nombre de qualifiés pour ${c.name}`}
+                            placeholder={String(catalog.brackets.find((b) => b.id === c.format)?.size ?? '')}
+                            onChange={(e) => patch(c.kind, { wildcardCount: e.target.value })}
+                          />
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox" checked={c.smallFinal}
+                          disabled={c.format === 'TOP_2'}
+                          aria-label={`Petite finale pour ${c.name}`}
+                          onChange={(e) => patch(c.kind, { smallFinal: e.target.checked })}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {chosen.length === 0 && (
+            <p className="empty" style={{ padding: '1rem' }}>
+              Aucune catégorie cochée pour l'instant.
+            </p>
+          )}
+        </>
       )}
-
-      <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
-        <div className="field">
-          <label htmlFor="fmt-mode">Mode</label>
-          <select id="fmt-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="add">Ajouter aux catégories existantes</option>
-            <option value="replace">Remplacer toute la structure</option>
-          </select>
-        </div>
-        <button className="btn btn--primary" disabled={chosen.length === 0} onClick={submit}>
-          Générer la structure
-        </button>
-        {mode === 'replace' && (
-          <span className="faint" style={{ fontSize: '0.82rem' }}>
-            Le remplacement refuse de partir si des pronostics existent déjà.
-          </span>
-        )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 

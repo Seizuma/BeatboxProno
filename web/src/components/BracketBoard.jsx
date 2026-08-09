@@ -303,7 +303,9 @@ export default function BracketBoard({
   }
 
   return (
-    <div className="bracket">
+    // Le nombre de colonnes est passé à la CSS : c'est lui qui permet de
+    // répartir la largeur disponible au lieu de déborder vers la droite.
+    <div className="bracket" style={{ '--cols': columns.length }}>
       {columns.map((col) => {
         const battles = battlesOf[col.main] ?? [];
         const extras = col.extra ? battlesOf[col.extra] ?? [] : [];

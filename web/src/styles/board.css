@@ -315,25 +315,22 @@ body.is-dragging {
    -------------------------------------------------------------------------- */
 
 .bracket {
-  --gutter: 2.5rem;
-  display: flex;
+  /* La gouttière se resserre quand les colonnes se multiplient : un Top 16 en
+     compte quatre, un Top 4 seulement deux. */
+  --gutter: clamp(0.9rem, 2.2vw, 2.2rem);
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
   gap: var(--gutter);
   align-items: stretch;
-  overflow-x: auto;
   padding: 0.25rem 0 0.75rem;
   min-height: 22rem;
 }
 
-@media (max-width: 720px) {
-  .bracket {
-    --gutter: 1.4rem;
-    min-height: 0;
-  }
-}
-
+/* minmax(0, 1fr) et min-width:0 sont la paire indispensable : sans eux, une
+   colonne de grille refuse de descendre sous la largeur de son contenu, et
+   c'est exactement ce qui provoquait le débordement horizontal. */
 .bracket__round {
-  flex: 1 0 15rem;
-  min-width: 15rem;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -499,15 +496,41 @@ body.is-dragging {
   border-top: 1px solid var(--line);
 }
 
+.bracket .battle__foot {
+  flex-wrap: wrap;
+}
+
 .bracket .battle__foot label {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
 }
 
 .bracket .battle__foot select {
-  flex: 1;
+  flex: 1 1 4rem;
   min-width: 0;
-  padding: 0.1rem 0.35rem;
+  padding: 0.1rem 0.25rem;
+  font-size: 0.9rem;
+}
+
+.bracket .battle__foot .btn {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.78rem;
+}
+
+/* En dessous de cette largeur, quatre colonnes deviennent illisibles quoi
+   qu'on fasse : on rend la main au défilement horizontal, avec des colonnes
+   d'une largeur confortable. */
+@media (max-width: 860px) {
+  .bracket {
+    display: flex;
+    overflow-x: auto;
+    min-height: 0;
+  }
+
+  .bracket__round {
+    flex: 1 0 13rem;
+    min-width: 13rem;
+  }
 }
 
 /* --- Fiches artistes ------------------------------------------------------ */
@@ -652,4 +675,88 @@ details.panel>summary .eyebrow {
   .bracket__col--finals>.bracket__annex {
     padding-top: 1rem;
   }
+}
+
+/* --- Fenêtre de paramétrage ------------------------------------------------
+   Pas d'ombre portée ni d'arrondi : un décodeur ne connaît pas la profondeur.
+   La fenêtre se distingue par un liseré jaune et un fond opaque, pas par un
+   effet de relief.
+   -------------------------------------------------------------------------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.modal__panel {
+  width: min(720px, 100%);
+  max-height: min(85vh, 900px);
+  display: flex;
+  flex-direction: column;
+  background: var(--screen);
+  border: var(--border-w) solid var(--y);
+  outline: none;
+}
+
+.modal__panel--wide {
+  width: min(1000px, 100%);
+}
+
+.modal__panel:focus-visible {
+  outline: none;
+}
+
+.modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-bottom: var(--frame);
+}
+
+.modal__head h2 {
+  background: var(--b);
+  color: var(--y);
+  display: inline-block;
+  padding: 0 0.4em;
+}
+
+.modal__body {
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1rem;
+  border-top: var(--frame);
+}
+
+/* Un brouillon ne doit jamais être confondu avec un événement publié, même
+   par le staff qui est le seul à le voir. */
+.rail--draft {
+  opacity: 0.62;
+  border-left: 3px solid var(--m);
+  padding-left: 0.6rem;
+}
+
+.rail--draft:hover {
+  opacity: 1;
+}
+
+.tag--draft {
+  border-color: var(--m);
+  color: var(--m);
 }
