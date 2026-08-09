@@ -7,7 +7,7 @@ import DiscordButton from './DiscordButton.jsx';
 /* ---------------------------------------------------------------------------
    L'habillage P411. L'en-tête est la ligne de service d'un décodeur
    télétexte : numéro de page à gauche, horloge en direct à droite, et une
-   navigation en pavés fastext dont chaque destination porte son numéro.
+   navigation dont chaque destination porte son numéro de page.
    Les numéros ne sont pas décoratifs : ils identifient les pages, comme
    les vraies pages 411, 412, 413 des services de résultats sportifs.
    --------------------------------------------------------------------------- */
@@ -74,21 +74,13 @@ export default function Layout() {
             </span>
           </nav>
         </div>
-        <div className="railstripe" aria-hidden="true" />
       </header>
 
       <main className="shell">
         <Outlet />
       </main>
 
-      <footer className="shell" style={{ paddingBottom: '2.5rem' }}>
-        <div className="railstripe" aria-hidden="true" style={{ marginTop: '2rem' }} />
-        <div className="fastext" aria-hidden="true">
-          <span className="k-r">{t('nav.events')}</span>
-          <span className="k-g">{t('nav.leaderboard')}</span>
-          <span className="k-y">{t('nav.stats')}</span>
-          <span className="k-c">{t('nav.artists')}</span>
-        </div>
+      <footer className="shell" style={{ paddingBottom: '2.5rem', paddingTop: '2rem' }}>
         <p className="silkscreen" style={{ margin: '0.5rem 0 0' }}>
           beatboxpredictions — {t('footer.tagline')}
         </p>

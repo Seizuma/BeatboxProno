@@ -1,0 +1,16 @@
+# Ne jamais embarquer les dépendances de la machine de développement : elles
+# contiennent un client Prisma généré sur un autre schéma, et des binaires
+# compilés pour un autre système que l'image Alpine.
+node_modules
+npm-debug.log*
+
+# Secrets et artefacts locaux.
+.env
+.env.*
+*.log
+
+# Inutile dans l'image.
+.git
+.gitignore
+Dockerfile
+.dockerignore

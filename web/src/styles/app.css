@@ -25,16 +25,10 @@ body {
   letter-spacing: 0.01em;
 }
 
-/* Les lignes de balayage du tube : un voile fixe sur tout l'écran.
-   pointer-events none — il ne gêne rien, il habille tout. */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 4px);
-}
+/* Plus de voile de balayage. L'effet donnait le grain du tube, mais il passait
+   par-dessus les textes, les boutons et les photos, et rendait la lecture
+   pénible partout. L'identité tient aux couleurs pures, aux angles droits et à
+   la typographie — pas à un filtre posé sur le contenu. */
 
 ::selection {
   background: var(--y);
@@ -123,14 +117,6 @@ img {
 .grid {
   display: grid;
   gap: 0.9rem;
-}
-
-/* La frise mosaïque : la signature du décodeur, entre l'en-tête et la page. */
-.railstripe {
-  height: 10px;
-  background: repeating-linear-gradient(90deg,
-      var(--b) 0 26px, var(--c) 26px 52px, var(--g) 52px 78px,
-      var(--y) 78px 104px, var(--m) 104px 130px, var(--r) 130px 156px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -228,7 +214,7 @@ img {
   }
 }
 
-/* Les liens de navigation : des pavés fastext, numéro de page compris.
+/* Les liens de navigation, numéro de page compris.
    Le numéro est posé par le Layout (attribut data-page). */
 .nav a {
   background: var(--c);
@@ -737,43 +723,6 @@ td.num {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-/* ---------------------------------------------------------------------------
-   Pied de page : la rangée de touches fastext
-   --------------------------------------------------------------------------- */
-
-.fastext {
-  display: flex;
-  gap: 0.7rem;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 0.8rem 0 0;
-}
-
-.fastext span {
-  font-family: var(--font-data);
-  text-transform: uppercase;
-  font-size: 0.95rem;
-  padding: 0 0.5em;
-  color: #000;
-}
-
-.fastext .k-r {
-  background: var(--r);
-  color: #fff;
-}
-
-.fastext .k-g {
-  background: var(--g);
-}
-
-.fastext .k-y {
-  background: var(--y);
-}
-
-.fastext .k-c {
-  background: var(--c);
 }
 
 @media (prefers-reduced-motion: reduce) {

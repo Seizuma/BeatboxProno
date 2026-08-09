@@ -1,0 +1,14 @@
+# Mêmes raisons que côté serveur : les dépendances et le build local n'ont rien
+# à faire dans l'image, et ralentissent chaque construction.
+node_modules
+npm-debug.log*
+dist
+
+.env
+.env.*
+*.log
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
