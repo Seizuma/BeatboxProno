@@ -6,6 +6,7 @@ import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
+import OrphanContenders from '../components/OrphanContenders.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -358,7 +359,7 @@ function ContenderManager({ category, onDone, run, askDelete }) {
               setForm({ ...form, artistId: e.target.value, name: a?.name ?? form.name });
             }}
           >
-            <option value="">— libre —</option>
+            <option value="">— créer d'après le nom —</option>
             {artists.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
@@ -382,6 +383,13 @@ function ContenderManager({ category, onDone, run, askDelete }) {
           Ajouter
         </button>
       </div>
+
+      <p className="faint" style={{ fontSize: '0.84rem', margin: 0 }}>
+        Sans artiste sélectionné, un artiste est créé d'après le nom saisi — ou réutilisé s'il
+        existe déjà. Un participant n'est jamais laissé sans fiche : c'est ce qui garantit la
+        photo et la page de l'artiste. Pour un duo ou un crew, ajoutez-le une première fois, puis
+        rattachez ses membres depuis la fiche de l'artiste.
+      </p>
 
       {category.contenders.length > 0 && (
         <div className="panel panel--flush">
@@ -601,6 +609,7 @@ function ArtistsAdmin() {
     <div className="stack">
       {flash}
       {confirmNode}
+      <OrphanContenders onDone={reload} />
       <ArtistPhotosPanel onDone={reload} />
 
       <section className="panel stack">

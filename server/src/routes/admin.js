@@ -261,24 +261,125 @@ adminRouter.post('/events/:eventId/categories', async (req, res) => {
   res.status(201).json({ category });
 });
 
+/**
+ * Ajout d'un participant à une catégorie.
+ *
+ * Un participant n'est jamais créé sans artiste derrière. C'est la règle qui
+ * manquait : en Crew et Tag Team, on saisissait « Berywam » ou « Colaps &
+ * Zekka » au clavier sans rattacher personne, et ces noms n'existaient nulle
+ * part ailleurs — ni dans la liste des artistes, ni avec une photo, ni avec une
+ * fiche. Faute d'artiste fourni, on en crée un du même nom (ou on réutilise
+ * celui qui existe déjà sous ce slug).
+ *
+ * Les deux modèles restent possibles : un crew peut être UN artiste à lui seul,
+ * ou réunir ses membres. Ce qui est interdit, c'est zéro.
+ */
 adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),
     seed: z.number().int().nullable().optional(),
     wildcard: z.boolean().default(false),
     artistIds: z.array(z.string()).default([]),
-    imageUrl: z.string().url().nullable().optional(),
+    imageUrl: z.string().min(1).nullable().optional(),
+    country: z.string().max(60).nullable().optional(),
   });
-  const { artistIds, ...data } = schema.parse(req.body);
-  const contender = await prisma.contender.create({
-    data: {
-      ...data,
-      categoryId: req.params.categoryId,
-      artists: { create: artistIds.map((artistId) => ({ artistId })) },
-    },
-    include: { artists: { include: { artist: true } } },
+  const { artistIds, country, ...data } = schema.parse(req.body);
+
+  const contender = await prisma.$transaction(async (tx) => {
+    let linked = artistIds;
+
+    if (linked.length === 0) {
+      const slug = slugify(data.name);
+      const artist =
+        (await tx.artist.findUnique({ where: { slug } })) ??
+        (await tx.artist.create({ data: { name: data.name, slug, country: country ?? null } }));
+      linked = [artist.id];
+    }
+
+    return tx.contender.create({
+      data: {
+        ...data,
+        categoryId: req.params.categoryId,
+        artists: { create: linked.map((artistId) => ({ artistId })) },
+      },
+      include: { artists: { include: { artist: true } } },
+    });
   });
+
   res.status(201).json({ contender });
+});
+
+/**
+ * Les participants sans aucun artiste rattaché — les fantômes hérités d'avant
+ * la règle ci-dessus, ou d'un import. Le rapport propose pour chacun l'artiste
+ * qui porte déjà le même slug, quand il en existe un.
+ */
+adminRouter.get('/orphan-contenders', async (_req, res) => {
+  const orphans = await prisma.contender.findMany({
+    where: { artists: { none: {} } },
+    include: {
+      category: { include: { event: { select: { name: true, year: true } } } },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  const slugs = [...new Set(orphans.map((c) => slugify(c.name)))];
+  const existing = slugs.length
+    ? await prisma.artist.findMany({ where: { slug: { in: slugs } } })
+    : [];
+  const bySlug = new Map(existing.map((a) => [a.slug, a]));
+
+  res.json({
+    orphans: orphans.map((c) => {
+      const match = bySlug.get(slugify(c.name));
+      return {
+        id: c.id,
+        name: c.name,
+        seed: c.seed,
+        category: c.category.name,
+        kind: c.category.kind,
+        event: `${c.category.event.name} ${c.category.event.year}`,
+        // Un artiste porte déjà ce nom : on rattachera plutôt que de dupliquer.
+        match: match ? { id: match.id, name: match.name, imageUrl: match.imageUrl } : null,
+      };
+    }),
+  });
+});
+
+/**
+ * Répare les participants orphelins : rattache ceux qui ont un homonyme,
+ * crée l'artiste manquant pour les autres. Idempotent — on peut le relancer.
+ */
+adminRouter.post('/orphan-contenders/repair', async (req, res) => {
+  const only = Array.isArray(req.body?.ids) ? new Set(req.body.ids) : null;
+
+  const orphans = await prisma.contender.findMany({
+    where: { artists: { none: {} } },
+    select: { id: true, name: true },
+  });
+  const todo = only ? orphans.filter((c) => only.has(c.id)) : orphans;
+
+  let linked = 0;
+  let created = 0;
+
+  for (const contender of todo) {
+    const slug = slugify(contender.name);
+    // Séquentiel et non en parallèle : deux participants du même nom dans deux
+    // catégories doivent aboutir au même artiste, pas à deux doublons.
+    await prisma.$transaction(async (tx) => {
+      let artist = await tx.artist.findUnique({ where: { slug } });
+      if (artist) linked += 1;
+      else {
+        artist = await tx.artist.create({ data: { name: contender.name, slug } });
+        created += 1;
+      }
+      await tx.contenderArtist.create({
+        data: { contenderId: contender.id, artistId: artist.id },
+      });
+    });
+  }
+
+  res.json({ repaired: todo.length, linked, created });
 });
 
 adminRouter.delete('/contenders/:id', async (req, res) => {
