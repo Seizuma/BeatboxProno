@@ -42,29 +42,36 @@ export default function Layout() {
           </Link>
 
           <Clock />
+        </div>
 
+        {/* Les pavés fastext occupent des colonnes de largeur égale, réparties
+            sur la place disponible. La géométrie ne dépend donc plus de la
+            longueur des libellés : anglais et français donnent exactement la
+            même barre. */}
+        <div className="masthead__nav">
           <nav className="nav">
-            <NavLink to="/" end data-page="411">{t('nav.events')}</NavLink>
-            <NavLink to="/leaderboard" data-page="412">{t('nav.leaderboard')}</NavLink>
-            <NavLink to="/stats" data-page="413">{t('nav.stats')}</NavLink>
-            <NavLink to="/artists" data-page="414">{t('nav.artists')}</NavLink>
-            {user && <NavLink to="/me" data-page="415">{t('nav.mine')}</NavLink>}
-            {isStaff(user) && <NavLink to="/admin" data-page="499">{t('nav.admin')}</NavLink>}
+            <span className="nav__links">
+              <NavLink to="/" end data-page="411">{t('nav.events')}</NavLink>
+              <NavLink to="/leaderboard" data-page="412">{t('nav.leaderboard')}</NavLink>
+              <NavLink to="/stats" data-page="413">{t('nav.stats')}</NavLink>
+              <NavLink to="/artists" data-page="414">{t('nav.artists')}</NavLink>
+              {user && <NavLink to="/me" data-page="415">{t('nav.mine')}</NavLink>}
+              {isStaff(user) && <NavLink to="/admin" data-page="499">{t('nav.admin')}</NavLink>}
+            </span>
 
-            <LangSwitch />
-
-            {user ? (
-              <span className="row" style={{ gap: '0.45rem', marginLeft: '0.35rem' }}>
-                {user.avatarUrl && <img className="avatar" src={user.avatarUrl} alt="" />}
-                <button className="btn btn--small btn--ghost" onClick={logout}>
-                  {t('nav.logout')}
-                </button>
-              </span>
-            ) : (
-              <span style={{ marginLeft: '0.35rem' }}>
+            <span className="nav__aside">
+              <LangSwitch />
+              {user ? (
+                <>
+                  {user.avatarUrl && <img className="avatar" src={user.avatarUrl} alt="" />}
+                  <button className="btn btn--small btn--ghost" onClick={logout}>
+                    {t('nav.logout')}
+                  </button>
+                </>
+              ) : (
                 <DiscordButton small>Discord</DiscordButton>
-              </span>
-            )}
+              )}
+            </span>
           </nav>
         </div>
         <div className="railstripe" aria-hidden="true" />

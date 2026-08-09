@@ -9,6 +9,43 @@ import path from 'node:path';
 export const PHOTO_DIR = process.env.ARTIST_PHOTOS_DIR ?? '/media/artists';
 export const PHOTO_ROUTE = '/api/media/artists';
 
+/**
+ * Les photos téléversées depuis l'administration vont ailleurs : le dossier du
+ * projet Beatbox-Games est monté en lecture seule, et il doit le rester — ce
+ * projet n'a pas à modifier les fichiers d'un autre. Les envois atterrissent
+ * donc dans un volume Docker dédié, qui survit aux reconstructions d'image.
+ */
+export const UPLOAD_DIR = process.env.ARTIST_UPLOAD_DIR ?? '/media/uploads';
+export const UPLOAD_ROUTE = '/api/media/uploads';
+
+/** Types acceptés, avec leur signature binaire. */
+const SIGNATURES = [
+  { ext: 'jpg', mime: 'image/jpeg', test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { ext: 'png', mime: 'image/png', test: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  {
+    ext: 'webp',
+    mime: 'image/webp',
+    test: (b) => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP',
+  },
+  { ext: 'gif', mime: 'image/gif', test: (b) => b.toString('ascii', 0, 3) === 'GIF' },
+];
+
+/**
+ * Reconnaît le format par sa signature binaire, pas par l'extension ni par
+ * l'en-tête Content-Type : l'un comme l'autre se falsifient d'un clic, et on
+ * écrit ce fichier dans un dossier servi publiquement.
+ */
+export function sniffImage(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+  return SIGNATURES.find((s) => s.test(buffer)) ?? null;
+}
+
+/** L'URL publique d'un fichier téléversé. */
+export const uploadUrl = (filename) => `${UPLOAD_ROUTE}/${encodeURIComponent(filename)}`;
+
+/** Vrai si cette URL désigne un fichier que nous avons nous-mêmes écrit. */
+export const isUpload = (url) => typeof url === 'string' && url.startsWith(`${UPLOAD_ROUTE}/`);
+
 const EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif']);
 
 /** Les codes pays collés en fin de nom de fichier : « alem_fr.jpg ». */

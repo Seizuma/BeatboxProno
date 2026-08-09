@@ -1,13 +1,22 @@
 const BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 async function request(method, path, body) {
+  // Un File ou un Blob part tel quel, avec son propre type MIME : c'est ce que
+  // la route de téléversement attend, et ça évite d'embarquer du multipart des
+  // deux côtés pour une seule fonctionnalité.
+  const raw = typeof Blob !== 'undefined' && body instanceof Blob;
+
   let res;
   try {
     res = await fetch(`${BASE}${path}`, {
       method,
       credentials: 'include',
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      headers: raw
+        ? { 'Content-Type': body.type || 'application/octet-stream' }
+        : body
+          ? { 'Content-Type': 'application/json' }
+          : undefined,
+      body: raw ? body : body ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new Error('Le serveur est injoignable. Vérifiez votre connexion.');
@@ -44,6 +53,7 @@ async function request(method, path, body) {
 export const api = {
   get: (p) => request('GET', p),
   post: (p, b) => request('POST', p, b),
+  upload: (p, file) => request('POST', p, file),
   put: (p, b) => request('PUT', p, b),
   patch: (p, b) => request('PATCH', p, b),
   del: (p) => request('DELETE', p),

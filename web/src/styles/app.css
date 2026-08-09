@@ -144,9 +144,9 @@ img {
 .masthead__inner {
   max-width: 980px;
   margin: 0 auto;
-  padding: 0.7rem 1.2rem;
+  padding: 0.7rem 1.2rem 0.5rem;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
@@ -192,11 +192,52 @@ img {
   white-space: nowrap;
 }
 
+.masthead__nav {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 1.2rem 0.7rem;
+}
+
 .nav {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+/* Colonnes de largeur égale, réparties sur la place restante : le libellé le
+   plus long ne dicte plus la mise en page, donc la barre est identique quelle
+   que soit la langue. */
+.nav__links {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.35rem;
+}
+
+.nav__aside {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 780px) {
+  .nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .nav__links {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nav__aside {
+    justify-content: flex-start;
+  }
 }
 
 /* Les liens de navigation : des pavés fastext, numéro de page compris.
@@ -204,10 +245,14 @@ img {
 .nav a {
   background: var(--c);
   color: #000;
-  padding: 0.05rem 0.55rem;
+  padding: 0.1rem 0.4rem;
   text-transform: uppercase;
-  font-size: 1rem;
-  letter-spacing: 0.05em;
+  font-size: 0.92rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav a::before {

@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 import { useSession, isStaff } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 import Modal from '../components/Modal.jsx';
+import ArtistFigure from '../components/ArtistFigure.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -593,21 +594,27 @@ function ArtistsAdmin() {
 
       <div className="panel panel--flush">
         <table>
-          <thead><tr><th>Nom</th><th>Pays</th><th></th></tr></thead>
+          <thead>
+            <tr><th>Photo</th><th>Nom</th><th>Pays</th><th></th></tr>
+          </thead>
           <tbody>
             {shown.map((a) => (
               <tr key={a.id}>
+                <td><ArtistFigure src={a.imageUrl} name={a.name} size="sm" /></td>
                 <td>{a.name}</td>
                 <td className="muted">{a.country ?? '—'}</td>
                 <td className="num">
-                  <button
-                    className="btn btn--small btn--ghost"
-                    onClick={() =>
-                      run(async () => { await api.del(`/admin/artists/${a.id}`); await reload(); }, 'Artiste supprimé.')
-                    }
-                  >
-                    Supprimer
-                  </button>
+                  <span className="row" style={{ gap: '0.35rem', justifyContent: 'flex-end' }}>
+                    <PhotoUpload artist={a} onDone={reload} run={run} />
+                    <button
+                      className="btn btn--small btn--ghost"
+                      onClick={() =>
+                        run(async () => { await api.del(`/admin/artists/${a.id}`); await reload(); }, 'Artiste supprimé.')
+                      }
+                    >
+                      Supprimer
+                    </button>
+                  </span>
                 </td>
               </tr>
             ))}
@@ -615,6 +622,66 @@ function ArtistsAdmin() {
         </table>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Envoi d'une photo pour un artiste. Le fichier part brut, avec son type MIME :
+ * le serveur vérifie la signature binaire et range l'image dans le volume
+ * dédié, puis met à jour l'artiste. La photo apparaît partout sur le site
+ * aussitôt — fiches, arbres, classements — puisque tout lit `imageUrl`.
+ */
+function PhotoUpload({ artist, onDone, run }) {
+  const [busy, setBusy] = useState(false);
+  const inputId = `photo-${artist.id}`;
+
+  const send = async (file) => {
+    if (!file) return;
+    // Contrôle de courtoisie : le serveur refait le sien sur la signature.
+    if (file.size > 8 * 1024 * 1024) {
+      return run(async () => {
+        throw new Error(`${file.name} pèse ${(file.size / 1048576).toFixed(1)} Mo. Maximum : 8 Mo.`);
+      });
+    }
+    setBusy(true);
+    await run(async () => {
+      await api.upload(`/admin/photos/upload/${artist.id}`, file);
+      await onDone();
+    }, `Photo de ${artist.name} mise à jour.`);
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <input
+        id={inputId}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="visually-hidden"
+        onChange={(e) => {
+          send(e.target.files?.[0]);
+          e.target.value = ''; // pour pouvoir renvoyer le même fichier
+        }}
+      />
+      <label htmlFor={inputId} className="btn btn--small" style={{ cursor: 'pointer', margin: 0 }}>
+        {busy ? 'Envoi…' : artist.imageUrl ? 'Remplacer' : 'Ajouter une photo'}
+      </label>
+      {artist.imageUrl && (
+        <button
+          className="btn btn--small btn--ghost"
+          title="Retirer la photo"
+          onClick={() =>
+            run(async () => {
+              await api.del(`/admin/photos/upload/${artist.id}`);
+              await onDone();
+            }, `Photo de ${artist.name} retirée.`)
+          }
+        >
+          ✕
+        </button>
+      )}
+    </>
   );
 }
 

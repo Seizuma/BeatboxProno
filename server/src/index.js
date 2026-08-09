@@ -10,7 +10,7 @@ import { statsRouter } from './routes/stats.js';
 import { predictionRouter } from './routes/predictions.js';
 import { adminRouter } from './routes/admin.js';
 import { photoRouter } from './routes/photos.js';
-import { PHOTO_DIR } from './lib/photos.js';
+import { PHOTO_DIR, UPLOAD_DIR } from './lib/photos.js';
 
 const app = express();
 app.set('trust proxy', 1); // derrière Nginx Proxy Manager
@@ -31,6 +31,20 @@ app.use(
   express.static(PHOTO_DIR, {
     maxAge: '30d',
     immutable: false,
+    fallthrough: true,
+    index: false,
+    dotfiles: 'ignore',
+  })
+);
+
+// Les photos téléversées depuis l'administration. Volume distinct et
+// inscriptible : le dossier ci-dessus reste en lecture seule. Les noms portent
+// un horodatage, donc le cache peut être agressif sans risque de photo périmée.
+app.use(
+  '/api/media/uploads',
+  express.static(UPLOAD_DIR, {
+    maxAge: '365d',
+    immutable: true,
     fallthrough: true,
     index: false,
     dotfiles: 'ignore',
@@ -70,4 +84,5 @@ const port = Number(process.env.PORT ?? 4000);
 app.listen(port, '0.0.0.0', () => {
   console.log(`API prête sur :${port}`);
   console.log(`Photos artistes lues dans ${PHOTO_DIR}`);
+  console.log(`Photos téléversées dans ${UPLOAD_DIR}`);
 });

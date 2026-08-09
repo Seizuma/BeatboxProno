@@ -27,6 +27,9 @@ services:
       # Les photos de beatboxers vivent dans l'autre projet du VPS. On les monte
       # en lecture seule : ce conteneur ne doit jamais pouvoir les modifier.
       - ${ARTIST_PHOTOS_HOST_DIR}:/media/artists:ro
+      # Les photos ajoutées depuis l'administration. Volume nommé : elles
+      # survivent aux `docker compose up --build`.
+      - artist-uploads:/media/uploads
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -38,6 +41,7 @@ services:
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
       BOOTSTRAP_ADMIN_DISCORD_IDS: ${BOOTSTRAP_ADMIN_DISCORD_IDS}
       ARTIST_PHOTOS_DIR: /media/artists
+      ARTIST_UPLOAD_DIR: /media/uploads
 
   web:
     build: ./web
@@ -50,3 +54,4 @@ services:
 
 volumes:
   db-data:
+  artist-uploads:
