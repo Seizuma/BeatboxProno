@@ -3,7 +3,6 @@ import Layout from './components/Layout.jsx';
 import Home from './pages/Home.jsx';
 import EventPage from './pages/EventPage.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
-import PlayerStats from './pages/PlayerStats.jsx';
 import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
 import { ArtistList, ArtistPage } from './pages/Artists.jsx';
@@ -16,7 +15,9 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="events/:slug" element={<EventPage />} />
         <Route path="leaderboard" element={<Leaderboard />} />
-        <Route path="stats" element={<PlayerStats />} />
+        {/* Le classement a absorbé les statistiques : les deux pages
+            montraient le même tableau. L'ancienne adresse redirige. */}
+        <Route path="stats" element={<Navigate to="/leaderboard" replace />} />
         <Route path="artists" element={<ArtistList />} />
         <Route path="artists/:slug" element={<ArtistPage />} />
         <Route path="me" element={<Profile />} />

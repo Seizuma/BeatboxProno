@@ -2,23 +2,31 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
+import ArtistFigure from '../components/ArtistFigure.jsx';
 
+/**
+ * Le classement. Anciennement deux pages — « Classement » et « Statistiques » —
+ * qui affichaient le même tableau de joueurs à deux détails près. Elles n'en
+ * font plus qu'une : les points en tête, la réussite dans la même ligne, et
+ * les lectures de la foule en dessous.
+ */
 export default function Leaderboard() {
   const [events, setEvents] = useState([]);
   const [scope, setScope] = useState('');
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const { t } = useI18n();
+  const { t, number } = useI18n();
 
   useEffect(() => {
-    api.get('/events').then(({ events }) => setEvents(events)).catch(() => {});
+    api.get('/events').then(({ events }) => setEvents(events)).catch(() => { });
   }, []);
 
   useEffect(() => {
-    setRows(null);
+    setData(null);
+    setError(null);
     api
-      .get(`/leaderboard${scope ? `?event=${scope}` : ''}`)
-      .then(({ leaderboard }) => setRows(leaderboard))
+      .get(`/stats${scope ? `?event=${scope}` : ''}`)
+      .then(setData)
       .catch((e) => setError(e.message));
   }, [scope]);
 
@@ -41,46 +49,167 @@ export default function Leaderboard() {
       </header>
 
       {error && <p className="notice">{error}</p>}
-      {!rows && !error && <p className="faint">{t('common.loading')}</p>}
-      {rows?.length === 0 && <p className="empty">{t('leaderboard.empty')}</p>}
+      {!data && !error && <p className="faint">{t('common.loading')}</p>}
 
-      {rows?.length > 0 && (
+      {data && (
         <>
-          <div className="panel panel--flush">
-            <table>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>{t('leaderboard.col.player')}</th>
-                  <th className="num">{t('leaderboard.col.predictions')}</th>
-                  <th className="num">{t('leaderboard.col.points')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.user?.id ?? r.position}>
-                    <td className="rank-cell">{r.position}</td>
-                    <td>
-                      <span className="row" style={{ gap: '0.55rem' }}>
-                        {r.user?.avatarUrl && <img className="avatar" src={r.user.avatarUrl} alt="" />}
-                        <Link to={`/players/${r.user?.id}`}>
-                          {r.user?.globalName ?? r.user?.username ?? t('leaderboard.deleted')}
-                        </Link>
-                      </span>
-                    </td>
-                    <td className="num muted">{r.predictions}</td>
-                    <td className="num" style={{ fontWeight: 600 }}>{r.points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+            <Metric value={number(data.totals.players)} label={t('stats.players')} accent />
+            <Metric value={number(data.totals.submitted)} label={t('stats.predictions')} />
+            <Metric value={number(data.totals.points)} label={t('stats.pointsGiven')} />
+            <Metric
+              value={data.totals.accuracy == null ? '—' : `${data.totals.accuracy} %`}
+              label={t('stats.battlesRead')}
+            />
           </div>
 
-          <p style={{ margin: 0 }}>
-            <Link to="/stats">{t('leaderboard.tostats')} →</Link>
-          </p>
+          {data.players.length === 0 ? (
+            <p className="empty">{t('leaderboard.empty')}</p>
+          ) : (
+            <div className="panel panel--flush">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>{t('leaderboard.col.player')}</th>
+                    <th className="num">{t('stats.col.predictions')}</th>
+                    <th className="num">{t('leaderboard.col.points')}</th>
+                    <th className="num">{t('stats.col.average')}</th>
+                    <th>{t('stats.col.accuracy')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.players.map((p, i) => (
+                    <tr key={p.user?.id ?? i}>
+                      <td className="rank-cell">{i + 1}</td>
+                      <td>
+                        <span className="stat-row">
+                          {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
+                          <Link to={`/players/${p.user?.id}`}>
+                            {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                          </Link>
+                        </span>
+                      </td>
+                      <td className="num muted">{p.predictions}</td>
+                      <td className="num" style={{ fontWeight: 600 }}>{p.points}</td>
+                      <td className="num muted">{p.average ?? '—'}</td>
+                      <td style={{ minWidth: '9rem' }}>
+                        {p.accuracy == null ? (
+                          <span className="faint">—</span>
+                        ) : (
+                          <>
+                            <span className="data" style={{ fontSize: '0.78rem' }}>
+                              {p.accuracy} % · {p.battleHits}/{p.battlePicks}
+                            </span>
+                            <span className="meter">
+                              <span style={{ width: `${p.accuracy}%` }} />
+                            </span>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {data.readings?.sampled > 0 && (
+            <>
+              <ReadingBoard
+                title={t('stats.wellRead')}
+                lede={t('stats.wellRead.lede')}
+                rows={data.readings.wellRead}
+              />
+              <ReadingBoard
+                title={t('stats.underRated')}
+                lede={t('stats.underRated.lede')}
+                rows={data.readings.underRated}
+                tone="ok"
+              />
+              <ReadingBoard
+                title={t('stats.overRated')}
+                lede={t('stats.overRated.lede')}
+                rows={data.readings.overRated}
+                tone="warn"
+              />
+            </>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Un palmarès de lecture : ce que la foule attendait face à ce qui s'est
+ * produit. L'écart est signé — positif, l'artiste a fini mieux que prévu.
+ */
+function ReadingBoard({ title, lede, rows, tone }) {
+  const { t } = useI18n();
+  if (!rows?.length) return null;
+
+  const color = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--r)' : 'var(--accent)';
+
+  return (
+    <section className="stack">
+      <div>
+        <h2>{title}</h2>
+        <p className="muted" style={{ fontSize: '0.88rem' }}>{lede}</p>
+      </div>
+      <div className="panel panel--flush">
+        <table>
+          <thead>
+            <tr>
+              <th>{t('stats.col.artist')}</th>
+              <th className="num">{t('stats.col.expected')}</th>
+              <th className="num">{t('stats.col.actual')}</th>
+              <th className="num">{t('stats.col.gap')}</th>
+              <th className="num">{t('stats.col.voters')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.contenderId}>
+                <td>
+                  <span className="stat-row">
+                    <ArtistFigure src={r.imageUrl} name={r.name} size="xs" />
+                    <span>
+                      {r.name}
+                      <span className="faint data" style={{ fontSize: '0.78rem', display: 'block' }}>
+                        {r.event} · {r.category}
+                      </span>
+                    </span>
+                  </span>
+                </td>
+                <td className="num muted">{r.expected}</td>
+                <td className="num">{r.actual}</td>
+                <td className="num" style={{ color, fontWeight: 600 }}>
+                  {r.delta > 0 ? `+${r.delta}` : r.delta}
+                </td>
+                <td className="num muted">{r.voters}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function Metric({ value, label, accent }) {
+  return (
+    <div className="panel">
+      <p
+        className="display"
+        style={{
+          fontSize: 'calc(2.2rem * var(--display-scale))',
+          color: accent ? 'var(--accent)' : 'inherit',
+        }}
+      >
+        {value}
+      </p>
+      <p className="eyebrow" style={{ margin: '0.4rem 0 0' }}>{label}</p>
     </div>
   );
 }

@@ -52,7 +52,6 @@ export default function Layout() {
             <span className="nav__links">
               <NavLink to="/" end>{t('nav.events')}</NavLink>
               <NavLink to="/leaderboard">{t('nav.leaderboard')}</NavLink>
-              <NavLink to="/stats">{t('nav.stats')}</NavLink>
               <NavLink to="/artists">{t('nav.artists')}</NavLink>
               {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
               {isStaff(user) && <NavLink to="/admin">{t('nav.admin')}</NavLink>}

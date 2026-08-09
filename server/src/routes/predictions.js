@@ -286,7 +286,14 @@ predictionRouter.post('/:predictionId/submit', async (req, res) => {
     // L'ordre compte : on libère la place avant de la prendre, sinon l'index
     // unique partiel rejette la transaction.
     if (previous) {
-      await tx.prediction.update({ where: { id: previous.id }, data: { submitted: false } });
+      // Rétrograder, c'est aussi effacer le score : `scoredAt` est posé à
+      // chaque publication de résultat, pas à la fin de l'événement. Le
+      // laisser ferait apparaître un brouillon parmi les pronostics terminés,
+      // avec des points qu'il ne rapporte plus.
+      await tx.prediction.update({
+        where: { id: previous.id },
+        data: { submitted: false, points: 0, breakdown: null, scoredAt: null },
+      });
     }
     const submitted = await tx.prediction.update({
       where: { id: prediction.id },
@@ -315,7 +322,7 @@ predictionRouter.post('/:predictionId/withdraw', async (req, res) => {
 
   const updated = await prisma.prediction.update({
     where: { id: prediction.id },
-    data: { submitted: false },
+    data: { submitted: false, points: 0, breakdown: null, scoredAt: null },
   });
   res.json({ prediction: updated });
 });
@@ -326,11 +333,13 @@ predictionRouter.delete('/:predictionId', async (req, res) => {
   const prediction = await loadMine(req.params.predictionId, req.user.id);
   if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
 
-  // Un pronostic déjà scoré est un résultat, pas un brouillon : on ne l'efface
-  // pas, sinon les points disparaîtraient du classement sans trace.
-  if (prediction.scoredAt) {
+  // Seul un pronostic DÉPOSÉ et scoré est figé : ses points comptent au
+  // classement, l'effacer les ferait disparaître sans trace. Un brouillon reste
+  // supprimable, même s'il porte un score hérité d'un ancien dépôt.
+  if (prediction.submitted && prediction.scoredAt) {
     return res.status(409).json({
-      error: 'Ce pronostic a déjà été scoré : il ne peut plus être supprimé.',
+      error:
+        'Ce pronostic est déposé et déjà scoré. Déposez une autre version, ou retirez-le, avant de le supprimer.',
     });
   }
 

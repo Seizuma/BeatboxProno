@@ -122,7 +122,7 @@ const DICT = {
     'bracket.score.none': 'No call',
     'bracket.clear': 'Clear',
 
-    'leaderboard.eyebrow': 'Who reads the battles best',
+    'leaderboard.eyebrow': 'Points, accuracy and what the crowd got wrong',
     'leaderboard.title': 'Leaderboard',
     'leaderboard.scope': 'Scope',
     'leaderboard.scope.all': 'All events',
@@ -131,7 +131,6 @@ const DICT = {
     'leaderboard.col.predictions': 'Predictions',
     'leaderboard.col.points': 'Points',
     'leaderboard.deleted': 'Deleted account',
-    'leaderboard.tostats': 'See the detailed stats',
 
     'artists.eyebrow': 'Reusable from one event to the next',
     'artists.title': 'Artists',
@@ -301,7 +300,7 @@ const DICT = {
     'bracket.score.none': 'Sans avis',
     'bracket.clear': 'Effacer',
 
-    'leaderboard.eyebrow': 'Qui lit le mieux les battles',
+    'leaderboard.eyebrow': 'Points, réussite, et ce que la foule a mal lu',
     'leaderboard.title': 'Classement',
     'leaderboard.scope': 'Périmètre',
     'leaderboard.scope.all': 'Tous les événements',
@@ -310,7 +309,6 @@ const DICT = {
     'leaderboard.col.predictions': 'Pronostics',
     'leaderboard.col.points': 'Points',
     'leaderboard.deleted': 'Compte supprimé',
-    'leaderboard.tostats': 'Voir les statistiques détaillées',
 
     'artists.eyebrow': 'Réutilisables d’un événement à l’autre',
     'artists.title': 'Artistes',
