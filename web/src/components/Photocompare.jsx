@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import Modal from './Modal.jsx';
 
+
 /** Une photo servie depuis le dossier monté du projet Beatbox-Games. */
 const fromBeatboxGames = (url) => typeof url === 'string' && url.startsWith('/api/media/artists/');
 

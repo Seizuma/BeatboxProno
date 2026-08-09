@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import Modal from './Modal.jsx';
 
+
 const TITLES = {
     artist: "Supprimer l'artiste",
     event: "Supprimer l'événement",
