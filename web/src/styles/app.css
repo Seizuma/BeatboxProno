@@ -193,7 +193,7 @@ img {
    de comprimer : on ne tronque jamais un intitulé de navigation. */
 .nav__links {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
   gap: 0.35rem;
 }
 
@@ -214,8 +214,7 @@ img {
   }
 }
 
-/* Les liens de navigation, numéro de page compris.
-   Le numéro est posé par le Layout (attribut data-page). */
+/* Les liens de navigation. */
 .nav a {
   background: var(--c);
   color: #000;
@@ -225,10 +224,6 @@ img {
   letter-spacing: 0.03em;
   text-align: center;
   white-space: nowrap;
-}
-
-.nav a::before {
-  content: attr(data-page) ' ';
 }
 
 .nav a:hover {

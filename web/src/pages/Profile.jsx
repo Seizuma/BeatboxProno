@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
+import PredictionView from '../components/PredictionView.jsx';
 
 export default function Profile() {
   const { id } = useParams();
@@ -13,6 +14,10 @@ export default function Profile() {
 
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  // Le pronostic ouvert en lecture. Fonctionne aussi sur le profil d'autrui :
+  // le serveur n'expose que les pronostics déposés.
+  const [reading, setReading] = useState(null);
+  const [busy, setBusy] = useState(null);
 
   useEffect(() => {
     if (!targetId) return;
@@ -30,6 +35,20 @@ export default function Profile() {
   }
   if (error) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
   if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
+
+  const own = !id || id === user?.id;
+
+  const removeDraft = async (p) => {
+    setBusy(p.id);
+    try {
+      await api.del(`/predictions/${p.id}`);
+      setData(await api.get(`/users/${targetId}`));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const buckets = [
     ['profile.bucket.live', data.predictions.filter((p) => p.submitted && !p.scoredAt)],
@@ -88,7 +107,22 @@ export default function Profile() {
                       <td className="muted">{p.category.name}</td>
                       <td className="num">{p.scoredAt ? p.points : '—'}</td>
                       <td className="num">
-                        <Link to={`/events/${p.event.slug}`}>{t('common.open')}</Link>
+                        <span className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
+                          <button className="btn btn--small" onClick={() => setReading(p.id)}>
+                            {t('common.open')}
+                          </button>
+                          {/* Un brouillon se supprime depuis son profil : c'est
+                              là qu'on gère ses versions, pas dans l'éditeur. */}
+                          {own && !p.submitted && (
+                            <button
+                              className="btn btn--small btn--danger"
+                              disabled={busy === p.id}
+                              onClick={() => removeDraft(p)}
+                            >
+                              {t('draft.delete')}
+                            </button>
+                          )}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -98,6 +132,8 @@ export default function Profile() {
           )}
         </section>
       ))}
+
+      {reading && <PredictionView predictionId={reading} onClose={() => setReading(null)} />}
     </div>
   );
 }

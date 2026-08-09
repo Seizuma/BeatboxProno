@@ -53,11 +53,15 @@ export default function EventPage() {
   const myVersions = versions[activeId] ?? [];
   const currentId = current[activeId] ?? null;
   const activeVersion = myVersions.find((v) => v.id === currentId) ?? null;
-  const state = draft[currentId] ?? { orders: {}, picks: {} };
+  // Tant qu'aucune version n'existe, on travaille sous une clé provisoire :
+  // l'éditeur reste utilisable, et la version est créée au premier
+  // enregistrement. Sans cela, une catégorie neuve restait grisée.
+  const stateKey = currentId ?? `new:${activeId}`;
+  const state = draft[stateKey] ?? { orders: {}, picks: {} };
   const eventClosed = event.status === 'FINISHED';
 
   const update = (patch) =>
-    setDraft((d) => ({ ...d, [currentId]: { ...(d[currentId] ?? { orders: {}, picks: {} }), ...patch } }));
+    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
 
   // La date butoir de l'événement ferme tout. Absente — wildcards ouvertes,
   // date de la compète encore inconnue — rien ne ferme globalement : seuls les
@@ -85,22 +89,42 @@ export default function EventPage() {
     return predictions;
   }
 
-  /** Enregistre le contenu de la version ouverte. Ne dépose rien. */
+  /** Le contenu de l'éditeur, prêt pour l'API. */
+  function payload() {
+    return {
+      ranks: Object.entries(state.orders).flatMap(([phaseId, ids]) =>
+        ids.map((contenderId, i) => ({ phaseId, contenderId, rank: i + 1 }))
+      ),
+      battles: Object.values(state.picks).flatMap((byBattle) =>
+        Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
+      ),
+    };
+  }
+
+  /**
+   * Garantit qu'une version existe pour la catégorie courante, et renvoie son
+   * identifiant. La création est paresseuse : on ne crée une ligne que le jour
+   * où la personne enregistre vraiment quelque chose.
+   */
+  async function ensureVersion() {
+    if (currentId) return currentId;
+    const { prediction } = await api.post(`/predictions/categories/${activeId}`, {
+      label: 'Mon pronostic',
+    });
+    // Le contenu saisi sous la clé provisoire suit la nouvelle version.
+    setDraft((d) => ({ ...d, [prediction.id]: d[`new:${activeId}`] ?? { orders: {}, picks: {} } }));
+    setCurrent((c) => ({ ...c, [activeId]: prediction.id }));
+    return prediction.id;
+  }
+
+  /** Enregistre le contenu. Ne dépose rien : déposer est un geste distinct. */
   async function save() {
-    if (!currentId) return;
     setSaving(true);
     setFlash(null);
     try {
-      const payload = {
-        ranks: Object.entries(state.orders).flatMap(([phaseId, ids]) =>
-          ids.map((contenderId, i) => ({ phaseId, contenderId, rank: i + 1 }))
-        ),
-        battles: Object.values(state.picks).flatMap((byBattle) =>
-          Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
-        ),
-      };
-      const res = await api.put(`/predictions/${currentId}`, payload);
-      await refreshVersions(activeId, currentId);
+      const id = await ensureVersion();
+      const res = await api.put(`/predictions/${id}`, payload());
+      await refreshVersions(activeId, id);
       setFlash({ ok: true, at: Date.now(), text: res.note ?? t('event.saved.draft') });
     } catch (e) {
       setFlash({ ok: false, at: Date.now(), text: e.message });
@@ -109,16 +133,35 @@ export default function EventPage() {
     }
   }
 
-  /** Dépose la version ouverte. Celle qui l'était redevient un brouillon. */
+  /** Dépose le pronostic. Toujours possible tant que l'événement est ouvert. */
   async function submitCurrent() {
-    if (!currentId) return;
     setSaving(true);
     setFlash(null);
     try {
-      await save();
-      const res = await api.post(`/predictions/${currentId}/submit`);
-      await refreshVersions(activeId, currentId);
+      const id = await ensureVersion();
+      await api.put(`/predictions/${id}`, payload());
+      const res = await api.post(`/predictions/${id}/submit`);
+      await refreshVersions(activeId, id);
       setFlash({ ok: true, at: Date.now(), text: res.note ?? t('event.saved.submit') });
+    } catch (e) {
+      setFlash({ ok: false, at: Date.now(), text: e.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Range l'état actuel dans un nouveau brouillon, sans quitter l'éditeur. */
+  async function snapshot() {
+    setSaving(true);
+    setFlash(null);
+    try {
+      const id = await ensureVersion();
+      await api.put(`/predictions/${id}`, payload());
+      const { prediction } = await api.post(`/predictions/categories/${activeId}`, {
+        copyFrom: id,
+      });
+      await refreshVersions(activeId, id);
+      setFlash({ ok: true, at: Date.now(), text: t('draft.saved', { name: prediction.label }) });
     } catch (e) {
       setFlash({ ok: false, at: Date.now(), text: e.message });
     } finally {
@@ -180,43 +223,23 @@ export default function EventPage() {
 
       {!user && <p className="notice">{t('event.signin')}</p>}
 
-      {user && category && !eventClosed && (
-        <VersionBar
-          versions={myVersions}
-          currentId={currentId}
-          max={10}
-          busy={saving}
-          onPick={(id) => setCurrent((c) => ({ ...c, [activeId]: id }))}
-          onCreate={(copyFrom) =>
-            versionAction(async () => {
-              const { prediction } = await api.post(`/predictions/categories/${activeId}`, { copyFrom });
-              await refreshVersions(activeId, prediction.id);
-              return t('draft.created', { name: prediction.label });
-            })
-          }
-          onRename={(label) =>
-            versionAction(async () => {
-              await api.patch(`/predictions/${currentId}`, { label });
-              await refreshVersions(activeId, currentId);
-              return t('draft.renamed');
-            })
-          }
-          onDelete={() =>
-            versionAction(async () => {
-              await api.del(`/predictions/${currentId}`);
-              const left = await refreshVersions(activeId, null);
-              setCurrent((c) => ({ ...c, [activeId]: left[0]?.id ?? null }));
-              return t('draft.deleted');
-            })
-          }
-          onWithdraw={() =>
-            versionAction(async () => {
-              await api.post(`/predictions/${currentId}/withdraw`);
-              await refreshVersions(activeId, currentId);
-              return t('draft.withdrawn');
-            })
-          }
-        />
+      {user && category && !eventClosed && myVersions.length > 1 && (
+        <div className="row" style={{ gap: '0.5rem' }}>
+          <label htmlFor="version" style={{ margin: 0 }}>{t('draft.load')}</label>
+          <select
+            id="version"
+            value={currentId ?? ''}
+            disabled={saving}
+            onChange={(e) => setCurrent((c) => ({ ...c, [activeId]: e.target.value }))}
+          >
+            {myVersions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.submitted ? '★ ' : ''}{v.label ?? t('draft.untitled')}
+              </option>
+            ))}
+          </select>
+          <span className="faint" style={{ fontSize: '0.82rem' }}>{t('draft.manage')}</span>
+        </div>
       )}
 
       {category && (
@@ -226,26 +249,26 @@ export default function EventPage() {
           state={state}
           update={update}
           phaseLocked={phaseLocked}
-          locked={eventClosed || !user || !currentId}
+          locked={eventClosed || !user}
         />
       )}
 
       {user && !eventClosed && (
         <div className="actionbar">
-          <button className="btn" onClick={save} disabled={saving || !currentId}>
+          <button className="btn" onClick={save} disabled={saving}>
             {saving ? t('event.saving') : t('event.save.draft')}
           </button>
-          <button
-            className="btn btn--primary"
-            onClick={submitCurrent}
-            disabled={saving || !currentId || activeVersion?.submitted}
-          >
+          <button className="btn" onClick={snapshot} disabled={saving || myVersions.length >= 10}>
+            {t('draft.snapshot')}
+          </button>
+          <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
             {saving
               ? t('event.saving')
               : activeVersion?.submitted
-                ? t('event.already.submitted')
+                ? t('event.resubmit')
                 : t('event.save.submit')}
           </button>
+          {activeVersion?.submitted && <span className="tag tag--live">{t('draft.submitted')}</span>}
 
           {/* La confirmation manquait : les boutons restaient identiques après
               l'enregistrement, et rien ne disait que c'était parti. */}
@@ -263,126 +286,6 @@ export default function EventPage() {
             {t('event.editable')}
           </span>
         </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * La barre des versions. Dix brouillons possibles, un seul pronostic déposé —
- * signalé par une pastille. Changer de version n'écrase rien : chacune vit sa
- * vie jusqu'à ce qu'on en dépose une.
- */
-function VersionBar({ versions, currentId, max, busy, onPick, onCreate, onRename, onDelete, onWithdraw }) {
-  const { t } = useI18n();
-  const [renaming, setRenaming] = useState(false);
-  const [label, setLabel] = useState('');
-
-  const currentVersion = versions.find((v) => v.id === currentId) ?? null;
-  const drafts = versions.filter((v) => !v.submitted).length;
-  const atCap = drafts >= max;
-
-  if (versions.length === 0) {
-    return (
-      <div className="versions">
-        <p className="faint" style={{ margin: 0 }}>{t('draft.none')}</p>
-        <button className="btn btn--primary btn--small" disabled={busy} onClick={() => onCreate()}>
-          {t('draft.start')}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="versions">
-      <span className="eyebrow" style={{ margin: 0 }}>{t('draft.title')}</span>
-
-      <span className="versions__list">
-        {versions.map((v) => (
-          <button
-            key={v.id}
-            className={`btn btn--small${v.id === currentId ? ' btn--primary' : ''}`}
-            onClick={() => onPick(v.id)}
-            disabled={busy}
-          >
-            {v.submitted && <span aria-hidden="true">★ </span>}
-            {v.label ?? t('draft.untitled')}
-            {v.submitted && <span className="visually-hidden"> — {t('draft.submitted')}</span>}
-          </button>
-        ))}
-      </span>
-
-      <span className="versions__actions">
-        <button
-          className="btn btn--small"
-          disabled={busy || atCap}
-          title={atCap ? t('draft.cap', { max }) : undefined}
-          onClick={() => onCreate()}
-        >
-          + {t('draft.new')}
-        </button>
-        <button className="btn btn--small" disabled={busy || atCap} onClick={() => onCreate(currentId)}>
-          {t('draft.duplicate')}
-        </button>
-        <button
-          className="btn btn--small"
-          disabled={busy}
-          onClick={() => {
-            setLabel(currentVersion?.label ?? '');
-            setRenaming(true);
-          }}
-        >
-          {t('draft.rename')}
-        </button>
-        {currentVersion?.submitted ? (
-          <button className="btn btn--small btn--ghost" disabled={busy} onClick={onWithdraw}>
-            {t('draft.withdraw')}
-          </button>
-        ) : (
-          <button
-            className="btn btn--small btn--danger"
-            disabled={busy || versions.length <= 1}
-            onClick={onDelete}
-          >
-            {t('draft.delete')}
-          </button>
-        )}
-        <span className="faint data" style={{ fontSize: '0.85rem' }}>
-          {drafts}/{max}
-        </span>
-      </span>
-
-      {renaming && (
-        <span className="row" style={{ gap: '0.4rem', flexBasis: '100%' }}>
-          <input
-            type="text"
-            value={label}
-            maxLength={60}
-            autoFocus
-            aria-label={t('draft.rename')}
-            onChange={(e) => setLabel(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && label.trim()) {
-                onRename(label.trim());
-                setRenaming(false);
-              }
-              if (e.key === 'Escape') setRenaming(false);
-            }}
-          />
-          <button
-            className="btn btn--small btn--primary"
-            disabled={!label.trim()}
-            onClick={() => {
-              onRename(label.trim());
-              setRenaming(false);
-            }}
-          >
-            {t('draft.rename.ok')}
-          </button>
-          <button className="btn btn--small btn--ghost" onClick={() => setRenaming(false)}>
-            {t('draft.cancel')}
-          </button>
-        </span>
       )}
     </div>
   );

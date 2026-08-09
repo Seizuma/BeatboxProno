@@ -57,6 +57,56 @@ publicRouter.get('/events/:slug', async (req, res) => {
   res.json({ event, myPredictions });
 });
 
+/**
+ * Le détail d'un pronostic, lisible par tout le monde.
+ *
+ * Deux conditions : le pronostic doit avoir été DÉPOSÉ — un brouillon reste
+ * privé, sans quoi on lirait les hésitations des autres — et son événement doit
+ * être visible. Le propriétaire, lui, accède aussi à ses propres brouillons.
+ */
+publicRouter.get('/predictions/:predictionId', async (req, res) => {
+  const prediction = await prisma.prediction.findUnique({
+    where: { id: req.params.predictionId },
+    include: {
+      user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+      event: { select: { slug: true, name: true, year: true, status: true, judgeCount: true } },
+      category: {
+        select: {
+          name: true,
+          kind: true,
+          phases: {
+            orderBy: { position: 'asc' },
+            select: { id: true, name: true, type: true, resolved: true, qualifierCount: true },
+          },
+          contenders: {
+            select: {
+              id: true,
+              name: true,
+              seed: true,
+              imageUrl: true,
+              artists: { select: { artist: { select: { imageUrl: true } } } },
+            },
+          },
+        },
+      },
+      ranks: true,
+      battles: true,
+    },
+  });
+
+  if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
+
+  const mine = req.user?.id === prediction.userId;
+  if (!mine && !prediction.submitted) {
+    return res.status(403).json({ error: "Ce brouillon n'est pas public." });
+  }
+  if (prediction.event.status === 'DRAFT' && !['ADMIN', 'OWNER'].includes(req.user?.role)) {
+    return res.status(404).json({ error: 'Pronostic introuvable.' });
+  }
+
+  res.json({ prediction });
+});
+
 /** Classement général ou par événement. */
 publicRouter.get('/leaderboard', async (req, res) => {
   const { event: eventSlug } = req.query;

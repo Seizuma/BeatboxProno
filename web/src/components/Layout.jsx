@@ -7,37 +7,22 @@ import DiscordButton from './DiscordButton.jsx';
 /* ---------------------------------------------------------------------------
    L'habillage P411. L'en-tête est la ligne de service d'un décodeur
    télétexte : numéro de page à gauche, horloge en direct à droite, et une
-   navigation dont chaque destination porte son numéro de page.
+   navigation en pavés pleine largeur.
    Les numéros ne sont pas décoratifs : ils identifient les pages, comme
    les vraies pages 411, 412, 413 des services de résultats sportifs.
    --------------------------------------------------------------------------- */
 
-const PAGES = {
-  '/': '411',
-  '/leaderboard': '412',
-  '/stats': '413',
-  '/artists': '414',
-  '/me': '415',
-  '/admin': '499',
-};
 
 export default function Layout() {
   const { user, logout } = useSession();
   const { t } = useI18n();
   const { pathname } = useLocation();
 
-  // La page courante, pour la ligne de service (les sous-pages héritent).
-  const page =
-    Object.entries(PAGES).find(([path]) => path !== '/' && pathname.startsWith(path))?.[1] ??
-    PAGES[pathname] ??
-    '411';
-
   return (
     <>
       <header className="masthead">
         <div className="masthead__inner">
           <Link to="/" className="wordmark">
-            <span className="wordmark__mark">P{page}</span>
             <span className="wordmark__name">beatbox<em>predictions</em></span>
           </Link>
 
@@ -65,12 +50,12 @@ export default function Layout() {
         <div className="masthead__nav">
           <nav className="nav">
             <span className="nav__links">
-              <NavLink to="/" end data-page="411">{t('nav.events')}</NavLink>
-              <NavLink to="/leaderboard" data-page="412">{t('nav.leaderboard')}</NavLink>
-              <NavLink to="/stats" data-page="413">{t('nav.stats')}</NavLink>
-              <NavLink to="/artists" data-page="414">{t('nav.artists')}</NavLink>
-              {user && <NavLink to="/me" data-page="415">{t('nav.mine')}</NavLink>}
-              {isStaff(user) && <NavLink to="/admin" data-page="499">{t('nav.admin')}</NavLink>}
+              <NavLink to="/" end>{t('nav.events')}</NavLink>
+              <NavLink to="/leaderboard">{t('nav.leaderboard')}</NavLink>
+              <NavLink to="/stats">{t('nav.stats')}</NavLink>
+              <NavLink to="/artists">{t('nav.artists')}</NavLink>
+              {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
+              {isStaff(user) && <NavLink to="/admin">{t('nav.admin')}</NavLink>}
             </span>
           </nav>
         </div>

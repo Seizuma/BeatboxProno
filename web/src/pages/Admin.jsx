@@ -250,6 +250,7 @@ function EventStructure({ event, onDone, run, askDelete }) {
 
   return (
     <section className="stack">
+      <EventSettings event={event} onDone={onDone} run={run} />
       <div className="spread">
         <h2>Structure — {event.name} {event.year}</h2>
         <div className="row" style={{ gap: '0.6rem' }}>
@@ -279,6 +280,94 @@ function EventStructure({ event, onDone, run, askDelete }) {
         />
       )}
     </section>
+  );
+}
+
+/**
+ * Les réglages d'un événement : nombre de juges et date butoir.
+ *
+ * La date est volontairement facultative. Une compète dont les wildcards sont
+ * ouvertes mais dont la date n'est pas fixée n'a pas de butoir — laisser le
+ * champ vide, c'est dire « rien ne ferme globalement, seules les phases se
+ * verrouillent ». Le bouton Effacer y revient.
+ */
+function EventSettings({ event, onDone, run }) {
+  // <input type="datetime-local"> attend « AAAA-MM-JJTHH:MM » en heure locale.
+  const toLocal = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const [judges, setJudges] = useState(event.judgeCount ?? 3);
+  const [closeAt, setCloseAt] = useState(toLocal(event.predictionsCloseAt));
+
+  const save = (patch) =>
+    run(async () => {
+      await api.patch(`/admin/events/${event.id}`, patch);
+      await onDone();
+    }, 'Réglages enregistrés.');
+
+  return (
+    <div className="panel stack" style={{ gap: '0.7rem' }}>
+      <h3>Réglages</h3>
+
+      <div className="row" style={{ alignItems: 'flex-end', gap: '1rem' }}>
+        <div className="field">
+          <label htmlFor={`judges-${event.id}`}>Nombre de juges</label>
+          <select
+            id={`judges-${event.id}`}
+            value={judges}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              setJudges(n);
+              save({ judgeCount: n });
+            }}
+          >
+            {[1, 3, 5, 7, 9].map((n) => (
+              <option key={n} value={n}>{n} juges</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor={`close-${event.id}`}>Date butoir des pronostics</label>
+          <input
+            id={`close-${event.id}`}
+            type="datetime-local"
+            value={closeAt}
+            onChange={(e) => setCloseAt(e.target.value)}
+          />
+        </div>
+
+        <button
+          className="btn btn--small btn--primary"
+          disabled={closeAt === toLocal(event.predictionsCloseAt)}
+          onClick={() => save({ predictionsCloseAt: new Date(closeAt).toISOString() })}
+        >
+          Enregistrer la date
+        </button>
+
+        <button
+          className="btn btn--small btn--ghost"
+          disabled={!event.predictionsCloseAt}
+          onClick={() => {
+            setCloseAt('');
+            save({ predictionsCloseAt: null });
+          }}
+        >
+          Effacer
+        </button>
+      </div>
+
+      <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+        {event.predictionsCloseAt
+          ? "Passé cette date, plus aucun pronostic n'est enregistrable sur l'événement."
+          : "Aucune date butoir : les pronostics restent ouverts tant que les phases ne sont pas verrouillées. C'est le réglage à garder tant que la date de la compète n'est pas connue."}
+        {' '}Les {judges} juges déterminent les scores proposés aux pronostiqueurs.
+      </p>
+    </div>
   );
 }
 
