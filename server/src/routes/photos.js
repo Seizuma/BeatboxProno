@@ -21,7 +21,9 @@ import {
  * des photos — seul Artist.imageUrl bouge.
  */
 export const photoRouter = Router();
-photoRouter.use(requireRole('ADMIN', 'MODERATOR'));
+// Le propriétaire et les administrateurs. Le rôle MODERATOR a disparu avec la
+// refonte des rôles : l'exiger ici renvoyait un 403 au propriétaire lui-même.
+photoRouter.use(requireRole('ADMIN', 'OWNER'));
 
 /** Aperçu : qui serait rattaché à quoi, sans rien enregistrer. */
 photoRouter.get('/', async (_req, res) => {

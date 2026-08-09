@@ -230,15 +230,13 @@ model PodiumSlot {
 
 // --- Pronostics ---------------------------------------------------------------
 
-/**
- * Un pronostic. Une personne peut en garder jusqu'à dix par catégorie sous
- * forme de brouillons, mais un seul compte : celui qu'elle dépose.
- *
- * L'unicité « un seul déposé par personne et par catégorie » est un index
- * partiel PostgreSQL (WHERE submitted), que Prisma ne sait pas décrire ici. Il
- * est créé dans la migration et vit dans la base : ne le retirez pas si un
- * `prisma migrate dev` propose un jour de le supprimer.
- */
+// Un pronostic. Une personne peut en garder jusqu'à dix par catégorie sous
+// forme de brouillons, mais un seul compte : celui qu'elle dépose.
+//
+// L'unicité « un seul déposé par personne et par catégorie » est un index
+// partiel PostgreSQL (WHERE submitted), que Prisma ne sait pas décrire ici. Il
+// est créé dans la migration et vit dans la base : ne le retirez pas si un
+// `prisma migrate dev` propose un jour de le supprimer.
 model Prediction {
   id          String   @id @default(cuid())
 
