@@ -77,7 +77,14 @@ export default function Profile() {
                 <tbody>
                   {rows.map((p) => (
                     <tr key={p.id}>
-                      <td>{p.event.name} {p.event.year}</td>
+                      <td>
+                        {p.event.name} {p.event.year}
+                        {p.label && (
+                          <span className="faint data" style={{ display: 'block', fontSize: '0.8rem' }}>
+                            {p.submitted && '★ '}{p.label}
+                          </span>
+                        )}
+                      </td>
                       <td className="muted">{p.category.name}</td>
                       <td className="num">{p.scoredAt ? p.points : '—'}</td>
                       <td className="num">

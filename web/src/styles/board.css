@@ -864,3 +864,28 @@ details.panel>summary .eyebrow {
     transform: none;
   }
 }
+
+/* --- Barre des versions ---------------------------------------------------- */
+
+.versions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  border: var(--frame);
+  padding: 0.6rem 0.7rem;
+}
+
+.versions__list {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.versions__actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+  align-items: center;
+}

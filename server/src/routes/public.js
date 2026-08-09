@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 export const publicRouter = Router();
 
 const visible = (user) =>
-  user && ['ADMIN', 'MODERATOR'].includes(user.role)
+  user && ['ADMIN', 'OWNER'].includes(user.role)
     ? {}
     : { status: { not: 'DRAFT' } };
 
@@ -45,9 +45,12 @@ publicRouter.get('/events/:slug', async (req, res) => {
 
   let myPredictions = [];
   if (req.user) {
+    // Toutes mes versions, pas seulement la déposée : la page événement laisse
+    // basculer de l'une à l'autre.
     myPredictions = await prisma.prediction.findMany({
       where: { userId: req.user.id, eventId: event.id },
       include: { ranks: true, battles: true },
+      orderBy: [{ submitted: 'desc' }, { updatedAt: 'desc' }],
     });
   }
 
