@@ -19,50 +19,84 @@ import ArtistFigure from './ArtistFigure.jsx';
 const EASE = 'cubic-bezier(.2,.9,.25,1)';
 const DURATION = 240;
 const EDGE = 90; // marge de défilement automatique, en px
+// Zone morte autour d'une frontière entre deux lignes. Sans elle, une main
+// posée pile sur la limite fait basculer la cible à chaque micro-mouvement.
+const DEADZONE = 7;
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**
- * Anime tout déplacement de position des noeuds enregistrés.
+ * Anime tout déplacement de position des noeuds enregistrés, et tient à jour
+ * un relevé des positions de mise en page.
  *
- * `orderKey` doit résumer l'ordre visuel affiché (un `join('|')` des ids
- * suffit). C'est la dépendance de l'effet : sans elle, React relance la
- * mesure et réinitialise la transition de chaque carte à chaque rendu — y
- * compris les dizaines de rendus par seconde déclenchés par le simple
- * déplacement du doigt pendant un glissement, ce qui hache l'animation.
- * Avec elle, l'effet ne s'exécute que lorsque l'ordre a réellement bougé.
+ * Deux précautions qui font toute la différence sur un glissement rapide :
+ *
+ * 1. On neutralise les transformations en cours AVANT de mesurer. Une carte au
+ *    milieu de son animation est décalée de plusieurs dizaines de pixels par
+ *    rapport à sa place réelle ; la mesurer telle quelle produit une position
+ *    de départ fausse, et l'animation suivante repart de travers.
+ *
+ * 2. Le relevé est stocké en coordonnées de document (et non d'écran), donc il
+ *    reste valide quand la page défile toute seule pendant le glissement.
+ *    C'est lui, et non une mesure en direct, qui sert à savoir sur quelle ligne
+ *    se trouve le doigt : interroger le DOM pendant qu'il s'anime renvoie la
+ *    position transitoire, ce qui fait osciller la cible d'une ligne à l'autre
+ *    — le tremblement constaté.
+ *
+ * `orderKey` résume l'ordre visuel affiché : c'est la seule dépendance de
+ * l'effet, qui ne se rejoue donc que lorsque l'ordre a réellement changé.
  */
 function useFlip(orderKey, skipId) {
   const nodes = useRef(new Map());
   const previous = useRef(new Map());
+  const layout = useRef(new Map());
 
   useLayoutEffect(() => {
-    const next = new Map();
     const animate = !prefersReducedMotion();
+    const scroll = window.scrollY;
 
+    // 1. Remise à plat : toute mesure prise sur un élément transformé est fausse.
+    for (const [, el] of nodes.current) {
+      if (!el?.isConnected) continue;
+      el.style.transition = 'none';
+      el.style.transform = '';
+    }
+
+    // 2. Mesure propre, en une seule passe pour ne provoquer qu'un reflow.
+    const next = new Map();
+    const geometry = new Map();
     for (const [id, el] of nodes.current) {
       if (!el?.isConnected) continue;
       const rect = el.getBoundingClientRect();
       next.set(id, rect);
-
-      if (!animate || id === skipId) continue;
-      const old = previous.current.get(id);
-      if (!old) continue;
-
-      const dx = old.left - rect.left;
-      const dy = old.top - rect.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-
-      el.style.transition = 'none';
-      el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
-      requestAnimationFrame(() => {
-        el.style.transition = `transform ${DURATION}ms ${EASE}`;
-        el.style.transform = 'translate3d(0, 0, 0)';
-      });
+      geometry.set(id, { top: rect.top + scroll, height: rect.height });
     }
+
+    // 3. Inversion, puis retour à zéro à la frame suivante.
+    if (animate) {
+      for (const [id, el] of nodes.current) {
+        if (!el?.isConnected || id === skipId) continue;
+        const old = previous.current.get(id);
+        const rect = next.get(id);
+        if (!old || !rect) continue;
+
+        const dx = old.left - rect.left;
+        const dy = old.top - rect.top;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+
+        el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+        requestAnimationFrame(() => {
+          if (!el.isConnected) return;
+          el.style.transition = `transform ${DURATION}ms ${EASE}`;
+          el.style.transform = 'translate3d(0, 0, 0)';
+        });
+      }
+    }
+
     previous.current = next;
+    layout.current = geometry;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderKey, skipId]);
 
@@ -74,7 +108,7 @@ function useFlip(orderKey, skipId) {
     []
   );
 
-  return { register, nodes };
+  return { register, nodes, layout };
 }
 
 /** Égalité par valeur, pour éviter un rendu quand la cible n'a pas changé. */
@@ -100,7 +134,6 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
 
   const rankedZone = useRef(null);
   const poolZone = useRef(null);
-  const rows = useRef(new Map()); // id → élément de ligne, pour le test de survol
 
   /* --- Ordre affiché : l'ordre réel, plus l'aperçu du dépôt en cours ------ */
 
@@ -115,7 +148,7 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
   // La colonne « à placer » dérive elle aussi de `preview` (elle liste les
   // contenders qui n'y figurent pas) : une seule clé suffit pour les deux
   // colonnes, l'effet se redéclenche dès que l'une ou l'autre bouge.
-  const { register } = useFlip(preview.join(','), drag?.id);
+  const { register, layout } = useFlip(preview.join(','), drag?.id);
 
   const ranked = preview.map((id) => byId.get(id)).filter(Boolean);
   const pool = contenders.filter((c) => !preview.includes(c.id));
@@ -137,20 +170,41 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
 
       // On teste contre les lignes *hors* celle qu'on déplace : l'index obtenu
       // est directement l'index d'insertion dans la liste sans l'élément.
+      //
+      // Les positions viennent du relevé de mise en page, en coordonnées de
+      // document. Mesurer le DOM ici renverrait la position transitoire des
+      // cartes en cours d'animation, et la cible sauterait d'une ligne à
+      // l'autre à chaque frame.
+      const docY = y + window.scrollY;
       const others = preview.filter((id) => id !== current.id);
+
+      const midOf = (i) => {
+        const box = layout.current.get(others[i]);
+        return box ? box.top + box.height / 2 : null;
+      };
+
       let index = others.length;
       for (let i = 0; i < others.length; i += 1) {
-        const el = rows.current.get(others[i]);
-        if (!el?.isConnected) continue;
-        const r = el.getBoundingClientRect();
-        if (y < r.top + r.height / 2) {
+        const mid = midOf(i);
+        if (mid == null) continue;
+        if (docY < mid) {
           index = i;
           break;
         }
       }
+
+      // Zone morte : un déplacement d'un seul cran ne compte que si la
+      // frontière a été franchie franchement. Une main immobile sur la limite
+      // ne fait plus osciller la carte entre deux places.
+      const held = targetRef.current;
+      if (held?.list === 'ranked' && Math.abs(index - held.index) === 1) {
+        const boundary = midOf(Math.min(index, held.index));
+        if (boundary != null && Math.abs(docY - boundary) < DEADZONE) return held;
+      }
+
       return { list: 'ranked', index };
     },
-    [preview]
+    [preview, layout]
   );
 
   /* --- Cycle de vie du glissement ---------------------------------------- */
@@ -322,11 +376,7 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
 
                 <div
                   data-row=""
-                  ref={(el) => {
-                    register(c.id)(el);
-                    if (el) rows.current.set(c.id, el);
-                    else rows.current.delete(c.id);
-                  }}
+                  ref={register(c.id)}
                   className={
                     'card card--ranked' +
                     (qualified ? ' card--qualified' : '') +

@@ -42,12 +42,26 @@ export default function Layout() {
           </Link>
 
           <Clock />
+
+          <span className="nav__aside">
+            <LangSwitch />
+            {user ? (
+              <>
+                {user.avatarUrl && <img className="avatar" src={user.avatarUrl} alt="" />}
+                <button className="btn btn--small btn--ghost" onClick={logout}>
+                  {t('nav.logout')}
+                </button>
+              </>
+            ) : (
+              <DiscordButton small>Discord</DiscordButton>
+            )}
+          </span>
         </div>
 
-        {/* Les pavés fastext occupent des colonnes de largeur égale, réparties
-            sur la place disponible. La géométrie ne dépend donc plus de la
-            longueur des libellés : anglais et français donnent exactement la
-            même barre. */}
+        {/* Les pavés occupent des colonnes de largeur égale, dimensionnées sur
+            le libellé le plus long des deux langues. La géométrie ne dépend
+            donc ni de la langue ni du contenu — et rien n'est jamais tronqué :
+            s'il manque de la place, la rangée passe à la ligne. */}
         <div className="masthead__nav">
           <nav className="nav">
             <span className="nav__links">
@@ -57,20 +71,6 @@ export default function Layout() {
               <NavLink to="/artists" data-page="414">{t('nav.artists')}</NavLink>
               {user && <NavLink to="/me" data-page="415">{t('nav.mine')}</NavLink>}
               {isStaff(user) && <NavLink to="/admin" data-page="499">{t('nav.admin')}</NavLink>}
-            </span>
-
-            <span className="nav__aside">
-              <LangSwitch />
-              {user ? (
-                <>
-                  {user.avatarUrl && <img className="avatar" src={user.avatarUrl} alt="" />}
-                  <button className="btn btn--small btn--ghost" onClick={logout}>
-                    {t('nav.logout')}
-                  </button>
-                </>
-              ) : (
-                <DiscordButton small>Discord</DiscordButton>
-              )}
             </span>
           </nav>
         </div>
