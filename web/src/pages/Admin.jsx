@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
-import { useSession, isStaff } from '../lib/context.jsx';
+import { useSession, isStaff, isOwner } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
@@ -1168,7 +1168,9 @@ function PeopleAdmin({ currentUser }) {
                 <td>
                   <select
                     value={u.role}
-                    disabled={u.id === currentUser.id}
+                    // Un administrateur ne peut pas toucher au propriétaire, et
+                    // personne ne se retire ses propres droits.
+                    disabled={u.id === currentUser.id || (u.role === 'OWNER' && !isOwner(currentUser))}
                     aria-label={`Rôle de ${u.username}`}
                     onChange={(e) =>
                       run(async () => {
@@ -1178,8 +1180,10 @@ function PeopleAdmin({ currentUser }) {
                     }
                   >
                     <option value="USER">Membre</option>
-                    <option value="MODERATOR">Modérateur</option>
                     <option value="ADMIN">Administrateur</option>
+                    {/* Seul le propriétaire peut transmettre son rang ; le
+                        serveur refuse de toute façon les autres cas. */}
+                    {isOwner(currentUser) && <option value="OWNER">Propriétaire</option>}
                   </select>
                 </td>
               </tr>
@@ -1188,8 +1192,9 @@ function PeopleAdmin({ currentUser }) {
         </table>
       </div>
       <p className="faint" style={{ fontSize: '0.85rem' }}>
-        Un modérateur saisit les résultats et gère les événements. Un administrateur peut en plus
-        supprimer des éléments et distribuer les rôles.
+        Un administrateur gère les événements, les artistes et les résultats, et distribue les
+        rôles. Le propriétaire est le seul qu'aucun administrateur ne peut destituer ; il n'y en a
+        qu'un, et il ne peut transmettre son rang qu'en le donnant à quelqu'un d'autre.
       </p>
     </div>
   );

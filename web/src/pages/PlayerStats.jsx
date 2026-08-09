@@ -16,7 +16,7 @@ export default function PlayerStats() {
   const { t, number } = useI18n();
 
   useEffect(() => {
-    api.get('/events').then(({ events }) => setEvents(events)).catch(() => {});
+    api.get('/events').then(({ events }) => setEvents(events)).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -117,36 +117,86 @@ export default function PlayerStats() {
             )}
           </section>
 
-          {data.favourites.length > 0 && (
-            <section className="stack">
-              <div>
-                <h2>{t('stats.favourites')}</h2>
-                <p className="muted" style={{ fontSize: '0.88rem' }}>{t('stats.favourites.lede')}</p>
-              </div>
-              <div
-                className="grid"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}
-              >
-                {data.favourites.map((f) => (
-                  <div className="artist-card" key={f.contenderId}>
-                    <ArtistFigure src={f.imageUrl} name={f.name} size="md" />
-                    <span style={{ minWidth: 0 }}>
-                      <h3>{f.name}</h3>
-                      <p className="data faint">
-                        {f.event} · {f.category}
-                      </p>
-                      <p className="data" style={{ color: 'var(--accent)', fontSize: '0.72rem' }}>
-                        {t('stats.favourites.count', { n: f.count })}
-                      </p>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
+          {data.readings?.sampled > 0 && (
+            <>
+              <ReadingBoard
+                title={t('stats.wellRead')}
+                lede={t('stats.wellRead.lede')}
+                rows={data.readings.wellRead}
+              />
+              <ReadingBoard
+                title={t('stats.underRated')}
+                lede={t('stats.underRated.lede')}
+                rows={data.readings.underRated}
+                tone="ok"
+              />
+              <ReadingBoard
+                title={t('stats.overRated')}
+                lede={t('stats.overRated.lede')}
+                rows={data.readings.overRated}
+                tone="warn"
+              />
+            </>
           )}
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Un palmarès de lecture : ce que la foule attendait face à ce qui s'est
+ * produit. L'écart est signé — positif, l'artiste a fini mieux que prévu.
+ */
+function ReadingBoard({ title, lede, rows, tone }) {
+  const { t } = useI18n();
+  if (!rows?.length) return null;
+
+  const color = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--r)' : 'var(--accent)';
+
+  return (
+    <section className="stack">
+      <div>
+        <h2>{title}</h2>
+        <p className="muted" style={{ fontSize: '0.88rem' }}>{lede}</p>
+      </div>
+      <div className="panel panel--flush">
+        <table>
+          <thead>
+            <tr>
+              <th>{t('stats.col.artist')}</th>
+              <th className="num">{t('stats.col.expected')}</th>
+              <th className="num">{t('stats.col.actual')}</th>
+              <th className="num">{t('stats.col.gap')}</th>
+              <th className="num">{t('stats.col.voters')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.contenderId}>
+                <td>
+                  <span className="stat-row">
+                    <ArtistFigure src={r.imageUrl} name={r.name} size="xs" />
+                    <span>
+                      {r.name}
+                      <span className="faint data" style={{ fontSize: '0.78rem', display: 'block' }}>
+                        {r.event} · {r.category}
+                      </span>
+                    </span>
+                  </span>
+                </td>
+                <td className="num muted">{r.expected}</td>
+                <td className="num">{r.actual}</td>
+                <td className="num" style={{ color, fontWeight: 600 }}>
+                  {r.delta > 0 ? `+${r.delta}` : r.delta}
+                </td>
+                <td className="num muted">{r.voters}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../lib/i18n.jsx';
 import { contenderPhoto } from '../lib/media.js';
+import { splitsFor, judgesFor } from '../lib/scores.js';
 import ArtistFigure from './ArtistFigure.jsx';
 
 const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
@@ -8,18 +9,6 @@ const DISPLAY_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL',
 // L'ordre dans lequel les affiches se déduisent les unes des autres : la petite
 // finale a besoin des demies, la finale aussi.
 const RESOLVE_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
-
-/** Splits de votes proposés — 3 juges, ou 5 pour les grosses finales. */
-const SCORES = [
-  { label: null, a: null, b: null }, // « sans avis », libellé traduit au rendu
-  { label: '3 – 0', a: 3, b: 0 },
-  { label: '2 – 1', a: 2, b: 1 },
-  { label: '1 – 2', a: 1, b: 2 },
-  { label: '0 – 3', a: 0, b: 3 },
-  { label: '5 – 0', a: 5, b: 0 },
-  { label: '4 – 1', a: 4, b: 1 },
-  { label: '3 – 2', a: 3, b: 2 },
-];
 
 const key = (round, slot) => `${round}:${slot}`;
 
@@ -46,8 +35,12 @@ export default function BracketBoard({
   onChange,
   locked,
   seedFromRanking = [],
+  event,
 }) {
   const { t } = useI18n();
+  // Les splits proposables découlent du panel de juges : inutile d'offrir un
+  // 5-0 sur une compète jugée à trois.
+  const scores = useMemo(() => splitsFor(judgesFor(phase, event)), [phase, event]);
   const byId = useMemo(() => new Map(contenders.map((c) => [c.id, c])), [contenders]);
 
   const rounds = useMemo(() => {
@@ -272,17 +265,16 @@ export default function BracketBoard({
                 disabled={locked}
                 value={r.scoreA == null ? '' : `${r.scoreA}-${r.scoreB}`}
                 onChange={(e) => {
-                  const found = SCORES.find((s) => `${s.a}-${s.b}` === e.target.value);
+                  const found = scores.find((s) => s.value === e.target.value);
                   setPick(battle.round, battle.slot, {
                     scoreA: found?.a ?? null,
                     scoreB: found?.b ?? null,
                   });
                 }}
               >
-                {SCORES.map((s) => (
-                  <option key={s.label ?? 'none'} value={s.a == null ? '' : `${s.a}-${s.b}`}>
-                    {s.label ?? t('bracket.score.none')}
-                  </option>
+                <option value="">{t('bracket.score.none')}</option>
+                {scores.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
               {r.winnerId && (

@@ -35,7 +35,10 @@ export function SessionProvider({ children }) {
 }
 
 export const useSession = () => useContext(SessionContext);
-export const isStaff = (user) => Boolean(user && ['ADMIN', 'MODERATOR'].includes(user.role));
+// Le propriétaire et les administrateurs. Le rôle modérateur a été retiré : il
+// n'accordait rien de plus qu'ADMIN et compliquait chaque contrôle.
+export const isStaff = (user) => Boolean(user && ['ADMIN', 'OWNER'].includes(user.role));
+export const isOwner = (user) => user?.role === 'OWNER';
 
 // --- Thème --------------------------------------------------------------------
 

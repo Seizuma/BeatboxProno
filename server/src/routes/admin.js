@@ -5,9 +5,9 @@ import { requireRole } from '../lib/auth.js';
 import { scorePrediction } from '../lib/scoring.js';
 
 export const adminRouter = Router();
-adminRouter.use(requireRole('ADMIN', 'MODERATOR'));
+adminRouter.use(requireRole('ADMIN', 'OWNER'));
 
-const onlyAdmin = requireRole('ADMIN');
+const onlyAdmin = requireRole('ADMIN', 'OWNER');
 const slugify = (s) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -217,6 +217,10 @@ adminRouter.post('/events', async (req, res) => {
     endsAt: z.coerce.date().optional().nullable(),
     description: z.string().optional().nullable(),
     coverUrl: z.string().url().optional().nullable(),
+    // 3 juges par défaut. Détermine les scores proposés aux pronostiqueurs.
+    judgeCount: z.number().int().min(1).max(9).optional(),
+    // Volontairement nullable : wildcards ouvertes, date encore inconnue.
+    predictionsCloseAt: z.coerce.date().optional().nullable(),
   });
   const data = schema.parse(req.body);
   const event = await prisma.event.create({
@@ -226,7 +230,26 @@ adminRouter.post('/events', async (req, res) => {
 });
 
 adminRouter.patch('/events/:id', async (req, res) => {
-  const event = await prisma.event.update({ where: { id: req.params.id }, data: req.body });
+  // Le corps était passé tel quel à Prisma : n'importe quelle colonne pouvait
+  // être écrite depuis le client, et une date arrivait en chaîne de caractères.
+  const data = z
+    .object({
+      name: z.string().min(1).optional(),
+      year: z.number().int().optional(),
+      location: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+      coverUrl: z.string().url().nullable().optional(),
+      status: z.enum(['DRAFT', 'OPEN', 'LIVE', 'FINISHED']).optional(),
+      startsAt: z.coerce.date().nullable().optional(),
+      endsAt: z.coerce.date().nullable().optional(),
+      judgeCount: z.number().int().min(1).max(9).optional(),
+      // null efface la date butoir : c'est le cas « wildcards ouvertes, date
+      // de la compète encore inconnue ».
+      predictionsCloseAt: z.coerce.date().nullable().optional(),
+    })
+    .parse(req.body);
+
+  const event = await prisma.event.update({ where: { id: req.params.id }, data });
   res.json({ event });
 });
 
@@ -486,8 +509,12 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
           kind: z.enum(['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'LEGACY']),
           name: z.string().min(1).optional(),
           format: z.enum(['TOP_16', 'TOP_8', 'TOP_4', 'TOP_2']).default('TOP_8'),
+          // Deux paliers indépendants. Les wildcards passent en premier : c'est
+          // la sélection sur vidéo, avant les éliminations sur scène.
           wildcard: z.boolean().default(false),
           wildcardCount: z.number().int().min(2).max(200).nullable().optional(),
+          elimination: z.boolean().default(false),
+          eliminationCount: z.number().int().min(2).max(200).nullable().optional(),
           smallFinal: z.boolean().default(false),
           legacyBattles: z.number().int().min(1).max(16).default(4),
         })
@@ -539,15 +566,27 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
 
       let position = 0;
 
-      // Phase de qualification, si l'événement en a une.
+      // Les paliers de qualification, dans l'ordre : wildcards puis
+      // éliminations. Chacun est facultatif et peut exister sans l'autre.
       if (spec.wildcard) {
         await tx.phase.create({
           data: {
             categoryId: category.id,
             name: 'Wildcards',
+            type: 'WILDCARD',
+            position: position++,
+            qualifierCount: spec.wildcardCount ?? bracket.size * 2,
+          },
+        });
+      }
+      if (spec.elimination) {
+        await tx.phase.create({
+          data: {
+            categoryId: category.id,
+            name: 'Éliminations',
             type: 'ELIMINATION',
             position: position++,
-            qualifierCount: spec.wildcardCount ?? bracket.size,
+            qualifierCount: spec.eliminationCount ?? bracket.size,
           },
         });
       }
@@ -770,16 +809,55 @@ adminRouter.get('/users', async (req, res) => {
   res.json({ users });
 });
 
+/**
+ * Changement de rôle.
+ *
+ * La hiérarchie tient en trois règles :
+ *   — un administrateur gère les membres et les autres administrateurs ;
+ *   — il ne peut ni toucher au propriétaire, ni s'auto-promouvoir propriétaire ;
+ *   — seul le propriétaire transmet son rang, et il ne peut pas se le retirer
+ *     sans le donner à quelqu'un d'autre. Le site garde toujours un propriétaire.
+ */
 adminRouter.patch('/users/:id/role', onlyAdmin, async (req, res) => {
-  const { role } = z.object({ role: z.enum(['USER', 'MODERATOR', 'ADMIN']) }).parse(req.body);
-  if (req.params.id === req.user.id && role !== 'ADMIN') {
-    return res.status(400).json({ error: 'Vous ne pouvez pas retirer votre propre rôle admin.' });
-  }
-  const user = await prisma.user.update({
+  const { role } = z.object({ role: z.enum(['USER', 'ADMIN', 'OWNER']) }).parse(req.body);
+
+  const target = await prisma.user.findUnique({
     where: { id: req.params.id },
-    data: { role },
     select: { id: true, username: true, role: true },
   });
+  if (!target) return res.status(404).json({ error: 'Compte introuvable.' });
+
+  const actorIsOwner = req.user.role === 'OWNER';
+
+  if (target.role === 'OWNER' && !actorIsOwner) {
+    return res.status(403).json({
+      error: 'Le propriétaire du site ne peut pas être rétrogradé par un administrateur.',
+    });
+  }
+  if (role === 'OWNER' && !actorIsOwner) {
+    return res.status(403).json({ error: 'Seul le propriétaire peut transmettre ce rang.' });
+  }
+  if (target.id === req.user.id && actorIsOwner && role !== 'OWNER') {
+    return res.status(400).json({
+      error: 'Transmettez d’abord la propriété à quelqu’un d’autre : le site doit toujours avoir un propriétaire.',
+    });
+  }
+  if (target.id === req.user.id && role === 'USER') {
+    return res.status(400).json({ error: 'Vous ne pouvez pas retirer vos propres droits.' });
+  }
+
+  // La propriété se transmet : l'ancien propriétaire redevient administrateur.
+  const user = await prisma.$transaction(async (tx) => {
+    if (role === 'OWNER') {
+      await tx.user.updateMany({ where: { role: 'OWNER' }, data: { role: 'ADMIN' } });
+    }
+    return tx.user.update({
+      where: { id: target.id },
+      data: { role },
+      select: { id: true, username: true, role: true },
+    });
+  });
+
   res.json({ user });
 });
 

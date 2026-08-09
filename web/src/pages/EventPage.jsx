@@ -49,8 +49,17 @@ export default function EventPage() {
   const update = (patch) =>
     setDraft((d) => ({ ...d, [activeId]: { ...state, ...patch } }));
 
+  // La date butoir de l'événement ferme tout. Absente — wildcards ouvertes,
+  // date de la compète encore inconnue — rien ne ferme globalement : seuls les
+  // verrous de phase s'appliquent.
+  const deadline = event.predictionsCloseAt ? new Date(event.predictionsCloseAt) : null;
+  const deadlinePassed = Boolean(deadline && deadline <= new Date());
+
   const phaseLocked = (phase) =>
-    eventClosed || phase.resolved || (phase.locksAt && new Date(phase.locksAt) <= new Date());
+    eventClosed ||
+    deadlinePassed ||
+    phase.resolved ||
+    (phase.locksAt && new Date(phase.locksAt) <= new Date());
 
   async function save(submit) {
     setSaving(true);
@@ -68,10 +77,12 @@ export default function EventPage() {
       const res = await api.put(`/predictions/categories/${activeId}`, payload);
       setFlash({
         ok: true,
+        submitted: submit,
+        at: Date.now(),
         text: res.note ?? t(submit ? 'event.saved.submit' : 'event.saved.draft'),
       });
     } catch (e) {
-      setFlash({ ok: false, text: e.message });
+      setFlash({ ok: false, at: Date.now(), text: e.message });
     } finally {
       setSaving(false);
     }
@@ -88,6 +99,17 @@ export default function EventPage() {
           {event.name} <em>{event.year}</em>
         </h1>
         {event.description && <p className="muted" style={{ maxWidth: '60ch' }}>{event.description}</p>}
+
+        <p className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
+          <span className="tag">{t('event.judges', { n: event.judgeCount ?? 3 })}</span>
+          <span className={`tag${deadlinePassed ? ' tag--done' : deadline ? ' tag--live' : ''}`}>
+            {deadlinePassed
+              ? t('event.deadline.passed')
+              : deadline
+                ? t('event.deadline', { date: date(deadline, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) })
+                : t('event.deadline.none')}
+          </span>
+        </p>
       </header>
 
       <nav
@@ -110,6 +132,7 @@ export default function EventPage() {
       {category && (
         <CategoryEditor
           category={category}
+          event={event}
           state={state}
           update={update}
           phaseLocked={phaseLocked}
@@ -120,14 +143,22 @@ export default function EventPage() {
       {user && !eventClosed && (
         <div className="actionbar">
           <button className="btn" onClick={() => save(false)} disabled={saving}>
-            {t('event.save.draft')}
+            {saving ? t('event.saving') : t('event.save.draft')}
           </button>
           <button className="btn btn--primary" onClick={() => save(true)} disabled={saving}>
-            {t('event.save.submit')}
+            {saving ? t('event.saving') : t('event.save.submit')}
           </button>
+
+          {/* La confirmation manquait : les boutons restaient identiques après
+              l'enregistrement, et rien ne disait que c'était parti. */}
           {flash && (
-            <span className="data" style={{ color: flash.ok ? 'var(--ok)' : 'var(--accent)' }}>
-              {flash.text}
+            <span
+              key={flash.at}
+              className={`saved${flash.ok ? '' : ' saved--error'}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span aria-hidden="true">{flash.ok ? '✓' : '!'}</span> {flash.text}
             </span>
           )}
           <span className="faint" style={{ fontSize: '0.8rem', marginLeft: 'auto' }}>
@@ -139,7 +170,7 @@ export default function EventPage() {
   );
 }
 
-function CategoryEditor({ category, state, update, phaseLocked, locked }) {
+function CategoryEditor({ category, event, state, update, phaseLocked, locked }) {
   const { t } = useI18n();
   const contenders = category.contenders;
 
@@ -183,6 +214,7 @@ function CategoryEditor({ category, state, update, phaseLocked, locked }) {
                 phase={phase}
                 phaseBattles={phase.battles}
                 contenders={contenders}
+                event={event}
                 picks={state.picks[phase.id] ?? {}}
                 locked={isLocked}
                 seedFromRanking={seedFromRanking}

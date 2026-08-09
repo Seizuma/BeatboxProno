@@ -28,7 +28,7 @@ statsRouter.get('/stats', async (req, res) => {
 
   const predictionWhere = { submitted: true, ...(eventId ? { eventId } : {}) };
 
-  const [grouped, battles, picks, favouriteRows] = await Promise.all([
+  const [grouped, battles, picks, officialRanks, predictedRanks] = await Promise.all([
     prisma.prediction.groupBy({
       by: ['userId'],
       where: predictionWhere,
@@ -59,15 +59,18 @@ statsRouter.get('/stats', async (req, res) => {
       },
     }),
 
-    // Les favoris se lisent maintenant dans l'arbre : qui est donné vainqueur
-    // de la finale. Plus fiable que l'ancien podium, puisque c'est un choix que
-    // le pronostiqueur doit défendre tour après tour.
-    prisma.predictedBattle.groupBy({
-      by: ['winnerId'],
-      where: { round: 'FINAL', winnerId: { not: null }, prediction: predictionWhere },
-      _count: { _all: true },
-      orderBy: { _count: { winnerId: 'desc' } },
-      take: 6,
+    // Le classement officiel de chaque phase résolue, avec les places
+    // pronostiquées correspondantes : de quoi mesurer qui la foule a bien lu.
+    prisma.phaseEntry.findMany({
+      where: {
+        phase: { resolved: true, ...(eventId ? { category: { eventId } } : {}) },
+      },
+      select: { phaseId: true, contenderId: true, rank: true },
+    }),
+
+    prisma.predictedRank.findMany({
+      where: { prediction: predictionWhere },
+      select: { phaseId: true, contenderId: true, rank: true },
     }),
   ]);
 
@@ -120,34 +123,74 @@ statsRouter.get('/stats', async (req, res) => {
     };
   });
 
-  // --- Les favoris du public -----------------------------------------------
+  // --- Précision et upsets --------------------------------------------------
+  //
+  // Pour chaque contender d'une phase résolue, on compare sa place réelle à la
+  // moyenne des places que les pronostiqueurs lui donnaient. L'écart dit deux
+  // choses : les artistes que la foule lit juste, et ceux qu'elle se trompe le
+  // plus à placer — les upsets, dans les deux sens.
+  const predictedByKey = new Map();
+  for (const r of predictedRanks) {
+    const key = `${r.phaseId}:${r.contenderId}`;
+    const bucket = predictedByKey.get(key) ?? { sum: 0, n: 0 };
+    bucket.sum += r.rank;
+    bucket.n += 1;
+    predictedByKey.set(key, bucket);
+  }
 
-  const favouriteIds = favouriteRows.map((f) => f.winnerId).filter(Boolean);
-  const contenders = favouriteIds.length
-    ? await prisma.contender.findMany({
-      where: { id: { in: favouriteIds } },
+  const readings = [];
+  for (const official of officialRanks) {
+    const bucket = predictedByKey.get(`${official.phaseId}:${official.contenderId}`);
+    // Sous 3 avis, la moyenne ne veut rien dire : on écarte.
+    if (!bucket || bucket.n < 3) continue;
+    const expected = bucket.sum / bucket.n;
+    readings.push({
+      contenderId: official.contenderId,
+      actual: official.rank,
+      expected: Math.round(expected * 10) / 10,
+      // Positif : il a fini MIEUX que prévu. Négatif : moins bien.
+      delta: Math.round((expected - official.rank) * 10) / 10,
+      voters: bucket.n,
+    });
+  }
+
+  const decorate = async (list) => {
+    const ids = list.map((r) => r.contenderId);
+    if (ids.length === 0) return [];
+    const contenders = await prisma.contender.findMany({
+      where: { id: { in: ids } },
       include: {
         category: { select: { name: true, event: { select: { name: true, year: true } } } },
         artists: { include: { artist: { select: { imageUrl: true } } } },
       },
-    })
-    : [];
-  const contenderById = new Map(contenders.map((c) => [c.id, c]));
+    });
+    const byId = new Map(contenders.map((c) => [c.id, c]));
+    return list
+      .map((r) => {
+        const c = byId.get(r.contenderId);
+        if (!c) return null;
+        return {
+          ...r,
+          name: c.name,
+          category: c.category.name,
+          event: `${c.category.event.name} ${c.category.event.year}`,
+          imageUrl: c.imageUrl ?? c.artists[0]?.artist?.imageUrl ?? null,
+        };
+      })
+      .filter(Boolean);
+  };
 
-  const favourites = favouriteRows
-    .map((f) => {
-      const c = contenderById.get(f.winnerId);
-      if (!c) return null;
-      return {
-        contenderId: c.id,
-        name: c.name,
-        category: c.category.name,
-        event: `${c.category.event.name} ${c.category.event.year}`,
-        imageUrl: c.imageUrl ?? c.artists[0]?.artist?.imageUrl ?? null,
-        count: f._count._all,
-      };
-    })
-    .filter(Boolean);
+  const byAccuracy = [...readings].sort((x, y) => Math.abs(x.delta) - Math.abs(y.delta));
+  const bySurprise = [...readings].sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+
+  const [wellRead, overRated, underRated] = await Promise.all([
+    // Les mieux lus : l'écart le plus faible entre attendu et réel.
+    decorate(byAccuracy.slice(0, 5)),
+    // Surcotés : on les attendait haut, ils ont fini bas (delta négatif).
+    decorate(bySurprise.filter((r) => r.delta < 0).slice(0, 5)),
+    // Sous-cotés : on les attendait bas, ils ont fini haut (delta positif).
+    decorate(bySurprise.filter((r) => r.delta > 0).slice(0, 5)),
+  ]);
 
   res.json({
     scope: eventSlug ?? 'general',
@@ -160,6 +203,6 @@ statsRouter.get('/stats', async (req, res) => {
       accuracy: globalPicks ? Math.round((globalHits / globalPicks) * 100) : null,
     },
     players,
-    favourites,
+    readings: { wellRead, overRated, underRated, sampled: readings.length },
   });
 });

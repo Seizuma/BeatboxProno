@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -15,8 +15,8 @@ datasource db {
 
 enum Role {
   USER
-  MODERATOR
   ADMIN
+  OWNER   // le propriétaire du site : un seul, qu'aucun admin ne peut destituer
 }
 
 model User {
@@ -67,6 +67,15 @@ model Event {
   coverUrl    String?
   description String?
   status      EventStatus @default(DRAFT)
+
+  // Nombre de juges de la compétition. Détermine les scores proposables :
+  // 3 juges donnent 3-0 et 2-1 ; 5 juges ouvrent 5-0, 4-1 et 3-2.
+  judgeCount  Int         @default(3)
+
+  // Fermeture globale des pronostics. Volontairement nullable : quand les
+  // wildcards sont ouvertes mais que la date de la compète n'est pas connue,
+  // on ne ferme rien — seuls les verrous de phase s'appliquent.
+  predictionsCloseAt DateTime?
   createdAt   DateTime    @default(now())
 
   categories  Category[]
@@ -145,6 +154,9 @@ enum PhaseType {
 
 model Phase {
   id             String    @id @default(cuid())
+  // Surcharge le nombre de juges de l'événement — une finale à 5 juges dans
+  // une compète qui en compte 3. Vide : on suit l'événement.
+  judgeCount     Int?
   categoryId     String
   category       Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   type           PhaseType
