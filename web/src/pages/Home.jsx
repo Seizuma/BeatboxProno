@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
+import ScoringHelp from '../components/ScoringHelp.jsx';
 
 const STATUS_CLASS = {
   DRAFT: '',
@@ -20,6 +21,7 @@ const STATUS_CLASS = {
  */
 export default function Home() {
   const [events, setEvents] = useState(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [error, setError] = useState(null);
   const [params] = useSearchParams();
   const { user } = useSession();
@@ -53,6 +55,9 @@ export default function Home() {
             <p className="hero__lede">{t('home.lede')}</p>
             <div className="row" style={{ gap: '1rem' }}>
               {!user && <DiscordButton />}
+              <button className="btn btn--small" onClick={() => setHelpOpen(true)}>
+                ? {t('help.open')}
+              </button>
               {total > 0 && (
                 <span className="readout">
                   <span className="readout__value">{number(total)}</span>
@@ -149,6 +154,8 @@ export default function Home() {
       )}
 
       {events?.length === 0 && <p className="empty">{t('home.events.empty')}</p>}
+
+      {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
     </>
   );
 }

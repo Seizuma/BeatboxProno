@@ -889,3 +889,69 @@ details.panel>summary .eyebrow {
   margin-left: auto;
   align-items: center;
 }
+
+/* --- Notification passagère ------------------------------------------------
+   Posée en bas à droite, au-dessus du contenu : elle ne déplace rien et ne
+   pousse aucun bouton. Une réussite s'efface toute seule ; une erreur attend
+   qu'on la ferme, sinon on rate un échec d'enregistrement.
+   -------------------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: min(28rem, calc(100vw - 2.4rem));
+  padding: 0.5rem 0.75rem;
+  background: var(--g);
+  color: #000;
+  border: var(--border-w) solid #000;
+  font-family: var(--font-data);
+  font-size: 0.95rem;
+  animation: toast-in 200ms ease-out both;
+}
+
+.toast--error {
+  background: var(--r);
+  color: #fff;
+  border-color: #fff;
+}
+
+.toast--leaving {
+  animation: toast-out 200ms ease-in both;
+}
+
+.toast__close {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 0.15rem;
+  margin-left: auto;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(0.6rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .toast,
+  .toast--leaving {
+    animation: none;
+  }
+}

@@ -4,6 +4,8 @@ import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
+import Toast from '../components/Toast.jsx';
+import ScoringHelp from '../components/ScoringHelp.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -26,6 +28,7 @@ export default function EventPage() {
   const [versions, setVersions] = useState({});
   const [flash, setFlash] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     api
@@ -210,15 +213,24 @@ export default function EventPage() {
         className="row"
         style={{ gap: '0.4rem', borderBottom: 'var(--frame)', paddingBottom: '0.75rem' }}
       >
-        {event.categories.map((c) => (
-          <button
-            key={c.id}
-            className={`btn${c.id === activeId ? ' btn--primary' : ''}`}
-            onClick={() => setActiveId(c.id)}
-          >
-            {c.name}
-          </button>
-        ))}
+        {event.categories.map((c) => {
+          // Une étoile sur l'onglet : on voit d'un coup d'œil les catégories
+          // pour lesquelles un pronostic est déjà déposé, sans le répéter
+          // partout dans la page.
+          const filed = (versions[c.id] ?? []).some((v) => v.submitted);
+          return (
+            <button
+              key={c.id}
+              className={`btn${c.id === activeId ? ' btn--primary' : ''}`}
+              onClick={() => setActiveId(c.id)}
+              title={filed ? t('draft.submitted') : undefined}
+            >
+              {c.name}
+              {filed && <span aria-hidden="true"> ★</span>}
+              {filed && <span className="visually-hidden"> — {t('draft.submitted')}</span>}
+            </button>
+          );
+        })}
       </nav>
 
       {!user && <p className="notice">{t('event.signin')}</p>}
@@ -238,6 +250,9 @@ export default function EventPage() {
               </option>
             ))}
           </select>
+          <button className="btn btn--small" onClick={snapshot} disabled={saving || myVersions.length >= 10}>
+            {t('draft.snapshot')}
+          </button>
           <span className="faint" style={{ fontSize: '0.82rem' }}>{t('draft.manage')}</span>
         </div>
       )}
@@ -258,9 +273,6 @@ export default function EventPage() {
           <button className="btn" onClick={save} disabled={saving}>
             {saving ? t('event.saving') : t('event.save.draft')}
           </button>
-          <button className="btn" onClick={snapshot} disabled={saving || myVersions.length >= 10}>
-            {t('draft.snapshot')}
-          </button>
           <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
             {saving
               ? t('event.saving')
@@ -268,25 +280,23 @@ export default function EventPage() {
                 ? t('event.resubmit')
                 : t('event.save.submit')}
           </button>
-          {activeVersion?.submitted && <span className="tag tag--live">{t('draft.submitted')}</span>}
 
-          {/* La confirmation manquait : les boutons restaient identiques après
-              l'enregistrement, et rien ne disait que c'était parti. */}
-          {flash && (
-            <span
-              key={flash.at}
-              className={`saved${flash.ok ? '' : ' saved--error'}`}
-              role="status"
-              aria-live="polite"
-            >
-              <span aria-hidden="true">{flash.ok ? '✓' : '!'}</span> {flash.text}
-            </span>
-          )}
+
+          <button className="btn btn--small btn--ghost" onClick={() => setHelpOpen(true)}>
+            ? {t('help.open')}
+          </button>
           <span className="faint" style={{ fontSize: '0.8rem', marginLeft: 'auto' }}>
             {t('event.editable')}
           </span>
         </div>
       )}
+
+      <Toast
+        message={flash?.text}
+        ok={flash?.ok}
+        onDismiss={() => setFlash(null)}
+      />
+      {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
