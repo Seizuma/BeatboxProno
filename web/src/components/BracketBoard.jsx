@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../lib/i18n.jsx';
 import { contenderPhoto } from '../lib/media.js';
-import { splitsFor, judgesFor } from '../lib/scores.js';
+import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js';
 import ArtistFigure from './ArtistFigure.jsx';
 
 const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
@@ -40,7 +40,7 @@ export default function BracketBoard({
   const { t } = useI18n();
   // Les splits proposables découlent du panel de juges : inutile d'offrir un
   // 5-0 sur une compète jugée à trois.
-  const scores = useMemo(() => splitsFor(judgesFor(phase, event)), [phase, event]);
+  const judges = judgesFor(phase, event);
   const byId = useMemo(() => new Map(contenders.map((c) => [c.id, c])), [contenders]);
 
   const rounds = useMemo(() => {
@@ -139,14 +139,21 @@ export default function BracketBoard({
         const stillValid = pick?.winnerId && (pick.winnerId === a || pick.winnerId === b);
         const winnerId = stillValid ? pick.winnerId : null;
 
+        // Le camp qui l'emporte, pour ne garder qu'un score qui le confirme.
+        // Changer de vainqueur invalide un score qui disait l'inverse.
+        const side = winnerId ? (winnerId === a ? 'a' : 'b') : null;
+        const keepScore =
+          winnerId && scoreMatchesWinner(pick?.scoreA, pick?.scoreB, side);
+
         out.set(key(round, battle.slot), {
           round,
           slot: battle.slot,
           a,
           b,
           winnerId,
-          scoreA: winnerId ? pick?.scoreA ?? null : null,
-          scoreB: winnerId ? pick?.scoreB ?? null : null,
+          side,
+          scoreA: keepScore ? pick?.scoreA ?? null : null,
+          scoreB: keepScore ? pick?.scoreB ?? null : null,
         });
       }
     }
@@ -229,6 +236,8 @@ export default function BracketBoard({
     const r = resolved.get(key(battle.round, battle.slot));
     if (!r) return null;
     const ready = Boolean(r.a && r.b);
+    // Seules les répartitions qui donnent la majorité au camp désigné.
+    const options = splitsForWinner(judges, r.side);
 
     return (
       <div className="bracket__node" key={battle.id ?? key(battle.round, battle.slot)}>
@@ -255,7 +264,9 @@ export default function BracketBoard({
             );
           })}
 
-          {ready && (
+          {/* Le score n'a de sens qu'une fois le vainqueur désigné : tant
+              qu'aucun camp n'est choisi, la ligne n'apparaît pas du tout. */}
+          {ready && r.winnerId && (
             <div className="battle__foot">
               <label htmlFor={`sc-${phase.id}-${battle.round}-${battle.slot}`}>
                 {t('bracket.score')}
@@ -265,7 +276,7 @@ export default function BracketBoard({
                 disabled={locked}
                 value={r.scoreA == null ? '' : `${r.scoreA}-${r.scoreB}`}
                 onChange={(e) => {
-                  const found = scores.find((s) => s.value === e.target.value);
+                  const found = options.find((s) => s.value === e.target.value);
                   setPick(battle.round, battle.slot, {
                     scoreA: found?.a ?? null,
                     scoreB: found?.b ?? null,
@@ -273,7 +284,7 @@ export default function BracketBoard({
                 }}
               >
                 <option value="">{t('bracket.score.none')}</option>
-                {scores.map((s) => (
+                {options.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>

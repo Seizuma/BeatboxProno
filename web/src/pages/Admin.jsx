@@ -4,6 +4,7 @@ import { useSession, isStaff, isOwner } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
+import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
@@ -875,7 +876,6 @@ const ROUND_LABELS = {
   LEGACY: 'Legacy',
 };
 const ROUND_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
-const SCORES = ['3-0', '2-1', '1-2', '0-3', '5-0', '4-1', '3-2'];
 
 function ResultsAdmin() {
   const [events, setEvents] = useState([]);
@@ -961,7 +961,14 @@ function ResultsAdmin() {
 
       {category && phase && (
         ['BRACKET', 'LEGACY'].includes(phase.type) ? (
-          <BracketResults key={phase.id} phase={phase} contenders={category.contenders} onDone={reload} run={run} />
+          <BracketResults
+            key={phase.id}
+            phase={phase}
+            event={detail.event}
+            contenders={category.contenders}
+            onDone={reload}
+            run={run}
+          />
         ) : (
           <RankingResults key={phase.id} phase={phase} contenders={category.contenders} onDone={reload} run={run} />
         )
@@ -975,7 +982,9 @@ function ResultsAdmin() {
  * remplit tranquillement, on envoie une fois. Le vainqueur se désigne en
  * cliquant sur le nom, pas dans une liste déroulante.
  */
-function BracketResults({ phase, contenders, onDone, run }) {
+function BracketResults({ phase, event, contenders, onDone, run }) {
+  // Le panel de juges de la phase, ou celui de l'événement à défaut.
+  const judges = judgesFor(phase, event);
   const [rows, setRows] = useState(() =>
     Object.fromEntries(
       phase.battles.map((b) => [
@@ -1089,23 +1098,39 @@ function BracketResults({ phase, contenders, onDone, run }) {
                       <button
                         key={id}
                         className={`btn btn--small${r.winnerId === id ? ' btn--primary' : ''}`}
-                        onClick={() => patch(b.id, { winnerId: r.winnerId === id ? '' : id })}
+                        onClick={() => {
+                          const next = r.winnerId === id ? '' : id;
+                          const side = next ? (next === r.contenderAId ? 'a' : 'b') : null;
+                          const [sa, sb] = r.score ? r.score.split('-').map(Number) : [null, null];
+                          // Un score qui donnait l'autre gagnant n'a plus de sens.
+                          patch(b.id, {
+                            winnerId: next,
+                            score: next && scoreMatchesWinner(sa, sb, side) ? r.score : '',
+                          });
+                        }}
                       >
                         {nameOf(id)}
                       </button>
                     ))}
                   </span>
 
-                  <select
-                    value={r.score}
-                    aria-label={`Score de l'affiche ${b.slot + 1}`}
-                    disabled={!r.winnerId}
-                    style={{ width: '6.5rem' }}
-                    onChange={(e) => patch(b.id, { score: e.target.value })}
-                  >
-                    <option value="">Score…</option>
-                    {SCORES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  {/* Sans vainqueur, pas de score à saisir. */}
+                  {r.winnerId && (
+                    <select
+                      value={r.score}
+                      aria-label={`Score de l'affiche ${b.slot + 1}`}
+                      style={{ width: '6.5rem' }}
+                      onChange={(e) => patch(b.id, { score: e.target.value })}
+                    >
+                      <option value="">Score…</option>
+                      {splitsForWinner(
+                        judges,
+                        r.winnerId === r.contenderAId ? 'a' : 'b'
+                      ).map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               );
             })}

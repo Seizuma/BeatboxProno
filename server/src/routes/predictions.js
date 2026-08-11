@@ -192,11 +192,23 @@ predictionRouter.put('/:predictionId', async (req, res) => {
   const openPhases = new Map(category.phases.filter((p) => !phaseIsLocked(p)).map((p) => [p.id, p]));
 
   const keepRank = (r) => openPhases.has(r.phaseId) && validContenders.has(r.contenderId);
+  /**
+   * Un score doit confirmer le vainqueur désigné : annoncer Seizuma gagnant
+   * puis saisir 1-2 est contradictoire. L'interface ne propose déjà que les
+   * répartitions cohérentes, mais l'API ne s'y fie pas.
+   */
+  const scoreAgrees = (b) => {
+    if (b.scoreA == null || b.scoreB == null) return true;
+    if (!b.winnerId) return false; // un score sans vainqueur ne veut rien dire
+    return b.winnerId === b.contenderAId ? b.scoreA > b.scoreB : b.scoreB > b.scoreA;
+  };
+
   const keepBattle = (b) =>
     openPhases.has(b.phaseId) &&
     (!b.contenderAId || validContenders.has(b.contenderAId)) &&
     (!b.contenderBId || validContenders.has(b.contenderBId)) &&
-    (!b.winnerId || [b.contenderAId, b.contenderBId].includes(b.winnerId));
+    (!b.winnerId || [b.contenderAId, b.contenderBId].includes(b.winnerId)) &&
+    scoreAgrees(b);
 
   const ranks = body.ranks.filter(keepRank);
   const battles = body.battles.filter(keepBattle);

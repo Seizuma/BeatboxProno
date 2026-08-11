@@ -27,3 +27,27 @@ export function splitsFor(judgeCount) {
 
 /** Le nombre de juges applicable à une phase : sa surcharge, sinon l'événement. */
 export const judgesFor = (phase, event) => phase?.judgeCount ?? event?.judgeCount ?? 3;
+
+/**
+ * Les splits compatibles avec un vainqueur donné.
+ *
+ * Désigner Seizuma vainqueur puis lui donner 1-2 serait une contradiction : le
+ * score dirait que Julard l'emporte. On ne propose donc que les répartitions où
+ * le camp désigné a la majorité — à 3 juges, 3-0 et 2-1 pour le côté A, 0-3 et
+ * 1-2 pour le côté B.
+ *
+ * @param {'a'|'b'|null} side  le côté de l'affiche qui l'emporte
+ */
+export function splitsForWinner(judgeCount, side) {
+    const all = splitsFor(judgeCount);
+    if (side !== 'a' && side !== 'b') return [];
+    return all.filter((s) => (side === 'a' ? s.a > s.b : s.b > s.a));
+}
+
+/** Un score est-il cohérent avec le camp désigné vainqueur ? */
+export function scoreMatchesWinner(scoreA, scoreB, side) {
+    if (scoreA == null || scoreB == null) return true; // « sans avis » reste valide
+    if (side === 'a') return scoreA > scoreB;
+    if (side === 'b') return scoreB > scoreA;
+    return false;
+}
