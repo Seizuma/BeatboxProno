@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
@@ -7,9 +7,38 @@ import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
 import PromptDialog from '../components/PromptDialog.jsx';
+import Modal from '../components/Modal.jsx';
+import useUnsavedGuard from '../lib/useUnsavedGuard.js';
 import BracketBoard from '../components/BracketBoard.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
+
+/**
+ * Une empreinte stable du contenu d'une version. Les clés sont triées pour que
+ * deux états identiques donnent la même chaîne quel que soit l'ordre dans
+ * lequel ils ont été construits — sans quoi on signalerait des modifications
+ * imaginaires.
+ */
+function fingerprint(state) {
+  const orders = Object.entries(state?.orders ?? {})
+    .filter(([, ids]) => ids?.length)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([phaseId, ids]) => [phaseId, ids]);
+
+  const picks = Object.entries(state?.picks ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([phaseId, byBattle]) => [
+      phaseId,
+      Object.entries(byBattle)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, v.winnerId ?? null, v.scoreA ?? null, v.scoreB ?? null])
+        // Une affiche sans vainqueur ni score n'est pas une modification.
+        .filter(([, w, sa]) => w != null || sa != null),
+    ])
+    .filter(([, list]) => list.length);
+
+  return JSON.stringify({ orders, picks });
+}
 const key = (round, slot) => `${round}:${slot}`;
 
 export default function EventPage() {
@@ -33,6 +62,9 @@ export default function EventPage() {
   // Le nom proposé pour la copie en cours de création, ou null si la fenêtre
   // est fermée.
   const [naming, setNaming] = useState(null);
+  // L'empreinte de chaque version telle qu'elle est enregistrée côté serveur.
+  const [baseline, setBaseline] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     api
@@ -44,6 +76,7 @@ export default function EventPage() {
         setDraft(draft);
         setVersions(versions);
         setCurrent(current);
+        setBaseline(Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, fingerprint(v)])));
       })
       .catch((e) => setError(e.message));
   }, [slug]);
@@ -67,6 +100,36 @@ export default function EventPage() {
   const state = draft[stateKey] ?? { orders: {}, picks: {} };
   const eventClosed = event.status === 'FINISHED';
 
+  /**
+   * Les versions dont le contenu diffère de ce qui est enregistré. On regarde
+   * toutes les catégories, pas seulement celle affichée : on peut avoir touché
+   * au Solo puis basculé sur le Crew avant de partir.
+   */
+  const unsaved = useMemo(() => {
+    const out = [];
+    for (const [k, content] of Object.entries(draft)) {
+      const empty = fingerprint({ orders: {}, picks: {} });
+      if (fingerprint(content) === (baseline[k] ?? empty)) continue;
+
+      // Retrouver la catégorie : soit la clé provisoire, soit l'id de version.
+      const provisional = k.startsWith('new:') ? k.slice(4) : null;
+      const categoryId =
+        provisional ??
+        Object.entries(versions).find(([, list]) => list.some((v) => v.id === k))?.[0];
+      if (!categoryId) continue;
+
+      out.push({
+        key: k,
+        predictionId: provisional ? null : k,
+        categoryId,
+        category: data?.event.categories.find((c) => c.id === categoryId)?.name ?? '',
+      });
+    }
+    return out;
+  }, [draft, baseline, versions, data]);
+
+  const guard = useUnsavedGuard(unsaved.length > 0);
+
   const update = (patch) =>
     setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
 
@@ -89,6 +152,14 @@ export default function EventPage() {
     setDraft((d) => {
       const next = { ...d };
       for (const p of predictions) next[p.id] = readVersion(p);
+      return next;
+    });
+    // Ce qui vient du serveur devient la nouvelle référence : sans cela, une
+    // version fraîchement enregistrée resterait signalée comme modifiée.
+    setBaseline((b) => {
+      const next = { ...b };
+      for (const p of predictions) next[p.id] = fingerprint(readVersion(p));
+      delete next[`new:${categoryId}`];
       return next;
     });
     const target = pick ?? predictions.find((p) => p.id === current[categoryId])?.id ?? predictions[0]?.id;
@@ -191,6 +262,45 @@ export default function EventPage() {
     }
   }
 
+  /**
+   * Enregistre tout ce qui traîne, dans toutes les catégories. Une version
+   * jamais créée l'est au passage — c'est le cas d'une catégorie remplie mais
+   * jamais enregistrée.
+   */
+  async function saveEverything() {
+    for (const item of unsaved) {
+      const content = draft[item.key];
+      const body = {
+        ranks: Object.entries(content.orders ?? {}).flatMap(([phaseId, ids]) =>
+          ids.map((contenderId, i) => ({ phaseId, contenderId, rank: i + 1 }))
+        ),
+        battles: Object.values(content.picks ?? {}).flatMap((byBattle) =>
+          Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
+        ),
+      };
+
+      let id = item.predictionId;
+      if (!id) {
+        const { prediction } = await api.post(`/predictions/categories/${item.categoryId}`, {
+          label: 'Mon pronostic',
+        });
+        id = prediction.id;
+      }
+      await api.put(`/predictions/${id}`, body);
+      await refreshVersions(item.categoryId, id);
+    }
+  }
+
+  /** Poursuit ce que la garde avait interrompu. */
+  function leave() {
+    const p = guard.pending;
+    guard.cancel();
+    if (!p) return;
+    if (p.type === 'link') navigate(p.href);
+    else if (p.type === 'back') window.history.go(-2);
+    else if (p.type === 'action') p.run();
+  }
+
   /** Un nom par défaut qui distingue la copie de son original. */
   function suggestedName() {
     const base = activeVersion?.label ?? t('draft.untitled');
@@ -248,7 +358,7 @@ export default function EventPage() {
             <button
               key={c.id}
               className={`btn${c.id === activeId ? ' btn--primary' : ''}`}
-              onClick={() => setActiveId(c.id)}
+              onClick={() => guard.guard(() => setActiveId(c.id))}
               title={filed ? t('draft.submitted') : undefined}
             >
               {c.name}
@@ -352,6 +462,53 @@ export default function EventPage() {
         onDismiss={() => setFlash(null)}
       />
       {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
+
+      {guard.pending && (
+        <Modal
+          title={t('leave.title')}
+          subtitle={event.name}
+          onClose={guard.cancel}
+          footer={
+            <>
+              <button
+                className="btn btn--primary"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await saveEverything();
+                    leave();
+                  } catch (e) {
+                    guard.cancel();
+                    setFlash({ ok: false, at: Date.now(), text: e.message });
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? t('event.saving') : t('leave.save')}
+              </button>
+              <button className="btn btn--danger" disabled={saving} onClick={leave}>
+                {t('leave.discard')}
+              </button>
+              <button className="btn" disabled={saving} onClick={guard.cancel}>
+                {t('leave.stay')}
+              </button>
+            </>
+          }
+        >
+          <p style={{ margin: 0 }}>{t('leave.body')}</p>
+          <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+            {unsaved.map((u) => (
+              <li key={u.key}>
+                {u.category}
+                {!u.predictionId && ` — ${t('leave.never')}`}
+              </li>
+            ))}
+          </ul>
+          <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>{t('leave.hint')}</p>
+        </Modal>
+      )}
 
       {naming !== null && (
         <PromptDialog
