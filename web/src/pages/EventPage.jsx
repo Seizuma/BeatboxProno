@@ -127,8 +127,19 @@ export default function EventPage() {
     try {
       const id = await ensureVersion();
       const res = await api.put(`/predictions/${id}`, payload());
-      await refreshVersions(activeId, id);
-      setFlash({ ok: true, at: Date.now(), text: res.note ?? t('event.saved.draft') });
+      const list = await refreshVersions(activeId, id);
+      // Nommer la version évite de chercher ensuite un brouillon qui n'a
+      // jamais été créé parce qu'on éditait le pronostic déposé.
+      const target = list.find((v) => v.id === id);
+      setFlash({
+        ok: true,
+        at: Date.now(),
+        text:
+          res.note ??
+          t(target?.submitted ? 'event.saved.filed' : 'event.saved.into', {
+            name: target?.label ?? t('draft.untitled'),
+          }),
+      });
     } catch (e) {
       setFlash({ ok: false, at: Date.now(), text: e.message });
     } finally {
@@ -235,25 +246,47 @@ export default function EventPage() {
 
       {!user && <p className="notice">{t('event.signin')}</p>}
 
-      {user && category && !eventClosed && myVersions.length > 1 && (
-        <div className="row" style={{ gap: '0.5rem' }}>
+      {/* Toujours visible, même avec une seule version : sans elle, on ne
+          savait pas si « Enregistrer » écrivait dans un brouillon ou dans le
+          pronostic déposé — et l'on cherchait ensuite un brouillon qui
+          n'existait pas. */}
+      {user && category && !eventClosed && (
+        <div className="versions">
           <label htmlFor="version" style={{ margin: 0 }}>{t('draft.load')}</label>
-          <select
-            id="version"
-            value={currentId ?? ''}
-            disabled={saving}
-            onChange={(e) => setCurrent((c) => ({ ...c, [activeId]: e.target.value }))}
-          >
-            {myVersions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.submitted ? '★ ' : ''}{v.label ?? t('draft.untitled')}
-              </option>
-            ))}
-          </select>
-          <button className="btn btn--small" onClick={snapshot} disabled={saving || myVersions.length >= 10}>
-            {t('draft.snapshot')}
-          </button>
-          <span className="faint" style={{ fontSize: '0.82rem' }}>{t('draft.manage')}</span>
+
+          {myVersions.length > 0 ? (
+            <select
+              id="version"
+              value={currentId ?? ''}
+              disabled={saving}
+              onChange={(e) => setCurrent((c) => ({ ...c, [activeId]: e.target.value }))}
+            >
+              {myVersions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.submitted ? '★ ' : ''}{v.label ?? t('draft.untitled')}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="faint">{t('draft.pending')}</span>
+          )}
+
+          <span className={`tag${activeVersion?.submitted ? ' tag--live' : ''}`}>
+            {activeVersion?.submitted ? t('draft.submitted') : t('draft.isdraft')}
+          </span>
+
+          <span className="versions__actions">
+            <button
+              className="btn btn--small"
+              onClick={snapshot}
+              disabled={saving || myVersions.length >= 10}
+            >
+              {t('draft.snapshot')}
+            </button>
+            <span className="faint" style={{ fontSize: '0.82rem' }}>
+              {myVersions.length}/10 · {t('draft.manage')}
+            </span>
+          </span>
         </div>
       )}
 
@@ -271,7 +304,11 @@ export default function EventPage() {
       {user && !eventClosed && (
         <div className="actionbar">
           <button className="btn" onClick={save} disabled={saving}>
-            {saving ? t('event.saving') : t('event.save.draft')}
+            {saving
+              ? t('event.saving')
+              : activeVersion?.submitted
+                ? t('event.save.filed')
+                : t('event.save.draft')}
           </button>
           <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
             {saving
