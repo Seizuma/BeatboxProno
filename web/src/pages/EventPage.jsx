@@ -86,20 +86,6 @@ export default function EventPage() {
     [data, activeId]
   );
 
-  if (error) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
-  if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
-
-  const { event } = data;
-  const myVersions = versions[activeId] ?? [];
-  const currentId = current[activeId] ?? null;
-  const activeVersion = myVersions.find((v) => v.id === currentId) ?? null;
-  // Tant qu'aucune version n'existe, on travaille sous une clé provisoire :
-  // l'éditeur reste utilisable, et la version est créée au premier
-  // enregistrement. Sans cela, une catégorie neuve restait grisée.
-  const stateKey = currentId ?? `new:${activeId}`;
-  const state = draft[stateKey] ?? { orders: {}, picks: {} };
-  const eventClosed = event.status === 'FINISHED';
-
   /**
    * Les versions dont le contenu diffère de ce qui est enregistré. On regarde
    * toutes les catégories, pas seulement celle affichée : on peut avoir touché
@@ -129,6 +115,23 @@ export default function EventPage() {
   }, [draft, baseline, versions, data]);
 
   const guard = useUnsavedGuard(unsaved.length > 0);
+
+  // Aucun hook au-delà de cette ligne : les deux sorties ci-dessous rendraient
+  // le nombre d'appels variable d'un rendu à l'autre, et React refuse
+  // (« Rendered more hooks than during the previous render »).
+  if (error) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
+  if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
+
+  const { event } = data;
+  const myVersions = versions[activeId] ?? [];
+  const currentId = current[activeId] ?? null;
+  const activeVersion = myVersions.find((v) => v.id === currentId) ?? null;
+  // Tant qu'aucune version n'existe, on travaille sous une clé provisoire :
+  // l'éditeur reste utilisable, et la version est créée au premier
+  // enregistrement. Sans cela, une catégorie neuve restait grisée.
+  const stateKey = currentId ?? `new:${activeId}`;
+  const state = draft[stateKey] ?? { orders: {}, picks: {} };
+  const eventClosed = event.status === 'FINISHED';
 
   const update = (patch) =>
     setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
