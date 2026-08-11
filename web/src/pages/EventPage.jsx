@@ -6,6 +6,7 @@ import { useI18n } from '../lib/i18n.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
+import PromptDialog from '../components/PromptDialog.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -29,6 +30,9 @@ export default function EventPage() {
   const [flash, setFlash] = useState(null);
   const [saving, setSaving] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Le nom proposé pour la copie en cours de création, ou null si la fenêtre
+  // est fermée.
+  const [naming, setNaming] = useState(null);
 
   useEffect(() => {
     api
@@ -164,8 +168,8 @@ export default function EventPage() {
     }
   }
 
-  /** Range l'état actuel dans un nouveau brouillon, sans quitter l'éditeur. */
-  async function snapshot() {
+  /** Range l'état actuel dans un nouveau brouillon, sous le nom choisi. */
+  async function snapshot(label) {
     setSaving(true);
     setFlash(null);
     try {
@@ -173,14 +177,25 @@ export default function EventPage() {
       await api.put(`/predictions/${id}`, payload());
       const { prediction } = await api.post(`/predictions/categories/${activeId}`, {
         copyFrom: id,
+        label,
       });
+      // On reste sur la version en cours : la copie est une sauvegarde, pas
+      // un changement de contexte.
       await refreshVersions(activeId, id);
+      setNaming(null);
       setFlash({ ok: true, at: Date.now(), text: t('draft.saved', { name: prediction.label }) });
     } catch (e) {
       setFlash({ ok: false, at: Date.now(), text: e.message });
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Un nom par défaut qui distingue la copie de son original. */
+  function suggestedName() {
+    const base = activeVersion?.label ?? t('draft.untitled');
+    const n = myVersions.length + 1;
+    return t('draft.copy.of', { name: base, n });
   }
 
   async function versionAction(fn, okText) {
@@ -278,7 +293,7 @@ export default function EventPage() {
           <span className="versions__actions">
             <button
               className="btn btn--small"
-              onClick={snapshot}
+              onClick={() => setNaming(suggestedName())}
               disabled={saving || myVersions.length >= 10}
             >
               {t('draft.snapshot')}
@@ -303,20 +318,23 @@ export default function EventPage() {
 
       {user && !eventClosed && (
         <div className="actionbar">
-          <button className="btn" onClick={save} disabled={saving}>
-            {saving
-              ? t('event.saving')
-              : activeVersion?.submitted
-                ? t('event.save.filed')
-                : t('event.save.draft')}
-          </button>
-          <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
-            {saving
-              ? t('event.saving')
-              : activeVersion?.submitted
-                ? t('event.resubmit')
-                : t('event.save.submit')}
-          </button>
+          {/* Sur la version déjà déposée, enregistrer et redéposer font la même
+              chose : un seul bouton. Sur un brouillon, les deux gestes sont
+              distincts — garder pour soi, ou faire compter. */}
+          {activeVersion?.submitted ? (
+            <button className="btn btn--primary" onClick={save} disabled={saving}>
+              {saving ? t('event.saving') : t('event.save.filed')}
+            </button>
+          ) : (
+            <>
+              <button className="btn" onClick={save} disabled={saving}>
+                {saving ? t('event.saving') : t('event.save.draft')}
+              </button>
+              <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
+                {saving ? t('event.saving') : t('event.save.submit')}
+              </button>
+            </>
+          )}
 
 
           <button className="btn btn--small btn--ghost" onClick={() => setHelpOpen(true)}>
@@ -334,6 +352,21 @@ export default function EventPage() {
         onDismiss={() => setFlash(null)}
       />
       {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
+
+      {naming !== null && (
+        <PromptDialog
+          title={t('draft.copy.title')}
+          subtitle={category?.name}
+          label={t('draft.copy.label')}
+          hint={t('draft.copy.hint')}
+          initialValue={naming}
+          confirmLabel={t('draft.copy.confirm')}
+          cancelLabel={t('draft.cancel')}
+          busy={saving}
+          onConfirm={snapshot}
+          onCancel={() => setNaming(null)}
+        />
+      )}
     </div>
   );
 }
