@@ -437,22 +437,20 @@ function ContenderManager({ category, onDone, run, askDelete }) {
   );
 
   /**
-   * Le sélecteur ne propose que les artistes qui concourent dans ce format.
-   * Chercher un crew parmi trois cents solos n'a aucun intérêt — et proposer
-   * un solo pour une catégorie Crew invite à l'erreur de saisie.
+   * Le sélecteur ne propose que les artistes typés dans ce format. Les non
+   * typés sont écartés eux aussi : tant qu'ils sont majoritaires, les laisser
+   * revient à ne pas filtrer du tout.
    *
-   * Les artistes non typés restent visibles : ils n'ont pas encore été
-   * qualifiés, les écarter les rendrait introuvables. Une case permet de tout
-   * afficher quand quelqu'un manque à l'appel.
+   * La case « tout afficher » reste le recours quand quelqu'un manque — et le
+   * message en dessous dit combien d'artistes attendent d'être qualifiés.
    */
-  const suggested = artists.filter((a) => {
-    if (engaged.has(a.id)) return false;
-    if (showAll) return true;
-    const kinds = a.kinds ?? [];
-    return kinds.length === 0 || kinds.includes(category.kind);
-  });
+  const available = artists.filter((a) => !engaged.has(a.id));
+  const suggested = showAll
+    ? available
+    : available.filter((a) => (a.kinds ?? []).includes(category.kind));
 
-  const hidden = artists.length - engaged.size - suggested.length;
+  const untyped = available.filter((a) => (a.kinds ?? []).length === 0).length;
+  const hidden = available.length - suggested.length;
 
   const add = () =>
     run(async () => {
@@ -482,7 +480,7 @@ function ContenderManager({ category, onDone, run, askDelete }) {
             {suggested.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
-                {(a.kinds ?? []).length === 0 ? ' (non typé)' : ''}
+                {showAll && (a.kinds ?? []).length === 0 ? ' (non typé)' : ''}
               </option>
             ))}
           </select>
@@ -515,7 +513,7 @@ function ContenderManager({ category, onDone, run, askDelete }) {
               onChange={(e) => setShowAll(e.target.checked)}
             />{' '}
             <span className="faint" style={{ fontSize: '0.84rem' }}>
-              Afficher les {hidden} artiste(s) d'un autre format
+              Afficher les {hidden} autre(s) artiste(s)
             </span>
           </label>
         )}
@@ -523,10 +521,17 @@ function ContenderManager({ category, onDone, run, askDelete }) {
 
       <p className="faint" style={{ fontSize: '0.84rem', margin: 0 }}>
         Le sélecteur ne propose que les artistes typés «{' '}
-        {ARTIST_KINDS.find(([id]) => id === category.kind)?.[1] ?? category.kind} » et ceux qui ne
-        sont pas encore typés. Sans artiste sélectionné, un artiste est créé d'après le nom saisi —
-        ou réutilisé s'il existe déjà : un participant n'est jamais laissé sans fiche, c'est ce qui
-        garantit sa photo et sa page.
+        {ARTIST_KINDS.find(([id]) => id === category.kind)?.[1] ?? category.kind} ».
+        {untyped > 0 && (
+          <>
+            {' '}
+            <strong>{untyped} artiste(s) ne sont pas encore typés</strong> et n'apparaissent donc
+            pas : qualifiez-les depuis l'onglet Artistes, filtre « Non typés ».
+          </>
+        )}{' '}
+        Sans artiste sélectionné, un artiste est créé d'après le nom saisi — ou réutilisé s'il
+        existe déjà : un participant n'est jamais laissé sans fiche, c'est ce qui garantit sa photo
+        et sa page.
       </p>
 
       {category.contenders.length > 0 && (
@@ -747,7 +752,7 @@ const ARTIST_KINDS = [
  * L'ancien nom part dans les alias, pour que l'appariement des photos continue
  * de reconnaître les fichiers existants.
  */
-function ArtistRow({ artist, onDone, run, askDelete }) {
+function ArtistRow({ artist, onDone, run, askDelete, picked, onPick }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: artist.name,
@@ -778,6 +783,7 @@ function ArtistRow({ artist, onDone, run, askDelete }) {
   if (editing) {
     return (
       <tr>
+        <td />
         <td><ArtistFigure src={artist.imageUrl} name={artist.name} size="sm" /></td>
         <td>
           <input
@@ -826,6 +832,14 @@ function ArtistRow({ artist, onDone, run, askDelete }) {
 
   return (
     <tr>
+      <td>
+        <input
+          type="checkbox"
+          checked={picked}
+          aria-label={`Sélectionner ${artist.name}`}
+          onChange={(e) => onPick(e.target.checked)}
+        />
+      </td>
       <td><ArtistFigure src={artist.imageUrl} name={artist.name} size="sm" /></td>
       <td>{artist.name}</td>
       <td className="muted">{artist.country ?? '—'}</td>
@@ -873,6 +887,7 @@ function ArtistsAdmin() {
   const [form, setForm] = useState({ name: '', country: '', kinds: [] });
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('');
+  const [picked, setPicked] = useState(new Set());
   const [flash, run] = useFlash();
   const [confirmNode, askDelete] = useConfirmDelete();
 
@@ -962,14 +977,72 @@ function ArtistsAdmin() {
         <span className="faint data" style={{ fontSize: '0.85rem' }}>{shown.length} artiste(s)</span>
       </div>
 
+      {/* Typage en masse : après l'introduction des formats, une base
+          existante compte des dizaines d'artistes à qualifier. */}
+      {picked.size > 0 && (
+        <div className="panel row" style={{ gap: '0.5rem', alignItems: 'center' }}>
+          <span className="data">{picked.size} sélectionné(s) — typer comme :</span>
+          {ARTIST_KINDS.map(([id, label]) => (
+            <button
+              key={id}
+              className="btn btn--small"
+              onClick={() =>
+                run(async () => {
+                  const { updated } = await api.post('/admin/artists/bulk-kinds', {
+                    ids: [...picked],
+                    kinds: [id],
+                    mode: 'add',
+                  });
+                  setPicked(new Set());
+                  await reload();
+                  return `${updated} artiste(s) typé(s) « ${label} ».`;
+                })
+              }
+            >
+              {label}
+            </button>
+          ))}
+          <button className="btn btn--small btn--ghost" onClick={() => setPicked(new Set())}>
+            Désélectionner
+          </button>
+        </div>
+      )}
+
       <div className="panel panel--flush">
         <table>
           <thead>
-            <tr><th>Photo</th><th>Nom</th><th>Pays</th><th>Formats</th><th></th></tr>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  aria-label="Tout sélectionner"
+                  checked={shown.length > 0 && shown.every((a) => picked.has(a.id))}
+                  onChange={(e) =>
+                    setPicked(e.target.checked ? new Set(shown.map((a) => a.id)) : new Set())
+                  }
+                />
+              </th>
+              <th>Photo</th><th>Nom</th><th>Pays</th><th>Formats</th><th></th>
+            </tr>
           </thead>
           <tbody>
             {shown.map((a) => (
-              <ArtistRow key={a.id} artist={a} onDone={reload} run={run} askDelete={askDelete} />
+              <ArtistRow
+                key={a.id}
+                artist={a}
+                onDone={reload}
+                run={run}
+                askDelete={askDelete}
+                picked={picked.has(a.id)}
+                onPick={(on) =>
+                  setPicked((p) => {
+                    const next = new Set(p);
+                    if (on) next.add(a.id);
+                    else next.delete(a.id);
+                    return next;
+                  })
+                }
+              />
             ))}
           </tbody>
         </table>

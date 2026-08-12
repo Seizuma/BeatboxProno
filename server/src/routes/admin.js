@@ -188,6 +188,43 @@ adminRouter.get('/impact/:kind/:id', async (req, res) => {
  * L'ancien nom est versé dans les alias, pour que les fichiers déjà nommés
  * continuent d'être reconnus.
  */
+/**
+ * Typer plusieurs artistes d'un coup.
+ *
+ * Après l'introduction des formats, une base existante se retrouve avec des
+ * dizaines d'artistes non typés — invisibles dans les sélecteurs. Les reprendre
+ * un par un serait décourageant.
+ *
+ * `mode` : 'add' ajoute les formats aux existants, 'set' les remplace.
+ */
+adminRouter.post('/artists/bulk-kinds', async (req, res) => {
+  const { ids, kinds, mode } = z
+    .object({
+      ids: z.array(z.string()).min(1),
+      kinds: z
+        .array(z.enum(['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'PRODUCER']))
+        .min(1),
+      mode: z.enum(['add', 'set']).default('add'),
+    })
+    .parse(req.body);
+
+  const targets = await prisma.artist.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, kinds: true },
+  });
+
+  await prisma.$transaction(
+    targets.map((a) =>
+      prisma.artist.update({
+        where: { id: a.id },
+        data: { kinds: mode === 'set' ? kinds : [...new Set([...a.kinds, ...kinds])] },
+      })
+    )
+  );
+
+  res.json({ updated: targets.length });
+});
+
 adminRouter.patch('/artists/:id', async (req, res) => {
   const data = z
     .object({
