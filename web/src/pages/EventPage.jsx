@@ -20,6 +20,11 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
  * imaginaires.
  */
 function fingerprint(state) {
+  // Attention : cette empreinte doit voir EXACTEMENT ce que le serveur
+  // conserve. BracketBoard remonte au parent toutes les affiches dont un côté
+  // est connu — y compris sans vainqueur — alors que seules celles ayant deux
+  // côtés ET un choix sont enregistrées. Compter les autres rendait la
+  // catégorie éternellement « modifiée ».
   const orders = Object.entries(state?.orders ?? {})
     .filter(([, ids]) => ids?.length)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -30,6 +35,9 @@ function fingerprint(state) {
     .map(([phaseId, byBattle]) => [
       phaseId,
       Object.entries(byBattle)
+        // Seules les affiches complètes voyagent jusqu'au serveur : les autres
+        // ne doivent pas peser dans la comparaison.
+        .filter(([, v]) => v.contenderAId && v.contenderBId)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => [k, v.winnerId ?? null, v.scoreA ?? null, v.scoreB ?? null])
         // Une affiche sans vainqueur ni score n'est pas une modification.
@@ -189,6 +197,13 @@ export default function EventPage() {
    */
   async function ensureVersion() {
     if (currentId) return currentId;
+    // Une version peut exister sans être encore sélectionnée : on la reprend
+    // plutôt que d'en créer une deuxième.
+    const existing = myVersions[0]?.id;
+    if (existing) {
+      setCurrent((c) => ({ ...c, [activeId]: existing }));
+      return existing;
+    }
     const { prediction } = await api.post(`/predictions/categories/${activeId}`, {
       label: 'Mon pronostic',
     });
@@ -282,7 +297,15 @@ export default function EventPage() {
         ),
       };
 
-      let id = item.predictionId;
+      // On n'ouvre une version que s'il n'en existe VRAIMENT aucune. Sans ce
+      // repli sur la version courante, chaque avertissement créait un brouillon
+      // de plus — dix en quelques allers-retours.
+      let id =
+        item.predictionId ??
+        current[item.categoryId] ??
+        (versions[item.categoryId] ?? [])[0]?.id ??
+        null;
+
       if (!id) {
         const { prediction } = await api.post(`/predictions/categories/${item.categoryId}`, {
           label: 'Mon pronostic',
@@ -361,7 +384,10 @@ export default function EventPage() {
             <button
               key={c.id}
               className={`btn${c.id === activeId ? ' btn--primary' : ''}`}
-              onClick={() => guard.guard(() => setActiveId(c.id))}
+              // Changer d'onglet ne fait rien perdre : le contenu des autres
+              // catégories reste en mémoire, et la garde se déclenchera au
+              // moment de quitter réellement la page.
+              onClick={() => setActiveId(c.id)}
               title={filed ? t('draft.submitted') : undefined}
             >
               {c.name}
