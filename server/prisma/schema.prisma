@@ -34,10 +34,21 @@ model User {
 
 // --- Référentiel artistes -----------------------------------------------------
 
+// Les formats dans lesquels un artiste se produit. Un même beatboxer peut
+// concourir en solo ET faire partie d'un crew : d'où une liste, pas une valeur.
+enum ArtistKind {
+  SOLO
+  TAG_TEAM
+  LOOPSTATION
+  CREW
+  PRODUCER
+}
+
 model Artist {
   id        String  @id @default(cuid())
   slug      String  @unique
   name      String
+  kinds     ArtistKind[] @default([])
   country   String?
   aliases   String[] @default([])
   imageUrl  String?
@@ -114,7 +125,11 @@ model Contender {
   id         String   @id @default(cuid())
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  name       String   // "Alexinho", "Colaps & Zekka", "Berywam"
+  // Le nom affiché. Laisser vide pour suivre l'artiste rattaché : renommer
+  // l'artiste se répercute alors partout, y compris dans les pronostics déjà
+  // déposés. On ne le renseigne que pour un duo ou un crew dont le nom
+  // n'appartient à aucun artiste isolé.
+  name       String?
   seed       Int?     // seeding officiel d'entrée
   wildcard   Boolean  @default(false)
   imageUrl   String?

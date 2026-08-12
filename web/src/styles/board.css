@@ -955,3 +955,12 @@ details.panel>summary .eyebrow {
     animation: none;
   }
 }
+
+/* La photo de profil est cliquable : on le montre. */
+.avatar--link {
+  cursor: pointer;
+}
+
+.avatar--link:hover {
+  border-color: var(--y);
+}

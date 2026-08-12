@@ -5,14 +5,6 @@ import Modal from './Modal.jsx';
 import ArtistFigure from './ArtistFigure.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
-const ROUND_LABELS = {
-    ROUND_OF_16: 'ROUND_OF_16',
-    QUARTER: 'QUARTER',
-    SEMI: 'SEMI',
-    SMALL_FINAL: 'SMALL_FINAL',
-    FINAL: 'FINAL',
-    LEGACY: 'LEGACY',
-};
 
 /**
  * Le pronostic de quelqu'un, en lecture seule.
@@ -69,6 +61,104 @@ export default function PredictionView({ predictionId, onClose }) {
     );
 }
 
+const ROUND_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+
+/**
+ * L'arbre d'un pronostic, en lecture seule.
+ *
+ * Reprend la géométrie de l'éditeur : une colonne par tour, réparties en
+ * `space-around` pour que chaque battle tombe à mi-hauteur des deux qui
+ * l'alimentent, et les deux finales dans la même colonne. Une liste à plat
+ * ne dit rien du chemin parcouru — or c'est précisément ce qu'on vient lire.
+ */
+function ReadOnlyBracket({ battles, byId, photo }) {
+    const { t } = useI18n();
+
+    const byRound = {};
+    for (const b of battles) (byRound[b.round] ??= []).push(b);
+    for (const list of Object.values(byRound)) list.sort((x, y) => x.slot - y.slot);
+
+    const present = ROUND_ORDER.filter((r) => byRound[r]);
+    const columns = [];
+    for (const r of ['ROUND_OF_16', 'QUARTER', 'SEMI']) {
+        if (present.includes(r)) columns.push({ key: r, main: r, extra: null });
+    }
+    if (present.includes('FINAL') || present.includes('SMALL_FINAL')) {
+        columns.push({
+            key: 'FINALS',
+            main: present.includes('FINAL') ? 'FINAL' : 'SMALL_FINAL',
+            extra: present.includes('FINAL') && present.includes('SMALL_FINAL') ? 'SMALL_FINAL' : null,
+        });
+    }
+    if (present.includes('LEGACY')) columns.push({ key: 'LEGACY', main: 'LEGACY', extra: null });
+
+    const card = (b) => {
+        const sides = [b.contenderAId, b.contenderBId];
+        return (
+            <div className="bracket__node" key={`${b.round}:${b.slot}`}>
+                <div className="battle battle--called">
+                    {sides.map((id, i) => {
+                        const c = byId.get(id);
+                        const won = b.winnerId === id;
+                        return (
+                            <div key={i} className={`battle__side${won ? ' battle__side--won' : ''}`}>
+                                <ArtistFigure src={photo(c)} name={c?.name} size="xs" />
+                                <span className="battle__name">{c?.name ?? '—'}</span>
+                                <span className="battle__seed">
+                                    {b.scoreA == null ? '' : i === 0 ? b.scoreA : b.scoreB}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="bracket" style={{ '--cols': columns.length }}>
+            {columns.map((col, i) => {
+                const list = byRound[col.main] ?? [];
+                const extras = col.extra ? byRound[col.extra] ?? [] : [];
+                const next = columns[i + 1];
+                const paired = Boolean(next) && list.length >= 2 && list.length === (byRound[next.main] ?? []).length * 2;
+                const fed = i > 0;
+
+                const pairs = [];
+                if (paired) for (let k = 0; k < list.length; k += 2) pairs.push(list.slice(k, k + 2));
+
+                return (
+                    <section className="bracket__round" key={col.key}>
+                        <h4 className="bracket__title">{t(`bracket.round.${col.main}`)}</h4>
+                        <div
+                            className={
+                                'bracket__col' +
+                                (col.key === 'FINALS' ? ' bracket__col--finals' : '') +
+                                (fed ? ' bracket__col--fed' : '')
+                            }
+                        >
+                            {paired
+                                ? pairs.map((pair, k) => (
+                                    <div className="bracket__pair" key={k}>
+                                        {pair.map(card)}
+                                    </div>
+                                ))
+                                : list.map(card)}
+
+                            {extras.length > 0 && (
+                                <div className="bracket__annex">
+                                    <h5 className="bracket__subtitle">{t(`bracket.round.${col.extra}`)}</h5>
+                                    {extras.map(card)}
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                );
+            })}
+        </div>
+    );
+}
+
 function Body({ prediction }) {
     const { t } = useI18n();
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
@@ -81,9 +171,9 @@ function Body({ prediction }) {
                 .sort((a, b) => a.rank - b.rank);
             return { phase, kind: 'ranking', ranks };
         }
-        const battles = prediction.battles
-            .filter((b) => b.phaseId === phase.id && b.winnerId)
-            .sort((a, b) => a.round.localeCompare(b.round) || a.slot - b.slot);
+        const battles = prediction.battles.filter(
+            (b) => b.phaseId === phase.id && (b.winnerId || b.contenderAId)
+        );
         return { phase, kind: 'bracket', battles };
     });
 
@@ -130,33 +220,7 @@ function Body({ prediction }) {
                                 </table>
                             </div>
                         ) : (
-                            <div className="panel panel--flush">
-                                <table>
-                                    <tbody>
-                                        {battles.map((b) => {
-                                            const a = byId.get(b.contenderAId);
-                                            const bb = byId.get(b.contenderBId);
-                                            const winner = byId.get(b.winnerId);
-                                            return (
-                                                <tr key={`${b.round}:${b.slot}`}>
-                                                    <td className="muted data" style={{ whiteSpace: 'nowrap' }}>
-                                                        {t(`bracket.round.${ROUND_LABELS[b.round] ?? b.round}`)}
-                                                    </td>
-                                                    <td>
-                                                        {a?.name ?? '—'} <span className="faint">vs</span> {bb?.name ?? '—'}
-                                                    </td>
-                                                    <td style={{ color: 'var(--accent)', whiteSpace: 'nowrap' }}>
-                                                        ► {winner?.name ?? '—'}
-                                                    </td>
-                                                    <td className="num muted">
-                                                        {b.scoreA == null ? '—' : `${b.scoreA} – ${b.scoreB}`}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <ReadOnlyBracket battles={battles} byId={byId} photo={photo} />
                         )}
                     </section>
                 );

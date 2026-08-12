@@ -32,7 +32,15 @@ export default function Layout() {
             <LangSwitch />
             {user ? (
               <>
-                {user.avatarUrl && <img className="avatar" src={user.avatarUrl} alt="" />}
+                {/* La photo mène à ses pronostics : c'est le geste attendu, et
+                    ça évite de chercher l'entrée de menu. */}
+                <Link to="/me" title={t('nav.mine')} aria-label={t('nav.mine')}>
+                  {user.avatarUrl ? (
+                    <img className="avatar avatar--link" src={user.avatarUrl} alt="" />
+                  ) : (
+                    <span className="tag">{t('nav.mine')}</span>
+                  )}
+                </Link>
                 <button className="btn btn--small btn--ghost" onClick={logout}>
                   {t('nav.logout')}
                 </button>

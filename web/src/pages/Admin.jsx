@@ -686,17 +686,160 @@ function FormatBuilder({ event, onDone, onClose, run }) {
 //  ARTISTES
 // =============================================================================
 
+const ARTIST_KINDS = [
+  ['SOLO', 'Solo'],
+  ['TAG_TEAM', 'Tag Team'],
+  ['LOOPSTATION', 'Loopstation'],
+  ['CREW', 'Crew'],
+  ['PRODUCER', 'Producer'],
+];
+
+/**
+ * Une ligne d'artiste modifiable : nom, pays, formats pratiqués.
+ *
+ * Renommer se répercute partout — fiches, arbres, pronostics déjà déposés —
+ * puisque les participants ne recopient plus le nom au moment de l'engagement.
+ * L'ancien nom part dans les alias, pour que l'appariement des photos continue
+ * de reconnaître les fichiers existants.
+ */
+function ArtistRow({ artist, onDone, run, askDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    name: artist.name,
+    country: artist.country ?? '',
+    kinds: artist.kinds ?? [],
+  });
+
+  const toggleKind = (id) =>
+    setForm((f) => ({
+      ...f,
+      kinds: f.kinds.includes(id) ? f.kinds.filter((k) => k !== id) : [...f.kinds, id],
+    }));
+
+  const save = () =>
+    run(async () => {
+      await api.patch(`/admin/artists/${artist.id}`, {
+        name: form.name.trim(),
+        country: form.country.trim() || null,
+        kinds: form.kinds,
+      });
+      setEditing(false);
+      await onDone();
+      return form.name.trim() !== artist.name
+        ? `« ${artist.name} » renommé en « ${form.name.trim()} » partout sur le site.`
+        : 'Artiste mis à jour.';
+    });
+
+  if (editing) {
+    return (
+      <tr>
+        <td><ArtistFigure src={artist.imageUrl} name={artist.name} size="sm" /></td>
+        <td>
+          <input
+            type="text"
+            value={form.name}
+            aria-label="Nom de l'artiste"
+            style={{ width: '11rem' }}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </td>
+        <td>
+          <input
+            type="text"
+            value={form.country}
+            aria-label="Pays"
+            style={{ width: '4.5rem' }}
+            onChange={(e) => setForm({ ...form, country: e.target.value })}
+          />
+        </td>
+        <td>
+          <span className="row" style={{ gap: '0.25rem' }}>
+            {ARTIST_KINDS.map(([id, label]) => (
+              <button
+                key={id}
+                className={`btn btn--small${form.kinds.includes(id) ? ' btn--primary' : ''}`}
+                onClick={() => toggleKind(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+        </td>
+        <td className="num">
+          <span className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
+            <button className="btn btn--small btn--primary" disabled={!form.name.trim()} onClick={save}>
+              Enregistrer
+            </button>
+            <button className="btn btn--small btn--ghost" onClick={() => setEditing(false)}>
+              Annuler
+            </button>
+          </span>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td><ArtistFigure src={artist.imageUrl} name={artist.name} size="sm" /></td>
+      <td>{artist.name}</td>
+      <td className="muted">{artist.country ?? '—'}</td>
+      <td>
+        <span className="row" style={{ gap: '0.25rem' }}>
+          {(artist.kinds ?? []).length === 0 ? (
+            <span className="faint data" style={{ fontSize: '0.8rem' }}>non typé</span>
+          ) : (
+            artist.kinds.map((k) => (
+              <span className="tag" key={k}>
+                {ARTIST_KINDS.find(([id]) => id === k)?.[1] ?? k}
+              </span>
+            ))
+          )}
+        </span>
+      </td>
+      <td className="num">
+        <span className="row" style={{ gap: '0.35rem', justifyContent: 'flex-end' }}>
+          <button className="btn btn--small" onClick={() => setEditing(true)}>Modifier</button>
+          <PhotoUpload artist={artist} onDone={onDone} run={run} />
+          <button
+            className="btn btn--small btn--danger"
+            onClick={() =>
+              askDelete('artist', artist.id, async (result) => {
+                await onDone();
+                await run(
+                  async () =>
+                    result?.removedContenders
+                      ? `${artist.name} supprimé, ${result.removedContenders} participant(s) retiré(s).`
+                      : `${artist.name} supprimé.`
+                );
+              })
+            }
+          >
+            Supprimer
+          </button>
+        </span>
+      </td>
+    </tr>
+  );
+}
+
 function ArtistsAdmin() {
   const [artists, setArtists] = useState([]);
-  const [form, setForm] = useState({ name: '', country: '' });
+  const [form, setForm] = useState({ name: '', country: '', kinds: [] });
   const [q, setQ] = useState('');
+  const [kind, setKind] = useState('');
   const [flash, run] = useFlash();
   const [confirmNode, askDelete] = useConfirmDelete();
 
   const reload = () => api.get('/artists').then(({ artists }) => setArtists(artists));
   useEffect(() => { reload(); }, []);
 
-  const shown = artists.filter((a) => a.name.toLowerCase().includes(q.toLowerCase()));
+  const shown = artists.filter((a) => {
+    if (!a.name.toLowerCase().includes(q.toLowerCase())) return false;
+    if (!kind) return true;
+    if (kind === 'none') return (a.kinds ?? []).length === 0;
+    return (a.kinds ?? []).includes(kind);
+  });
 
   return (
     <div className="stack">
@@ -718,13 +861,34 @@ function ArtistsAdmin() {
             <input id="ar-country" type="text" value={form.country} style={{ width: '6rem' }}
               onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="FR" />
           </div>
+          <div className="field">
+            <label>Formats</label>
+            <span className="row" style={{ gap: '0.25rem' }}>
+              {ARTIST_KINDS.map(([id, label]) => (
+                <button
+                  key={id}
+                  className={`btn btn--small${form.kinds.includes(id) ? ' btn--primary' : ''}`}
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      kinds: f.kinds.includes(id)
+                        ? f.kinds.filter((k) => k !== id)
+                        : [...f.kinds, id],
+                    }))
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
+          </div>
           <button
             className="btn btn--primary"
             disabled={!form.name}
             onClick={() =>
               run(async () => {
                 await api.post('/admin/artists', { ...form, aliases: [] });
-                setForm({ name: '', country: '' });
+                setForm({ name: '', country: '', kinds: [] });
                 await reload();
               }, 'Artiste ajouté.')
             }
@@ -737,44 +901,30 @@ function ArtistsAdmin() {
         </p>
       </section>
 
-      <div className="field">
-        <label htmlFor="ar-q">Filtrer</label>
-        <input id="ar-q" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un nom" />
+      <div className="row" style={{ alignItems: 'flex-end' }}>
+        <div className="field">
+          <label htmlFor="ar-q">Filtrer</label>
+          <input id="ar-q" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un nom" />
+        </div>
+        <div className="field">
+          <label htmlFor="ar-kind">Format</label>
+          <select id="ar-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">Tous</option>
+            {ARTIST_KINDS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            <option value="none">Non typés</option>
+          </select>
+        </div>
+        <span className="faint data" style={{ fontSize: '0.85rem' }}>{shown.length} artiste(s)</span>
       </div>
 
       <div className="panel panel--flush">
         <table>
           <thead>
-            <tr><th>Photo</th><th>Nom</th><th>Pays</th><th></th></tr>
+            <tr><th>Photo</th><th>Nom</th><th>Pays</th><th>Formats</th><th></th></tr>
           </thead>
           <tbody>
             {shown.map((a) => (
-              <tr key={a.id}>
-                <td><ArtistFigure src={a.imageUrl} name={a.name} size="sm" /></td>
-                <td>{a.name}</td>
-                <td className="muted">{a.country ?? '—'}</td>
-                <td className="num">
-                  <span className="row" style={{ gap: '0.35rem', justifyContent: 'flex-end' }}>
-                    <PhotoUpload artist={a} onDone={reload} run={run} />
-                    <button
-                      className="btn btn--small btn--danger"
-                      onClick={() =>
-                        askDelete('artist', a.id, async (result) => {
-                          await reload();
-                          await run(
-                            async () => { },
-                            result?.removedContenders
-                              ? `${a.name} supprimé, ${result.removedContenders} participant(s) retiré(s) des événements.`
-                              : `${a.name} supprimé.`
-                          );
-                        })
-                      }
-                    >
-                      Supprimer
-                    </button>
-                  </span>
-                </td>
-              </tr>
+              <ArtistRow key={a.id} artist={a} onDone={reload} run={run} askDelete={askDelete} />
             ))}
           </tbody>
         </table>

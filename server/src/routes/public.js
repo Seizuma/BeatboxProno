@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
+import { withName } from '../lib/naming.js';
 
 export const publicRouter = Router();
 
@@ -28,7 +29,9 @@ publicRouter.get('/events', async (req, res) => {
     orderBy: [{ startsAt: 'desc' }, { year: 'desc' }],
     include: {
       categories: { orderBy: { position: 'asc' }, select: { id: true, name: true, slug: true, kind: true } },
-      _count: { select: { predictions: true } },
+      // Uniquement les pronostics déposés : les brouillons sont privés, et les
+      // compter gonflait le compteur public de l'accueil.
+      _count: { select: { predictions: { where: { submitted: true } } } },
     },
   });
   res.json({ events });
@@ -52,6 +55,12 @@ publicRouter.get('/events/:slug', async (req, res) => {
       include: { ranks: true, battles: true },
       orderBy: [{ submitted: 'desc' }, { updatedAt: 'desc' }],
     });
+  }
+
+  // Les noms se résolvent ici, une fois pour toutes : le client n'a pas à
+  // savoir qu'un participant peut suivre son artiste.
+  for (const category of event.categories) {
+    category.contenders = category.contenders.map(withName);
   }
 
   res.json({ event, myPredictions });
@@ -84,7 +93,7 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
               name: true,
               seed: true,
               imageUrl: true,
-              artists: { select: { artist: { select: { imageUrl: true } } } },
+              artists: { select: { artist: { select: { name: true, imageUrl: true } } } },
             },
           },
         },
@@ -104,6 +113,7 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
     return res.status(404).json({ error: 'Pronostic introuvable.' });
   }
 
+  prediction.category.contenders = prediction.category.contenders.map(withName);
   res.json({ prediction });
 });
 

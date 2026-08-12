@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireRole } from '../lib/auth.js';
+import { contenderName, withName } from '../lib/naming.js';
 import { scorePrediction } from '../lib/scoring.js';
 
 export const adminRouter = Router();
@@ -19,6 +20,9 @@ adminRouter.post('/artists', async (req, res) => {
     name: z.string().min(1),
     country: z.string().optional().nullable(),
     aliases: z.array(z.string()).default([]),
+    kinds: z
+      .array(z.enum(['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'PRODUCER']))
+      .default([]),
     // Les photos servies depuis /api/media/artists sont des chemins relatifs :
     // exiger une URL absolue les refuserait.
     imageUrl: z.string().min(1).optional().nullable(),
@@ -29,11 +33,6 @@ adminRouter.post('/artists', async (req, res) => {
     data: { ...data, slug: slugify(data.name) },
   });
   res.status(201).json({ artist });
-});
-
-adminRouter.patch('/artists/:id', async (req, res) => {
-  const artist = await prisma.artist.update({ where: { id: req.params.id }, data: req.body });
-  res.json({ artist });
 });
 
 // --- Ce qu'une suppression emporte --------------------------------------------
@@ -65,7 +64,7 @@ async function artistImpact(artistId) {
 
   const contenders = artist.entries.map((e) => ({
     id: e.contender.id,
-    name: e.contender.name,
+    name: contenderName(e.contender),
     category: e.contender.category.name,
     event: `${e.contender.category.event.name} ${e.contender.category.event.year}`,
     // Un participant peut réunir plusieurs artistes (« Colaps & Zekka ») : il ne
@@ -143,7 +142,7 @@ async function contenderImpact(contenderId) {
 
   return {
     kind: 'contender',
-    name: contender.name,
+    name: contenderName(contender),
     category: contender.category.name,
     event: `${contender.category.event.name} ${contender.category.event.year}`,
     // Les affiches où il apparaît : les retirer laisse des trous dans l'arbre.
@@ -180,6 +179,41 @@ adminRouter.get('/impact/:kind/:id', async (req, res) => {
  *   ?confirm=true    obligatoire dès qu'il y a le moindre impact
  *   ?keep=true       conserve les participants orphelins (nom libre)
  */
+/**
+ * Modifier un artiste. Le renommer se répercute immédiatement partout — fiches,
+ * arbres de battles, pronostics déjà déposés — puisque les participants qui le
+ * suivent ne recopient plus son nom.
+ *
+ * Le slug bouge avec le nom : c'est lui qui sert à l'appariement des photos.
+ * L'ancien nom est versé dans les alias, pour que les fichiers déjà nommés
+ * continuent d'être reconnus.
+ */
+adminRouter.patch('/artists/:id', async (req, res) => {
+  const data = z
+    .object({
+      name: z.string().min(1).optional(),
+      country: z.string().max(60).nullable().optional(),
+      bio: z.string().max(2000).nullable().optional(),
+      kinds: z
+        .array(z.enum(['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'PRODUCER']))
+        .optional(),
+      aliases: z.array(z.string().min(1)).optional(),
+    })
+    .parse(req.body);
+
+  const current = await prisma.artist.findUnique({ where: { id: req.params.id } });
+  if (!current) return res.status(404).json({ error: 'Artiste introuvable.' });
+
+  const patch = { ...data };
+  if (data.name && data.name !== current.name) {
+    patch.slug = slugify(data.name);
+    patch.aliases = [...new Set([...(data.aliases ?? current.aliases), current.name])];
+  }
+
+  const artist = await prisma.artist.update({ where: { id: current.id }, data: patch });
+  res.json({ artist });
+});
+
 adminRouter.delete('/artists/:id', onlyAdmin, async (req, res) => {
   const impact = await artistImpact(req.params.id);
   if (!impact) return res.status(404).json({ error: 'Artiste introuvable.' });
@@ -299,7 +333,10 @@ adminRouter.post('/events/:eventId/categories', async (req, res) => {
  */
 adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
   const schema = z.object({
-    name: z.string().min(1),
+    // Vide : le participant suit le nom de ses artistes, et une correction
+    // ultérieure se propage partout. On ne le renseigne que pour un duo ou un
+    // crew dont le nom n'appartient à aucun artiste isolé.
+    name: z.string().min(1).nullable().optional(),
     seed: z.number().int().nullable().optional(),
     wildcard: z.boolean().default(false),
     artistIds: z.array(z.string()).default([]),
@@ -312,6 +349,9 @@ adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
     let linked = artistIds;
 
     if (linked.length === 0) {
+      if (!data.name) {
+        throw Object.assign(new Error('Indiquez un artiste ou un nom.'), { status: 400 });
+      }
       const slug = slugify(data.name);
       const artist =
         (await tx.artist.findUnique({ where: { slug } })) ??
@@ -322,6 +362,7 @@ adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
     return tx.contender.create({
       data: {
         ...data,
+        name: data.name ?? null,
         categoryId: req.params.categoryId,
         artists: { create: linked.map((artistId) => ({ artistId })) },
       },
@@ -377,7 +418,7 @@ adminRouter.post('/orphan-contenders/repair', async (req, res) => {
   const only = Array.isArray(req.body?.ids) ? new Set(req.body.ids) : null;
 
   const orphans = await prisma.contender.findMany({
-    where: { artists: { none: {} } },
+    where: { artists: { none: {} }, name: { not: null } },
     select: { id: true, name: true },
   });
   const todo = only ? orphans.filter((c) => only.has(c.id)) : orphans;
