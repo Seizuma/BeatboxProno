@@ -61,6 +61,11 @@ export default function ScoringHelp({ onClose }) {
             </section>
 
             <section className="stack" style={{ gap: '0.4rem' }}>
+                <h3>{t('help.qualify.title')}</h3>
+                <p className="muted" style={{ margin: 0 }}>{t('help.qualify.body')}</p>
+            </section>
+
+            <section className="stack" style={{ gap: '0.4rem' }}>
                 <h3>{t('help.gap.title')}</h3>
                 <p className="muted" style={{ margin: 0 }}>{t('help.gap.body')}</p>
                 <div className="panel panel--flush">
