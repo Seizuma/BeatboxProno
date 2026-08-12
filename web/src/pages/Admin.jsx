@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useSession, isStaff, isOwner } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
@@ -6,6 +6,7 @@ import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
 import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js';
 import { shrinkImage, humanSize } from '../lib/image.js';
+import MenuButton from '../components/MenuButton.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
@@ -221,18 +222,21 @@ function StructureAdmin() {
                   </td>
                   <td className="num">{ev._count?.predictions ?? 0}</td>
                   <td className="num">
-                    <button
-                      className="btn btn--small btn--danger"
-                      onClick={() =>
-                        askDelete('event', ev.id, async () => {
-                          if (selected === ev.id) setSelected('');
-                          await reload();
-                          await run(async () => { }, `${ev.name} ${ev.year} supprimé.`);
-                        })
-                      }
-                    >
-                      Supprimer
-                    </button>
+                    <MenuButton
+                      label={`Actions pour ${ev.name}`}
+                      items={[
+                        {
+                          label: "Supprimer l'événement",
+                          danger: true,
+                          onClick: () =>
+                            askDelete('event', ev.id, async () => {
+                              if (selected === ev.id) setSelected('');
+                              await reload();
+                              await run(async () => `${ev.name} ${ev.year} supprimé.`);
+                            }),
+                        },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -390,17 +394,20 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           <button className="btn btn--small" onClick={() => setOpen(!open)}>
             {open ? 'Réduire' : 'Participants'}
           </button>
-          <button
-            className="btn btn--small btn--danger"
-            onClick={() =>
-              askDelete('category', category.id, async () => {
-                await onDone();
-                await run(async () => { }, `${category.name} supprimée.`);
-              })
-            }
-          >
-            Supprimer
-          </button>
+          <MenuButton
+            label={`Actions pour ${category.name}`}
+            items={[
+              {
+                label: 'Supprimer la catégorie',
+                danger: true,
+                onClick: () =>
+                  askDelete('category', category.id, async () => {
+                    await onDone();
+                    await run(async () => `${category.name} supprimée.`);
+                  }),
+              },
+            ]}
+          />
         </div>
       </div>
 
@@ -508,17 +515,20 @@ function ContenderManager({ category, onDone, run, askDelete }) {
                     <td className="num">{c.seed ?? '—'}</td>
                     <td>{c.name}</td>
                     <td className="num">
-                      <button
-                        className="btn btn--small btn--danger"
-                        onClick={() =>
-                          askDelete('contender', c.id, async () => {
-                            await onDone();
-                            await run(async () => { }, `${c.name} retiré.`);
-                          })
-                        }
-                      >
-                        Retirer
-                      </button>
+                      <MenuButton
+                        label={`Actions pour ${c.name}`}
+                        items={[
+                          {
+                            label: 'Retirer de la catégorie',
+                            danger: true,
+                            onClick: () =>
+                              askDelete('contender', c.id, async () => {
+                                await onDone();
+                                await run(async () => `${c.name} retiré.`);
+                              }),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -714,8 +724,9 @@ const ARTIST_KINDS = [
  * L'ancien nom part dans les alias, pour que l'appariement des photos continue
  * de reconnaître les fichiers existants.
  */
-function ArtistRow({ artist, onDone, run, askDelete, picked, onPick }) {
+function ArtistRow({ artist, onDone, run, askDelete }) {
   const [editing, setEditing] = useState(false);
+  const photo = usePhotoUpload(artist, onDone, run);
   const [form, setForm] = useState({
     name: artist.name,
     country: artist.country ?? '',
@@ -745,7 +756,6 @@ function ArtistRow({ artist, onDone, run, askDelete, picked, onPick }) {
   if (editing) {
     return (
       <tr>
-        <td />
         <td><ArtistFigure src={artist.imageUrl} name={artist.name} size="sm" /></td>
         <td>
           <input
@@ -794,14 +804,6 @@ function ArtistRow({ artist, onDone, run, askDelete, picked, onPick }) {
 
   return (
     <tr>
-      <td>
-        <input
-          type="checkbox"
-          checked={picked}
-          aria-label={`Sélectionner ${artist.name}`}
-          onChange={(e) => onPick(e.target.checked)}
-        />
-      </td>
       <td><ArtistFigure src={artist.imageUrl} name={artist.name} size="sm" /></td>
       <td>{artist.name}</td>
       <td className="muted">{artist.country ?? '—'}</td>
@@ -819,26 +821,37 @@ function ArtistRow({ artist, onDone, run, askDelete, picked, onPick }) {
         </span>
       </td>
       <td className="num">
-        <span className="row" style={{ gap: '0.35rem', justifyContent: 'flex-end' }}>
-          <button className="btn btn--small" onClick={() => setEditing(true)}>Modifier</button>
-          <PhotoUpload artist={artist} onDone={onDone} run={run} />
-          <button
-            className="btn btn--small btn--danger"
-            onClick={() =>
-              askDelete('artist', artist.id, async (result) => {
-                await onDone();
-                await run(
-                  async () =>
+        {/* Toutes les actions dans un menu : la ligne reste lisible même quand
+            elles se multiplient. */}
+        <MenuButton
+          label={`Actions pour ${artist.name}`}
+          items={[
+            { label: 'Modifier', onClick: () => setEditing(true) },
+            {
+              label: artist.imageUrl ? 'Remplacer la photo' : 'Ajouter une photo',
+              onClick: () => photo.pick(),
+            },
+            artist.imageUrl && {
+              label: 'Retirer la photo',
+              onClick: photo.remove,
+            },
+            { separator: true },
+            {
+              label: 'Supprimer',
+              danger: true,
+              onClick: () =>
+                askDelete('artist', artist.id, async (result) => {
+                  await onDone();
+                  await run(async () =>
                     result?.removedContenders
                       ? `${artist.name} supprimé, ${result.removedContenders} participant(s) retiré(s).`
                       : `${artist.name} supprimé.`
-                );
-              })
-            }
-          >
-            Supprimer
-          </button>
-        </span>
+                  );
+                }),
+            },
+          ]}
+        />
+        {photo.node}
       </td>
     </tr>
   );
@@ -849,7 +862,6 @@ function ArtistsAdmin() {
   const [form, setForm] = useState({ name: '', country: '', kinds: [] });
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('');
-  const [picked, setPicked] = useState(new Set());
   const [flash, run] = useFlash();
   const [confirmNode, askDelete] = useConfirmDelete();
 
@@ -939,72 +951,14 @@ function ArtistsAdmin() {
         <span className="faint data" style={{ fontSize: '0.85rem' }}>{shown.length} artiste(s)</span>
       </div>
 
-      {/* Typage en masse : après l'introduction des formats, une base
-          existante compte des dizaines d'artistes à qualifier. */}
-      {picked.size > 0 && (
-        <div className="panel row" style={{ gap: '0.5rem', alignItems: 'center' }}>
-          <span className="data">{picked.size} sélectionné(s) — typer comme :</span>
-          {ARTIST_KINDS.map(([id, label]) => (
-            <button
-              key={id}
-              className="btn btn--small"
-              onClick={() =>
-                run(async () => {
-                  const { updated } = await api.post('/admin/artists/bulk-kinds', {
-                    ids: [...picked],
-                    kinds: [id],
-                    mode: 'add',
-                  });
-                  setPicked(new Set());
-                  await reload();
-                  return `${updated} artiste(s) typé(s) « ${label} ».`;
-                })
-              }
-            >
-              {label}
-            </button>
-          ))}
-          <button className="btn btn--small btn--ghost" onClick={() => setPicked(new Set())}>
-            Désélectionner
-          </button>
-        </div>
-      )}
-
       <div className="panel panel--flush">
         <table>
           <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  aria-label="Tout sélectionner"
-                  checked={shown.length > 0 && shown.every((a) => picked.has(a.id))}
-                  onChange={(e) =>
-                    setPicked(e.target.checked ? new Set(shown.map((a) => a.id)) : new Set())
-                  }
-                />
-              </th>
-              <th>Photo</th><th>Nom</th><th>Pays</th><th>Formats</th><th></th>
-            </tr>
+            <tr><th>Photo</th><th>Nom</th><th>Pays</th><th>Formats</th><th></th></tr>
           </thead>
           <tbody>
             {shown.map((a) => (
-              <ArtistRow
-                key={a.id}
-                artist={a}
-                onDone={reload}
-                run={run}
-                askDelete={askDelete}
-                picked={picked.has(a.id)}
-                onPick={(on) =>
-                  setPicked((p) => {
-                    const next = new Set(p);
-                    if (on) next.add(a.id);
-                    else next.delete(a.id);
-                    return next;
-                  })
-                }
-              />
+              <ArtistRow key={a.id} artist={a} onDone={reload} run={run} askDelete={askDelete} />
             ))}
           </tbody>
         </table>
@@ -1020,20 +974,24 @@ function ArtistsAdmin() {
  * dédié, puis met à jour l'artiste. La photo apparaît partout sur le site
  * aussitôt — fiches, arbres, classements — puisque tout lit `imageUrl`.
  */
-function PhotoUpload({ artist, onDone, run }) {
-  const [busy, setBusy] = useState(false);
+/**
+ * L'envoi de photo, réduit à un crochet : le déclencheur vit désormais dans le
+ * menu de la ligne, mais le champ de fichier et la fenêtre de comparaison
+ * doivent rester montés quelque part.
+ *
+ * Renvoie `pick()` pour ouvrir le sélecteur, `remove()` pour retirer la photo,
+ * et `node` à poser dans le rendu.
+ */
+function usePhotoUpload(artist, onDone, run) {
+  const input = useRef(null);
   const [candidate, setCandidate] = useState(null);
-  const inputId = `photo-${artist.id}`;
 
   const send = async (file) => {
     if (!file) return;
 
     // Une photo existe déjà : on la met face à la nouvelle avant de trancher.
-    // Rien n'est envoyé tant que le choix n'est pas fait — la réduction se
-    // fera dans la fenêtre de comparaison.
     if (artist.imageUrl) return setCandidate(file);
 
-    setBusy(true);
     await run(async () => {
       // Une photo de scène pèse plusieurs mégaoctets pour un affichage en
       // 96 px : on la réduit avant de l'envoyer.
@@ -1048,14 +1006,13 @@ function PhotoUpload({ artist, onDone, run }) {
       return resized
         ? `Photo de ${artist.name} ajoutée (${humanSize(from)} → ${humanSize(to)}).`
         : `Photo de ${artist.name} ajoutée.`;
-    }, `Photo de ${artist.name} ajoutée.`);
-    setBusy(false);
+    });
   };
 
-  return (
+  const node = (
     <>
       <input
-        id={inputId}
+        ref={input}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
         className="visually-hidden"
@@ -1064,24 +1021,6 @@ function PhotoUpload({ artist, onDone, run }) {
           e.target.value = ''; // pour pouvoir renvoyer le même fichier
         }}
       />
-      <label htmlFor={inputId} className="btn btn--small" style={{ cursor: 'pointer', margin: 0 }}>
-        {busy ? 'Envoi…' : artist.imageUrl ? 'Remplacer' : 'Ajouter une photo'}
-      </label>
-      {artist.imageUrl && (
-        <button
-          className="btn btn--small btn--ghost"
-          title="Retirer la photo"
-          onClick={() =>
-            run(async () => {
-              await api.del(`/admin/photos/upload/${artist.id}`);
-              await onDone();
-            }, `Photo de ${artist.name} retirée.`)
-          }
-        >
-          ✕
-        </button>
-      )}
-
       {candidate && (
         <PhotoCompare
           artist={artist}
@@ -1090,13 +1029,25 @@ function PhotoUpload({ artist, onDone, run }) {
           onReplaced={async () => {
             setCandidate(null);
             await onDone();
-            await run(async () => { }, `Photo de ${artist.name} remplacée.`);
+            await run(async () => `Photo de ${artist.name} remplacée.`);
           }}
         />
       )}
     </>
   );
+
+  return {
+    node,
+    pick: () => input.current?.click(),
+    remove: () =>
+      run(async () => {
+        await api.del(`/admin/photos/upload/${artist.id}`);
+        await onDone();
+        return `Photo de ${artist.name} retirée.`;
+      }),
+  };
 }
+
 
 // =============================================================================
 //  RÉSULTATS

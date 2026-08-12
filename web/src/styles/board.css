@@ -964,3 +964,70 @@ details.panel>summary .eyebrow {
 .avatar--link:hover {
   border-color: var(--y);
 }
+
+/* --- Menu d'actions --------------------------------------------------------
+   Rendu en position fixe : une ligne de tableau rognerait un menu absolu, et
+   une ligne haute repousserait la mise en page.
+   -------------------------------------------------------------------------- */
+
+.menubtn {
+  border: var(--border-w) solid var(--line);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
+}
+
+.menubtn:hover,
+.menubtn[aria-expanded='true'] {
+  border-color: var(--y);
+  color: var(--y);
+}
+
+.menupanel {
+  position: fixed;
+  z-index: 70;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--screen);
+  border: var(--border-w) solid var(--y);
+}
+
+.menupanel__item {
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+}
+
+.menupanel__item:hover:not(:disabled) {
+  background: var(--y);
+  color: #000;
+}
+
+.menupanel__item:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.menupanel__item--danger {
+  color: var(--r);
+}
+
+.menupanel__item--danger:hover:not(:disabled) {
+  background: var(--r);
+  color: #fff;
+}
+
+.menupanel__sep {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.15rem 0;
+}
