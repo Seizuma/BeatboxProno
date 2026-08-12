@@ -423,10 +423,36 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
 function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', seed: '', artistId: '' });
+  // Les artistes déjà engagés dans cette catégorie n'ont plus à être proposés.
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => { api.get('/artists').then(({ artists }) => setArtists(artists)).catch(() => { }); }, []);
 
   const nextSeed = category.contenders.length + 1;
+
+  // Déjà engagés : on les écarte de la liste plutôt que de laisser créer un
+  // doublon dans la même catégorie.
+  const engaged = new Set(
+    category.contenders.flatMap((c) => (c.artists ?? []).map((l) => l.artist?.id ?? l.artistId))
+  );
+
+  /**
+   * Le sélecteur ne propose que les artistes qui concourent dans ce format.
+   * Chercher un crew parmi trois cents solos n'a aucun intérêt — et proposer
+   * un solo pour une catégorie Crew invite à l'erreur de saisie.
+   *
+   * Les artistes non typés restent visibles : ils n'ont pas encore été
+   * qualifiés, les écarter les rendrait introuvables. Une case permet de tout
+   * afficher quand quelqu'un manque à l'appel.
+   */
+  const suggested = artists.filter((a) => {
+    if (engaged.has(a.id)) return false;
+    if (showAll) return true;
+    const kinds = a.kinds ?? [];
+    return kinds.length === 0 || kinds.includes(category.kind);
+  });
+
+  const hidden = artists.length - engaged.size - suggested.length;
 
   const add = () =>
     run(async () => {
@@ -453,7 +479,12 @@ function ContenderManager({ category, onDone, run, askDelete }) {
             }}
           >
             <option value="">— créer d'après le nom —</option>
-            {artists.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {suggested.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+                {(a.kinds ?? []).length === 0 ? ' (non typé)' : ''}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field">
@@ -475,13 +506,27 @@ function ContenderManager({ category, onDone, run, askDelete }) {
         <button className="btn btn--primary btn--small" disabled={!form.name && !form.artistId} onClick={add}>
           Ajouter
         </button>
+
+        {hidden > 0 && (
+          <label style={{ margin: 0, textTransform: 'none', letterSpacing: 0, color: 'var(--ink)' }}>
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+            />{' '}
+            <span className="faint" style={{ fontSize: '0.84rem' }}>
+              Afficher les {hidden} artiste(s) d'un autre format
+            </span>
+          </label>
+        )}
       </div>
 
       <p className="faint" style={{ fontSize: '0.84rem', margin: 0 }}>
-        Sans artiste sélectionné, un artiste est créé d'après le nom saisi — ou réutilisé s'il
-        existe déjà. Un participant n'est jamais laissé sans fiche : c'est ce qui garantit la
-        photo et la page de l'artiste. Pour un duo ou un crew, ajoutez-le une première fois, puis
-        rattachez ses membres depuis la fiche de l'artiste.
+        Le sélecteur ne propose que les artistes typés «{' '}
+        {ARTIST_KINDS.find(([id]) => id === category.kind)?.[1] ?? category.kind} » et ceux qui ne
+        sont pas encore typés. Sans artiste sélectionné, un artiste est créé d'après le nom saisi —
+        ou réutilisé s'il existe déjà : un participant n'est jamais laissé sans fiche, c'est ce qui
+        garantit sa photo et sa page.
       </p>
 
       {category.contenders.length > 0 && (
