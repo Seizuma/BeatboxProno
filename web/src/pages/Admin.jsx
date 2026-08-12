@@ -5,6 +5,7 @@ import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
 import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js';
+import { shrinkImage, humanSize } from '../lib/image.js';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
@@ -82,8 +83,10 @@ function useFlash() {
   const [flash, setFlash] = useState(null);
   const run = async (fn, okText) => {
     try {
-      await fn();
-      setFlash({ ok: true, text: okText });
+      // Une action peut renvoyer son propre message quand elle en sait plus
+      // que l'appelant — par exemple le poids gagné après réduction d'image.
+      const text = await fn();
+      setFlash({ ok: true, text: text ?? okText });
     } catch (e) {
       setFlash({ ok: false, text: e.message });
     }
@@ -794,21 +797,27 @@ function PhotoUpload({ artist, onDone, run }) {
 
   const send = async (file) => {
     if (!file) return;
-    // Contrôle de courtoisie : le serveur refait le sien sur la signature.
-    if (file.size > 8 * 1024 * 1024) {
-      return run(async () => {
-        throw new Error(`${file.name} pèse ${(file.size / 1048576).toFixed(1)} Mo. Maximum : 8 Mo.`);
-      });
-    }
 
     // Une photo existe déjà : on la met face à la nouvelle avant de trancher.
-    // Rien n'est envoyé tant que le choix n'est pas fait.
+    // Rien n'est envoyé tant que le choix n'est pas fait — la réduction se
+    // fera dans la fenêtre de comparaison.
     if (artist.imageUrl) return setCandidate(file);
 
     setBusy(true);
     await run(async () => {
-      await api.upload(`/admin/photos/upload/${artist.id}`, file);
+      // Une photo de scène pèse plusieurs mégaoctets pour un affichage en
+      // 96 px : on la réduit avant de l'envoyer.
+      const { file: payload, resized, from, to } = await shrinkImage(file);
+      if (payload.size > 8 * 1024 * 1024) {
+        throw new Error(
+          `${file.name} pèse encore ${humanSize(payload.size)} après réduction. Maximum : 8 Mo.`
+        );
+      }
+      await api.upload(`/admin/photos/upload/${artist.id}`, payload);
       await onDone();
+      return resized
+        ? `Photo de ${artist.name} ajoutée (${humanSize(from)} → ${humanSize(to)}).`
+        : `Photo de ${artist.name} ajoutée.`;
     }, `Photo de ${artist.name} ajoutée.`);
     setBusy(false);
   };

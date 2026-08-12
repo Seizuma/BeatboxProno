@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import Modal from './Modal.jsx';
-
+import { shrinkImage, humanSize } from '../lib/image.js';
 
 /** Une photo servie depuis le dossier monté du projet Beatbox-Games. */
 const fromBeatboxGames = (url) => typeof url === 'string' && url.startsWith('/api/media/artists/');
-
-const kilobytes = (n) => `${Math.round(n / 1024)} Ko`;
 
 /**
  * Comparaison avant remplacement. La nouvelle image n'est pas envoyée tant que
@@ -18,19 +16,34 @@ export default function PhotoCompare({ artist, file, onCancel, onReplaced }) {
     const [preview, setPreview] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
+    // Le fichier réellement envoyé : la version réduite, pas l'original.
+    const [ready, setReady] = useState(null);
 
     useEffect(() => {
-        const url = URL.createObjectURL(file);
-        setPreview(url);
-        // Un blob non révoqué reste en mémoire tant que l'onglet est ouvert.
-        return () => URL.revokeObjectURL(url);
+        let url = null;
+        let cancelled = false;
+
+        // On réduit AVANT d'afficher l'aperçu : ce qu'on voit est exactement ce
+        // qui partira sur le serveur.
+        shrinkImage(file).then((result) => {
+            if (cancelled) return;
+            setReady(result);
+            url = URL.createObjectURL(result.file);
+            setPreview(url);
+        });
+
+        return () => {
+            cancelled = true;
+            // Un blob non révoqué reste en mémoire tant que l'onglet est ouvert.
+            if (url) URL.revokeObjectURL(url);
+        };
     }, [file]);
 
     const replace = async () => {
         setBusy(true);
         setError(null);
         try {
-            await api.upload(`/admin/photos/upload/${artist.id}`, file);
+            await api.upload(`/admin/photos/upload/${artist.id}`, ready.file);
             onReplaced();
         } catch (e) {
             setError(e.message);
@@ -49,7 +62,7 @@ export default function PhotoCompare({ artist, file, onCancel, onReplaced }) {
                     <button className="btn" onClick={onCancel} disabled={busy}>
                         Garder l'actuelle
                     </button>
-                    <button className="btn btn--primary" onClick={replace} disabled={busy}>
+                    <button className="btn btn--primary" onClick={replace} disabled={busy || !ready}>
                         {busy ? 'Envoi…' : 'Utiliser la nouvelle'}
                     </button>
                 </>
@@ -68,9 +81,14 @@ export default function PhotoCompare({ artist, file, onCancel, onReplaced }) {
 
                 <figure className="compare__side compare__side--new">
                     <figcaption className="eyebrow">Nouvelle</figcaption>
-                    {preview && <img src={preview} alt={`Nouvelle photo proposée pour ${artist.name}`} />}
+                    {preview ? (
+                        <img src={preview} alt={`Nouvelle photo proposée pour ${artist.name}`} />
+                    ) : (
+                        <p className="faint">Préparation…</p>
+                    )}
                     <p className="faint" style={{ fontSize: '0.82rem', margin: 0 }}>
-                        {file.name} — {kilobytes(file.size)}
+                        {file.name} — {ready ? humanSize(ready.to) : humanSize(file.size)}
+                        {ready?.resized && ` (réduite depuis ${humanSize(ready.from)})`}
                     </p>
                 </figure>
             </div>
