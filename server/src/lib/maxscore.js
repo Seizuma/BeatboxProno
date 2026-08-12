@@ -27,20 +27,34 @@ export function maxScoreForCategory(category) {
     for (const phase of category.phases ?? []) {
         if (RANKING_TYPES.includes(phase.type)) {
             const runners = category.contenders?.length ?? 0;
+
             // Écart nul sur chaque participant : le maximum du barème de placement.
             const gap = runners * GAP_MAX_BONUS;
-            // Un point par qualification correctement prédite. Sans coupe définie,
-            // la phase ne distribue pas ces points.
-            const qualification = phase.qualifierCount ? runners * QUALIFIED_POINT : 0;
+
+            // Le point de qualification ne va qu'aux contenders RÉELLEMENT qualifiés
+            // (`actual.qualified` dans scoreRankingPhase), donc au plus la coupe —
+            // et jamais à l'ensemble des participants.
+            //
+            // Deux cas où la phase n'en distribue aucun : le barème réserve ces
+            // points aux types WILDCARD et ELIMINATION, et une phase sans coupe, ou
+            // dont la coupe couvre tout le plateau, n'élimine personne.
+            const countsQualification = phase.type === 'WILDCARD' || phase.type === 'ELIMINATION';
+            const cut = phase.qualifierCount ?? 0;
+            const qualifies = countsQualification && cut > 0 && cut < runners ? cut : 0;
+            const qualification = qualifies * QUALIFIED_POINT;
+
             const points = gap + qualification;
 
             lines.push({
                 phaseId: phase.id,
                 phase: phase.name,
                 type: phase.type,
-                detail: phase.qualifierCount
-                    ? `${runners} participants × ${GAP_MAX_BONUS} (placement) + ${runners} × ${QUALIFIED_POINT} (qualification)`
-                    : `${runners} participants × ${GAP_MAX_BONUS} (placement)`,
+                detail: qualifies
+                    ? `${runners} × ${GAP_MAX_BONUS} (placement) + ${qualifies} × ${QUALIFIED_POINT} (qualification)`
+                    : `${runners} × ${GAP_MAX_BONUS} (placement)` +
+                    (countsQualification && cut >= runners && runners > 0
+                        ? ' — personne n\'est éliminé, aucun point de qualification'
+                        : ''),
                 points,
             });
             total += points;
