@@ -112,9 +112,14 @@ export default function EventPage() {
         Object.entries(versions).find(([, list]) => list.some((v) => v.id === k))?.[0];
       if (!categoryId) continue;
 
+      // Une clé provisoire survivant à la création d'une version est un
+      // résidu : la catégorie a bien un pronostic, on ne la signale pas.
+      const existing = (versions[categoryId] ?? [])[0]?.id ?? null;
+      if (provisional && existing) continue;
+
       out.push({
         key: k,
-        predictionId: provisional ? null : k,
+        predictionId: provisional ? existing : k,
         categoryId,
         category: data?.event.categories.find((c) => c.id === categoryId)?.name ?? '',
       });
@@ -163,6 +168,10 @@ export default function EventPage() {
     setDraft((d) => {
       const next = { ...d };
       for (const p of predictions) next[p.id] = readVersion(p);
+      // La clé provisoire a rempli son office : son contenu vit désormais sous
+      // l'identifiant de la version. La laisser en place la faisait compter
+      // comme une catégorie « jamais enregistrée », indéfiniment.
+      if (predictions.length > 0) delete next[`new:${categoryId}`];
       return next;
     });
     // Ce qui vient du serveur devient la nouvelle référence : sans cela, une
