@@ -423,8 +423,6 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
 function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', seed: '', artistId: '' });
-  // Les artistes déjà engagés dans cette catégorie n'ont plus à être proposés.
-  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => { api.get('/artists').then(({ artists }) => setArtists(artists)).catch(() => { }); }, []);
 
@@ -437,20 +435,13 @@ function ContenderManager({ category, onDone, run, askDelete }) {
   );
 
   /**
-   * Le sélecteur ne propose que les artistes typés dans ce format. Les non
-   * typés sont écartés eux aussi : tant qu'ils sont majoritaires, les laisser
-   * revient à ne pas filtrer du tout.
-   *
-   * La case « tout afficher » reste le recours quand quelqu'un manque — et le
-   * message en dessous dit combien d'artistes attendent d'être qualifiés.
+   * Le sélecteur ne propose que les artistes typés dans ce format, et pas déjà
+   * engagés ici. Un artiste qui manque se règle dans l'onglet Artistes, en lui
+   * donnant le bon format — pas en contournant le filtre.
    */
-  const available = artists.filter((a) => !engaged.has(a.id));
-  const suggested = showAll
-    ? available
-    : available.filter((a) => (a.kinds ?? []).includes(category.kind));
-
-  const untyped = available.filter((a) => (a.kinds ?? []).length === 0).length;
-  const hidden = available.length - suggested.length;
+  const suggested = artists.filter(
+    (a) => !engaged.has(a.id) && (a.kinds ?? []).includes(category.kind)
+  );
 
   const add = () =>
     run(async () => {
@@ -478,10 +469,7 @@ function ContenderManager({ category, onDone, run, askDelete }) {
           >
             <option value="">— créer d'après le nom —</option>
             {suggested.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {showAll && (a.kinds ?? []).length === 0 ? ' (non typé)' : ''}
-              </option>
+              <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
         </div>
@@ -505,34 +493,8 @@ function ContenderManager({ category, onDone, run, askDelete }) {
           Ajouter
         </button>
 
-        {hidden > 0 && (
-          <label style={{ margin: 0, textTransform: 'none', letterSpacing: 0, color: 'var(--ink)' }}>
-            <input
-              type="checkbox"
-              checked={showAll}
-              onChange={(e) => setShowAll(e.target.checked)}
-            />{' '}
-            <span className="faint" style={{ fontSize: '0.84rem' }}>
-              Afficher les {hidden} autre(s) artiste(s)
-            </span>
-          </label>
-        )}
       </div>
 
-      <p className="faint" style={{ fontSize: '0.84rem', margin: 0 }}>
-        Le sélecteur ne propose que les artistes typés «{' '}
-        {ARTIST_KINDS.find(([id]) => id === category.kind)?.[1] ?? category.kind} ».
-        {untyped > 0 && (
-          <>
-            {' '}
-            <strong>{untyped} artiste(s) ne sont pas encore typés</strong> et n'apparaissent donc
-            pas : qualifiez-les depuis l'onglet Artistes, filtre « Non typés ».
-          </>
-        )}{' '}
-        Sans artiste sélectionné, un artiste est créé d'après le nom saisi — ou réutilisé s'il
-        existe déjà : un participant n'est jamais laissé sans fiche, c'est ce qui garantit sa photo
-        et sa page.
-      </p>
 
       {category.contenders.length > 0 && (
         <div className="panel panel--flush">
