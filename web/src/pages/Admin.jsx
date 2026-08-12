@@ -7,6 +7,8 @@ import ArtistFigure from '../components/ArtistFigure.jsx';
 import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js';
 import { shrinkImage, humanSize } from '../lib/image.js';
 import MenuButton from '../components/MenuButton.jsx';
+import RankingBoard from '../components/RankingBoard.jsx';
+import BracketBoard from '../components/BracketBoard.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
@@ -558,7 +560,19 @@ function FormatBuilder({ event, onDone, onClose, run }) {
     setPicked((p) => {
       const next = { ...p };
       if (next[kind]) delete next[kind];
-      else next[kind] = { kind, name: label, format: 'TOP_8', wildcard: false, wildcardCount: '', smallFinal: false };
+      else
+        next[kind] = {
+          kind,
+          name: label,
+          format: 'TOP_8',
+          wildcard: false,
+          wildcardCount: '',
+          // Deux paliers indépendants : toutes les catégories n'ont pas
+          // d'éliminations, et certaines n'ont que ça.
+          elimination: false,
+          eliminationCount: '',
+          smallFinal: false,
+        };
       return next;
     });
 
@@ -576,6 +590,8 @@ function FormatBuilder({ event, onDone, onClose, run }) {
           format: c.format,
           wildcard: c.wildcard,
           wildcardCount: c.wildcardCount === '' ? null : Number(c.wildcardCount),
+          elimination: c.elimination,
+          eliminationCount: c.eliminationCount === '' ? null : Number(c.eliminationCount),
           smallFinal: c.smallFinal,
         })),
       });
@@ -638,7 +654,7 @@ function FormatBuilder({ event, onDone, onClose, run }) {
             <div className="panel panel--flush">
               <table>
                 <thead>
-                  <tr><th>Catégorie</th><th>Tableau</th><th>Qualifications</th><th>3e place</th></tr>
+                  <tr><th>Catégorie</th><th>Tableau</th><th>Wildcards</th><th>Éliminations</th><th>3e place</th></tr>
                 </thead>
                 <tbody>
                   {chosen.map((c) => (
@@ -669,13 +685,39 @@ function FormatBuilder({ event, onDone, onClose, run }) {
                           wildcards
                         </label>
                         {c.wildcard && (
-                          <input
-                            type="number" min="2" style={{ width: '5rem', marginLeft: '0.5rem' }}
+                          <select
+                            style={{ marginLeft: '0.5rem' }}
                             value={c.wildcardCount}
                             aria-label={`Nombre de qualifiés pour ${c.name}`}
-                            placeholder={String(catalog.brackets.find((b) => b.id === c.format)?.size ?? '')}
                             onChange={(e) => patch(c.kind, { wildcardCount: e.target.value })}
-                          />
+                          >
+                            <option value="">Taille du tableau</option>
+                            {[2, 4, 8, 16, 32].map((n) => (
+                              <option key={n} value={n}>{n} qualifiés</option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                      <td>
+                        <label style={{ margin: 0 }}>
+                          <input
+                            type="checkbox" checked={c.elimination}
+                            onChange={(e) => patch(c.kind, { elimination: e.target.checked })}
+                          />{' '}
+                          oui
+                        </label>
+                        {c.elimination && (
+                          <select
+                            style={{ marginLeft: '0.5rem' }}
+                            value={c.eliminationCount}
+                            aria-label={`Qualifiés après éliminations pour ${c.name}`}
+                            onChange={(e) => patch(c.kind, { eliminationCount: e.target.value })}
+                          >
+                            <option value="">Taille du tableau</option>
+                            {[2, 4, 8, 16, 32].map((n) => (
+                              <option key={n} value={n}>{n} qualifiés</option>
+                            ))}
+                          </select>
                         )}
                       </td>
                       <td>
@@ -1057,6 +1099,72 @@ function usePhotoUpload(artist, onDone, run) {
 //  catégorie à chaque clic.
 // =============================================================================
 
+/**
+ * Le score maximal atteignable, phase par phase.
+ *
+ * Un contrôle avant ouverture : si le total ne correspond pas à ce qu'on
+ * attend, c'est que la structure est mal montée — une phase oubliée, un nombre
+ * de qualifiés incohérent. Le maximum ne dépend que de la structure, pas des
+ * résultats : il est donc vérifiable dès la création de l'événement.
+ */
+function MaxScorePanel({ eventId }) {
+  const [data, setData] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setData(null);
+    if (!eventId) return;
+    api.get(`/admin/events/${eventId}/max-score`).then(setData).catch(() => { });
+  }, [eventId]);
+
+  if (!data) return null;
+
+  return (
+    <div className="panel stack" style={{ gap: '0.6rem' }}>
+      <div className="spread">
+        <div>
+          <p className="eyebrow" style={{ margin: 0 }}>Contrôle du barème</p>
+          <h3>Score maximal : {data.total} points</h3>
+        </div>
+        <button className="btn btn--small" onClick={() => setOpen(!open)}>
+          {open ? 'Réduire' : 'Détail par phase'}
+        </button>
+      </div>
+
+      <div className="row" style={{ gap: '1.2rem' }}>
+        {data.categories.map((c) => (
+          <span className="readout" key={c.categoryId}>
+            <span className="readout__value">{c.total}</span>
+            <span className="readout__unit">{c.category}</span>
+          </span>
+        ))}
+      </div>
+
+      {open && (
+        <div className="panel panel--flush">
+          <table>
+            <thead>
+              <tr><th>Catégorie</th><th>Phase</th><th>Calcul</th><th className="num">Points</th></tr>
+            </thead>
+            <tbody>
+              {data.categories.flatMap((c) =>
+                c.lines.map((l) => (
+                  <tr key={l.phaseId}>
+                    <td className="muted">{c.category}</td>
+                    <td>{l.phase}</td>
+                    <td className="faint data" style={{ fontSize: '0.8rem' }}>{l.detail}</td>
+                    <td className="num">{l.points}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ROUND_LABELS = {
   ROUND_OF_16: 'Huitièmes',
   QUARTER: 'Quarts',
@@ -1113,6 +1221,8 @@ function ResultsAdmin() {
         )}
       </div>
 
+      {slug && <MaxScorePanel eventId={detail?.event.id} />}
+
       {!detail && <p className="faint">Chargement…</p>}
       {detail && categories.length === 0 && (
         <p className="empty">Cet événement n'a pas encore de catégorie. Composez-le dans l'onglet Événements.</p>
@@ -1155,6 +1265,7 @@ function ResultsAdmin() {
             key={phase.id}
             phase={phase}
             event={detail.event}
+            category={category}
             contenders={category.contenders}
             onDone={reload}
             run={run}
@@ -1172,55 +1283,81 @@ function ResultsAdmin() {
  * remplit tranquillement, on envoie une fois. Le vainqueur se désigne en
  * cliquant sur le nom, pas dans une liste déroulante.
  */
-function BracketResults({ phase, event, contenders, onDone, run }) {
-  // Le panel de juges de la phase, ou celui de l'événement à défaut.
-  const judges = judgesFor(phase, event);
-  const [rows, setRows] = useState(() =>
+/**
+ * Saisie d'un tableau, sur le même arbre que les joueurs.
+ *
+ * L'ancienne liste de sélecteurs ne montrait pas la structure : on ne voyait
+ * pas d'où venait chaque affiche. Ici c'est le BracketBoard de la page de
+ * pronostic, en mode officiel — les participants du premier tour se déduisent
+ * du classement d'éliminations publié, et chaque vainqueur désigné propage le
+ * suivant.
+ */
+function BracketResults({ phase, event, category, contenders, onDone, run }) {
+  // Le classement de la dernière phase de qualification RÉSOLUE alimente
+  // l'arbre : c'est l'officiel, pas un pronostic.
+  const seedFromRanking = useMemo(() => {
+    const qualifying = (category?.phases ?? [])
+      .filter((p) => ['SEEDING', 'WILDCARD', 'ELIMINATION'].includes(p.type))
+      .pop();
+    if (!qualifying?.entries?.length) return [];
+    return [...qualifying.entries]
+      .sort((a, b) => a.rank - b.rank)
+      .filter((e) => (qualifying.qualifierCount ? e.qualified : true))
+      .map((e) => e.contenderId);
+  }, [category]);
+
+  // L'état local reprend la forme attendue par BracketBoard.
+  const [picks, setPicks] = useState(() =>
     Object.fromEntries(
-      phase.battles.map((b) => [
-        b.id,
+      (phase.battles ?? []).map((b) => [
+        `${b.round}:${b.slot}`,
         {
-          contenderAId: b.contenderAId ?? '',
-          contenderBId: b.contenderBId ?? '',
-          winnerId: b.winnerId ?? '',
-          score: b.scoreA == null ? '' : `${b.scoreA}-${b.scoreB}`,
+          phaseId: phase.id,
+          round: b.round,
+          slot: b.slot,
+          contenderAId: b.contenderAId,
+          contenderBId: b.contenderBId,
+          winnerId: b.winnerId,
+          scoreA: b.scoreA,
+          scoreB: b.scoreB,
         },
       ])
     )
   );
+  const [dirty, setDirty] = useState(false);
 
-  const byRound = useMemo(() => {
-    const map = {};
-    for (const b of phase.battles) (map[b.round] ??= []).push(b);
-    for (const list of Object.values(map)) list.sort((x, y) => x.slot - y.slot);
-    return ROUND_ORDER.filter((r) => map[r]).map((r) => [r, map[r]]);
-  }, [phase.battles]);
+  const change = (next) => {
+    setPicks(next);
+    setDirty(true);
+  };
 
-  const nameOf = (id) => contenders.find((c) => c.id === id)?.name ?? '—';
-  const patch = (id, changes) => setRows((r) => ({ ...r, [id]: { ...r[id], ...changes } }));
+  const filled = Object.values(picks).filter((p) => p.winnerId).length;
 
-  const filled = phase.battles.filter((b) => rows[b.id]?.winnerId).length;
-
-  const publish = (resolved) =>
+  const send = (resolved) =>
     run(async () => {
+      const byKey = new Map(
+        (phase.battles ?? []).map((b) => [`${b.round}:${b.slot}`, b.id])
+      );
       await api.put(`/admin/phases/${phase.id}/battles`, {
         resolved,
-        battles: phase.battles.map((b) => {
-          const r = rows[b.id];
-          const [sa, sb] = r.score ? r.score.split('-').map(Number) : [null, null];
-          return {
-            id: b.id,
-            contenderAId: r.contenderAId || null,
-            contenderBId: r.contenderBId || null,
-            winnerId: r.winnerId || null,
-            scoreA: sa,
-            scoreB: sb,
-            played: Boolean(r.winnerId),
-          };
-        }),
+        battles: Object.entries(picks)
+          .filter(([k]) => byKey.has(k))
+          .map(([k, p]) => ({
+            id: byKey.get(k),
+            contenderAId: p.contenderAId ?? null,
+            contenderBId: p.contenderBId ?? null,
+            winnerId: p.winnerId ?? null,
+            scoreA: p.scoreA ?? null,
+            scoreB: p.scoreB ?? null,
+            played: Boolean(p.winnerId),
+          })),
       });
+      setDirty(false);
       await onDone();
-    }, resolved === false ? 'Phase rouverte.' : resolved ? 'Phase publiée, pronostics recalculés.' : 'Résultats enregistrés.');
+      return resolved
+        ? `${phase.name} publiée : les pronostics ont été recalculés.`
+        : `${phase.name} enregistrée en brouillon — rien n'est encore visible des joueurs.`;
+    });
 
   return (
     <div className="stack">
@@ -1230,209 +1367,166 @@ function BracketResults({ phase, event, contenders, onDone, run }) {
           <h2>{phase.name}</h2>
         </div>
         <div className="row" style={{ gap: '0.6rem' }}>
-          <Progress done={filled} total={phase.battles.length} />
-          <button className="btn btn--small" onClick={() => publish(undefined)}>Enregistrer</button>
-          <button className="btn btn--small btn--primary" onClick={() => publish(true)}>Publier la phase</button>
+          <Progress done={filled} total={phase.battles?.length ?? 0} />
+          <button className="btn btn--small" onClick={() => send(false)}>
+            Enregistrer{dirty ? ' •' : ''}
+          </button>
+          <button className="btn btn--small btn--primary" onClick={() => send(true)}>
+            {phase.resolved ? 'Republier' : 'Publier'}
+          </button>
           {phase.resolved && (
-            <button className="btn btn--small btn--ghost" onClick={() => publish(false)}>Rouvrir</button>
+            <button className="btn btn--small btn--ghost" onClick={() => send(false)}>
+              Dépublier
+            </button>
           )}
         </div>
       </div>
 
-      {byRound.map(([round, battles]) => (
-        <details className="panel" key={round} open>
-          <summary style={{ cursor: 'pointer' }}>
-            <span className="eyebrow">{ROUND_LABELS[round] ?? round}</span>{' '}
-            <span className="data faint">
-              {battles.filter((b) => rows[b.id]?.winnerId).length}/{battles.length}
-            </span>
-          </summary>
+      <PublishState phase={phase} />
 
-          <div className="stack" style={{ gap: '0.4rem', marginTop: '0.7rem' }}>
-            {battles.map((b) => {
-              const r = rows[b.id];
-              const both = [r.contenderAId, r.contenderBId].filter(Boolean);
-              return (
-                <div
-                  key={b.id}
-                  className="row"
-                  style={{ gap: '0.4rem', borderTop: '1px solid var(--line)', paddingTop: '0.45rem' }}
-                >
-                  <span className="tag" style={{ minWidth: '2.5rem' }}>#{b.slot + 1}</span>
+      {seedFromRanking.length === 0 && (
+        <p className="faint" style={{ fontSize: '0.86rem', margin: 0 }}>
+          Aucun classement de qualification enregistré : composez les affiches du premier tour à la
+          main, ou saisissez d'abord la phase d'éliminations.
+        </p>
+      )}
 
-                  {['contenderAId', 'contenderBId'].map((field) => (
-                    <select
-                      key={field}
-                      value={r[field]}
-                      aria-label={`${field === 'contenderAId' ? 'Premier' : 'Second'} participant, affiche ${b.slot + 1}`}
-                      style={{ maxWidth: '11rem' }}
-                      onChange={(e) => {
-                        const next = { [field]: e.target.value };
-                        // Un vainqueur qui n'est plus dans l'affiche n'a plus lieu d'être.
-                        const pair =
-                          field === 'contenderAId'
-                            ? [e.target.value, r.contenderBId]
-                            : [r.contenderAId, e.target.value];
-                        if (r.winnerId && !pair.includes(r.winnerId)) next.winnerId = '';
-                        patch(b.id, next);
-                      }}
-                    >
-                      <option value="">— non défini —</option>
-                      {contenders.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  ))}
-
-                  <span className="row" style={{ gap: '0.25rem' }}>
-                    {both.length === 0 && <span className="faint data">choisissez les participants</span>}
-                    {both.map((id) => (
-                      <button
-                        key={id}
-                        className={`btn btn--small${r.winnerId === id ? ' btn--primary' : ''}`}
-                        onClick={() => {
-                          const next = r.winnerId === id ? '' : id;
-                          const side = next ? (next === r.contenderAId ? 'a' : 'b') : null;
-                          const [sa, sb] = r.score ? r.score.split('-').map(Number) : [null, null];
-                          // Un score qui donnait l'autre gagnant n'a plus de sens.
-                          patch(b.id, {
-                            winnerId: next,
-                            score: next && scoreMatchesWinner(sa, sb, side) ? r.score : '',
-                          });
-                        }}
-                      >
-                        {nameOf(id)}
-                      </button>
-                    ))}
-                  </span>
-
-                  {/* Sans vainqueur, pas de score à saisir. */}
-                  {r.winnerId && (
-                    <select
-                      value={r.score}
-                      aria-label={`Score de l'affiche ${b.slot + 1}`}
-                      style={{ width: '6.5rem' }}
-                      onChange={(e) => patch(b.id, { score: e.target.value })}
-                    >
-                      <option value="">Score…</option>
-                      {splitsForWinner(
-                        judges,
-                        r.winnerId === r.contenderAId ? 'a' : 'b'
-                      ).map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </details>
-      ))}
+      <BracketBoard
+        phase={phase}
+        phaseBattles={phase.battles ?? []}
+        contenders={contenders}
+        picks={picks}
+        onChange={change}
+        locked={false}
+        seedFromRanking={seedFromRanking}
+        event={event}
+      />
     </div>
   );
 }
 
+
 /** Saisie d'un classement, avec numérotation assistée. */
+const QUALIFIER_CHOICES = [null, 2, 4, 8, 16, 32];
+
+/**
+ * Saisie d'un classement officiel, au glisser-déposer.
+ *
+ * Reprend le RankingBoard de la page de pronostic : classer des artistes est le
+ * même geste qu'on soit joueur ou organisateur, et deux interfaces différentes
+ * pour la même tâche n'auraient servi personne.
+ *
+ * Enregistrer ne publie pas. Tant que la phase n'est pas publiée, les résultats
+ * restent invisibles des joueurs et aucun score n'est recalculé — de quoi
+ * saisir le Solo pendant que le Tag Team attend encore ses résultats.
+ */
 function RankingResults({ phase, contenders, onDone, run }) {
-  const [rows, setRows] = useState(() =>
-    contenders.map((c) => {
-      const e = phase.entries?.find((x) => x.contenderId === c.id);
-      return {
-        contenderId: c.id,
-        name: c.name,
-        seed: c.seed,
-        rank: e?.rank ?? '',
-        qualified: e?.qualified ?? false,
-      };
-    })
+  const [order, setOrder] = useState(() =>
+    [...(phase.entries ?? [])].sort((a, b) => a.rank - b.rank).map((e) => e.contenderId)
   );
+  const [cut, setCut] = useState(phase.qualifierCount ?? null);
+  const [dirty, setDirty] = useState(false);
 
-  const patch = (i, changes) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...changes } : row)));
-
-  const ranked = rows.filter((r) => r.rank !== '').length;
-  const cut = phase.qualifierCount ?? null;
-
-  /** Numérote dans l'ordre des seeds, et coche les qualifiés jusqu'à la coupe. */
-  const fillFromSeed = () => {
-    const ordered = [...rows].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999));
-    const rankById = new Map(ordered.map((r, i) => [r.contenderId, i + 1]));
-    setRows(
-      rows.map((r) => {
-        const rank = rankById.get(r.contenderId);
-        return { ...r, rank, qualified: cut ? rank <= cut : r.qualified };
-      })
-    );
+  const change = (next) => {
+    setOrder(next);
+    setDirty(true);
   };
 
-  /** Coche les qualifiés d'après les places déjà saisies. */
-  const syncQualified = () =>
-    setRows(rows.map((r) => ({ ...r, qualified: cut && r.rank !== '' ? r.rank <= cut : r.qualified })));
+  const fillBySeed = () =>
+    change(
+      [...contenders].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999)).map((c) => c.id)
+    );
+
+  const send = (resolved) =>
+    run(async () => {
+      await api.put(`/admin/phases/${phase.id}/results`, {
+        resolved,
+        entries: order.map((contenderId, i) => ({
+          contenderId,
+          rank: i + 1,
+          qualified: cut ? i < cut : false,
+        })),
+      });
+      setDirty(false);
+      await onDone();
+      return resolved
+        ? `${phase.name} publiée : les pronostics ont été recalculés.`
+        : `${phase.name} enregistrée en brouillon — rien n'est encore visible des joueurs.`;
+    });
 
   return (
     <div className="stack">
       <div className="panel spread">
         <div>
-          <p className="eyebrow" style={{ margin: 0 }}>
-            {phase.type}{cut ? ` · ${cut} qualifiés` : ''}
-          </p>
+          <p className="eyebrow" style={{ margin: 0 }}>{phase.type}</p>
           <h2>{phase.name}</h2>
         </div>
+
         <div className="row" style={{ gap: '0.6rem' }}>
-          <Progress done={ranked} total={rows.length} />
-          <button className="btn btn--small" onClick={fillFromSeed}>Numéroter par seed</button>
-          {cut && <button className="btn btn--small" onClick={syncQualified}>Cocher les qualifiés</button>}
-          <button
-            className="btn btn--small btn--primary"
-            onClick={() =>
-              run(async () => {
-                await api.put(`/admin/phases/${phase.id}/results`, {
-                  resolved: true,
-                  entries: rows
-                    .filter((r) => r.rank !== '')
-                    .map(({ contenderId, rank, qualified }) => ({ contenderId, rank: Number(rank), qualified })),
+          <div className="field">
+            <label htmlFor={`cut-${phase.id}`}>Qualifiés</label>
+            <select
+              id={`cut-${phase.id}`}
+              value={cut ?? ''}
+              onChange={(e) => {
+                const n = e.target.value === '' ? null : Number(e.target.value);
+                setCut(n);
+                run(async () => {
+                  await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
+                  await onDone();
+                  return n ? `${n} qualifiés sur cette phase.` : 'Phase sans qualification.';
                 });
-                await onDone();
-              }, 'Classement publié, pronostics recalculés.')
-            }
-          >
-            Publier le classement
+              }}
+            >
+              {QUALIFIER_CHOICES.map((n) => (
+                <option key={n ?? 'none'} value={n ?? ''}>
+                  {n ? `${n} qualifiés` : 'Aucune coupe'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Progress done={order.length} total={contenders.length} />
+
+          <button className="btn btn--small" onClick={fillBySeed}>Classer par seed</button>
+          <button className="btn btn--small" onClick={() => send(false)}>
+            Enregistrer{dirty ? ' •' : ''}
           </button>
+          <button className="btn btn--small btn--primary" onClick={() => send(true)}>
+            {phase.resolved ? 'Republier' : 'Publier'}
+          </button>
+          {phase.resolved && (
+            <button className="btn btn--small btn--ghost" onClick={() => send(false)}>
+              Dépublier
+            </button>
+          )}
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        <p className="empty">Aucun participant dans cette catégorie.</p>
-      ) : (
-        <div className="panel panel--flush">
-          <table>
-            <thead>
-              <tr><th className="num">Seed</th><th>Participant</th><th className="num">Place</th><th>Qualifié</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.contenderId}>
-                  <td className="num muted">{r.seed ?? '—'}</td>
-                  <td>{r.name}</td>
-                  <td className="num">
-                    <input
-                      type="number" min="1" style={{ width: '4.5rem' }} value={r.rank}
-                      aria-label={`Place de ${r.name}`}
-                      onChange={(e) => patch(i, { rank: e.target.value === '' ? '' : Number(e.target.value) })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox" checked={r.qualified}
-                      aria-label={`${r.name} qualifié`}
-                      onChange={(e) => patch(i, { qualified: e.target.checked })}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <PublishState phase={phase} />
+
+      <RankingBoard
+        phase={{ ...phase, qualifierCount: cut }}
+        contenders={contenders}
+        order={order}
+        onChange={change}
+        locked={false}
+      />
     </div>
+  );
+}
+
+/** Dit clairement si ce qui est saisi est visible des joueurs. */
+function PublishState({ phase }) {
+  return phase.resolved ? (
+    <p className="notice notice--ok" style={{ margin: 0 }}>
+      Phase publiée : les résultats sont visibles et les pronostics scorés.
+    </p>
+  ) : (
+    <p className="notice" style={{ margin: 0, borderColor: 'var(--line)', color: 'var(--ink-faint)' }}>
+      Brouillon de résultats : rien n'est visible des joueurs, aucun score n'est calculé.
+      Publiez quand la phase est complète.
+    </p>
   );
 }
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireRole } from '../lib/auth.js';
 import { contenderName, withName } from '../lib/naming.js';
+import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
 
 export const adminRouter = Router();
@@ -742,9 +743,69 @@ adminRouter.delete('/phases/:id', onlyAdmin, async (req, res) => {
 // --- Saisie des résultats -----------------------------------------------------
 
 /** Classement officiel d'une phase. Résout la phase et relance le scoring. */
+/**
+ * Le score maximal atteignable sur un événement, phase par phase.
+ *
+ * Un contrôle avant ouverture : si le total ne correspond pas à ce qu'on
+ * attend, c'est que la structure est mal montée. Le maximum ne dépend que de
+ * la structure, pas des résultats — il est donc connu dès la création.
+ */
+adminRouter.get('/events/:eventId/max-score', async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { id: req.params.eventId },
+    include: {
+      categories: {
+        orderBy: { position: 'asc' },
+        include: {
+          contenders: { select: { id: true } },
+          phases: {
+            orderBy: { position: 'asc' },
+            include: { battles: { select: { id: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
+
+  res.json(maxScoreForEvent(event));
+});
+
+/** Change le nombre de qualifiés d'une phase après coup. */
+adminRouter.patch('/phases/:id/qualifiers', async (req, res) => {
+  const { qualifierCount } = z
+    .object({ qualifierCount: z.number().int().min(1).max(128).nullable() })
+    .parse(req.body);
+
+  const phase = await prisma.phase.update({
+    where: { id: req.params.id },
+    data: { qualifierCount },
+  });
+
+  // Les qualifications déjà saisies suivent la nouvelle coupe : laisser
+  // l'ancienne répartition afficherait une ligne de qualification qui ne
+  // correspond plus au réglage.
+  if (qualifierCount) {
+    const entries = await prisma.phaseEntry.findMany({ where: { phaseId: phase.id } });
+    await prisma.$transaction(
+      entries.map((e) =>
+        prisma.phaseEntry.update({
+          where: { id: e.id },
+          data: { qualified: e.rank <= qualifierCount },
+        })
+      )
+    );
+  }
+
+  res.json({ phase });
+});
+
 adminRouter.put('/phases/:phaseId/results', async (req, res) => {
   const schema = z.object({
-    resolved: z.boolean().default(true),
+    // Explicite, sans valeur par défaut : enregistrer des résultats ne les
+    // publie pas. Une catégorie peut être saisie et gardée au chaud pendant
+    // qu'une autre attend encore ses résultats.
+    resolved: z.boolean(),
     entries: z.array(
       z.object({
         contenderId: z.string(),
