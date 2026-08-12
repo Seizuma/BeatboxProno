@@ -241,9 +241,6 @@ const DICT = {
     'draft.empty': 'Nothing was filled in on this category.',
     'draft.delete': 'Delete',
     'draft.untitled': 'Untitled',
-    'draft.delete': 'Delete',
-    'draft.submitted': 'filed prediction',
-    'draft.untitled': 'Untitled',
   },
 
   fr: {
@@ -461,9 +458,6 @@ const DICT = {
     'draft.close': 'Fermer',
     'draft.empty': 'Rien n’a été rempli sur cette catégorie.',
     'draft.delete': 'Supprimer',
-    'draft.untitled': 'Sans titre',
-    'draft.delete': 'Supprimer',
-    'draft.submitted': 'pronostic déposé',
     'draft.untitled': 'Sans titre',
   },
 };
