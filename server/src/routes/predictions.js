@@ -44,6 +44,9 @@ function phaseIsLocked(phase) {
 /** L'événement accepte-t-il encore des pronostics ? */
 function eventGate(event) {
   if (event.status === 'DRAFT') return "Cet événement n'est pas encore ouvert.";
+  // « En cours » signifie que la compétition a commencé : les pronostics
+  // ferment, sans quoi on pourrait parier sur une battle déjà jouée.
+  if (event.status === 'LIVE') return 'La compétition a commencé, les pronostics sont fermés.';
   if (event.status === 'FINISHED') return 'Cet événement est terminé, les pronostics sont clos.';
   // Date butoir facultative : absente, seules les phases ferment.
   if (event.predictionsCloseAt && new Date(event.predictionsCloseAt) <= new Date()) {

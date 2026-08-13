@@ -125,6 +125,8 @@ function StructureAdmin() {
   const [form, setForm] = useState({ name: '', year: new Date().getFullYear(), location: '' });
   const [flash, run] = useFlash();
   const [confirmNode, askDelete] = useConfirmDelete();
+  // Le changement de statut en attente de confirmation.
+  const [closing, setClosing] = useState(null);
 
   const reload = async () => {
     const { events } = await api.get('/events');
@@ -209,12 +211,21 @@ function StructureAdmin() {
                     <select
                       value={ev.status}
                       aria-label={`Statut de ${ev.name}`}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        // Passer « en cours » ou « terminé » ferme les
+                        // pronostics : on ne le fait pas par inadvertance en
+                        // parcourant une liste déroulante.
+                        if (['LIVE', 'FINISHED'].includes(next) && !['LIVE', 'FINISHED'].includes(ev.status)) {
+                          setClosing({ event: ev, status: next });
+                          return;
+                        }
                         run(async () => {
-                          await api.patch(`/admin/events/${ev.id}`, { status: e.target.value });
+                          await api.patch(`/admin/events/${ev.id}`, { status: next });
                           await reload();
-                        }, 'Statut mis à jour.')
-                      }
+                          return 'Statut mis à jour.';
+                        });
+                      }}
                     >
                       <option value="DRAFT">Brouillon</option>
                       <option value="OPEN">Pronostics ouverts</option>

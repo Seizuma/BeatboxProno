@@ -11,24 +11,32 @@ import ArtistFigure from '../components/ArtistFigure.jsx';
  * les lectures de la foule en dessous.
  */
 export default function Leaderboard() {
-  const [events, setEvents] = useState([]);
+  const [filters, setFilters] = useState({ events: [], kinds: [] });
   const [scope, setScope] = useState('');
+  const [kind, setKind] = useState('');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const { t, number } = useI18n();
 
+  // Les périmètres disponibles viennent du serveur : tous les formats ayant
+  // déjà existé, y compris ceux d'événements passés.
   useEffect(() => {
-    api.get('/events').then(({ events }) => setEvents(events)).catch(() => { });
+    api.get('/stats/filters').then(setFilters).catch(() => { });
   }, []);
 
   useEffect(() => {
     setData(null);
     setError(null);
+    const params = new URLSearchParams();
+    if (scope) params.set('event', scope);
+    if (kind) params.set('kind', kind);
+    const qs = params.toString();
+
     api
-      .get(`/stats${scope ? `?event=${scope}` : ''}`)
+      .get(`/stats${qs ? `?${qs}` : ''}`)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [scope]);
+  }, [scope, kind]);
 
   return (
     <div className="stack" style={{ paddingTop: '2.5rem' }}>
@@ -37,14 +45,30 @@ export default function Leaderboard() {
           <p className="eyebrow">{t('leaderboard.eyebrow')}</p>
           <h1>{t('leaderboard.title')}</h1>
         </div>
-        <div>
-          <label htmlFor="scope">{t('leaderboard.scope')}</label>
-          <select id="scope" value={scope} onChange={(e) => setScope(e.target.value)}>
-            <option value="">{t('leaderboard.scope.all')}</option>
-            {events.map((ev) => (
-              <option key={ev.id} value={ev.slug}>{ev.name} {ev.year}</option>
-            ))}
-          </select>
+        <div className="row" style={{ gap: '0.6rem', alignItems: 'flex-end' }}>
+          <div className="field">
+            <label htmlFor="scope">{t('leaderboard.scope')}</label>
+            <select id="scope" value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="">{t('leaderboard.scope.all')}</option>
+              {filters.events.map((ev) => (
+                <option key={ev.slug} value={ev.slug}>{ev.name} {ev.year}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="kind">{t('leaderboard.kind')}</label>
+            <select id="kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="">{t('leaderboard.kind.all')}</option>
+              {filters.kinds.map((k) => (
+                <option key={k.kind} value={k.kind}>{t(`kind.${k.kind}`)}</option>
+              ))}
+            </select>
+          </div>
+          {(scope || kind) && (
+            <button className="btn btn--small btn--ghost" onClick={() => { setScope(''); setKind(''); }}>
+              {t('common.clear')}
+            </button>
+          )}
         </div>
       </header>
 

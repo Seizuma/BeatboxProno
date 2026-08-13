@@ -16,8 +16,25 @@ const battleKey = (phaseId, round, a, b) => `${phaseId}:${round}:${pairKey(a, b)
  *
  * GET /api/stats?event=gbb-2026
  */
+/** Les formats de catégorie ayant déjà existé, pour alimenter les filtres. */
+statsRouter.get('/stats/filters', async (_req, res) => {
+  const [events, kinds] = await Promise.all([
+    prisma.event.findMany({
+      where: { status: { not: 'DRAFT' } },
+      select: { slug: true, name: true, year: true },
+      orderBy: [{ year: 'desc' }, { name: 'asc' }],
+    }),
+    prisma.category.groupBy({ by: ['kind'], _count: { _all: true } }),
+  ]);
+
+  res.json({
+    events,
+    kinds: kinds.map((k) => ({ kind: k.kind, categories: k._count._all })),
+  });
+});
+
 statsRouter.get('/stats', async (req, res) => {
-  const { event: eventSlug } = req.query;
+  const { event: eventSlug, kind } = req.query;
 
   let eventId = null;
   if (eventSlug) {
@@ -26,7 +43,28 @@ statsRouter.get('/stats', async (req, res) => {
     eventId = ev.id;
   }
 
-  const predictionWhere = { submitted: true, ...(eventId ? { eventId } : {}) };
+  const KINDS = ['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'LEGACY'];
+  const categoryKind = KINDS.includes(String(kind)) ? String(kind) : null;
+
+  const predictionWhere = {
+    submitted: true,
+    ...(eventId ? { eventId } : {}),
+    // Filtrer par format : « qui lit le mieux les crews » n'est pas la même
+    // question que « qui marque le plus ».
+    ...(categoryKind ? { category: { kind: categoryKind } } : {}),
+  };
+
+  // Le même périmètre, exprimé côté phases.
+  const phaseScope = {
+    ...(eventId || categoryKind
+      ? {
+        category: {
+          ...(eventId ? { eventId } : {}),
+          ...(categoryKind ? { kind: categoryKind } : {}),
+        },
+      }
+      : {}),
+  };
 
   const [grouped, battles, picks, officialRanks, predictedRanks] = await Promise.all([
     prisma.prediction.groupBy({
@@ -42,7 +80,7 @@ statsRouter.get('/stats', async (req, res) => {
       where: {
         played: true,
         winnerId: { not: null },
-        ...(eventId ? { phase: { category: { eventId } } } : {}),
+        ...(Object.keys(phaseScope).length ? { phase: phaseScope } : {}),
       },
       select: { phaseId: true, round: true, contenderAId: true, contenderBId: true, winnerId: true },
     }),
@@ -63,7 +101,7 @@ statsRouter.get('/stats', async (req, res) => {
     // pronostiquées correspondantes : de quoi mesurer qui la foule a bien lu.
     prisma.phaseEntry.findMany({
       where: {
-        phase: { resolved: true, ...(eventId ? { category: { eventId } } : {}) },
+        phase: { resolved: true, ...phaseScope },
       },
       select: { phaseId: true, contenderId: true, rank: true },
     }),
@@ -193,7 +231,7 @@ statsRouter.get('/stats', async (req, res) => {
   ]);
 
   res.json({
-    scope: eventSlug ?? 'general',
+    scope: { event: eventSlug ?? null, kind: categoryKind },
     totals: {
       players: grouped.length,
       submitted: grouped.reduce((n, g) => n + g._count._all, 0),

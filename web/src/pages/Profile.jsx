@@ -92,7 +92,11 @@ export default function Profile() {
                   <tr>
                     <th>{t('artists.col.event')}</th>
                     <th>{t('artists.col.category')}</th>
-                    <th className="num">{t('leaderboard.col.points')}</th>
+                    {/* Les points ne veulent rien dire tant que l'événement
+                        n'est pas terminé : la colonne n'apparaît que là. */}
+                    {titleKey === 'profile.bucket.done' && (
+                      <th className="num">{t('leaderboard.col.points')}</th>
+                    )}
                     <th></th>
                   </tr>
                 </thead>
@@ -108,7 +112,9 @@ export default function Profile() {
                         )}
                       </td>
                       <td className="muted">{p.category.name}</td>
-                      <td className="num">{p.scoredAt ? p.points : '—'}</td>
+                      {titleKey === 'profile.bucket.done' && (
+                        <td className="num">{p.scoredAt ? p.points : '—'}</td>
+                      )}
                       <td className="num">
                         <span className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
                           <button className="btn btn--small" onClick={() => setReading(p.id)}>
