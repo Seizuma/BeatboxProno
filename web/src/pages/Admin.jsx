@@ -262,6 +262,48 @@ function StructureAdmin() {
       {selected && detail && (
         <EventStructure event={detail.event} onDone={refresh} run={run} askDelete={askDelete} />
       )}
+
+      {/* Fermer les pronostics engage : on le confirme plutôt que de le
+          déclencher au passage dans une liste déroulante. */}
+      {closing && (
+        <Modal
+          title="Fermer les pronostics ?"
+          subtitle={`${closing.event.name} ${closing.event.year}`}
+          onClose={() => setClosing(null)}
+          footer={
+            <>
+              <button
+                className="btn btn--danger"
+                onClick={() =>
+                  run(async () => {
+                    await api.patch(`/admin/events/${closing.event.id}`, {
+                      status: closing.status,
+                    });
+                    setClosing(null);
+                    await reload();
+                    return 'Pronostics fermés.';
+                  })
+                }
+              >
+                {closing.status === 'LIVE' ? 'Passer en cours' : 'Marquer terminé'}
+              </button>
+              <button className="btn" onClick={() => setClosing(null)}>Annuler</button>
+            </>
+          }
+        >
+          <p className="notice" style={{ margin: 0 }}>
+            Plus aucun pronostic ne pourra être déposé ni modifié sur cet événement.
+          </p>
+          <p style={{ margin: 0 }}>
+            {closing.status === 'LIVE'
+              ? 'La compétition commence : les brouillons des joueurs restent enregistrés, mais seuls les pronostics déjà déposés compteront.'
+              : "L'événement est terminé : le classement final est figé."}
+          </p>
+          <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+            Réversible : repasser l'événement en « Pronostics ouverts » les rouvre.
+          </p>
+        </Modal>
+      )}
     </div>
   );
 }

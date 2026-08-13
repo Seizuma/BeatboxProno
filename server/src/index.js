@@ -12,6 +12,20 @@ import { adminRouter } from './routes/admin.js';
 import { photoRouter } from './routes/photos.js';
 import { PHOTO_DIR, UPLOAD_DIR } from './lib/photos.js';
 
+/**
+ * Express 4 ne rattrape pas les erreurs des gestionnaires asynchrones : une
+ * exception dans un `async (req, res) => …` devient un rejet non géré, et Node
+ * 20 termine alors le processus. Le conteneur redémarre, la connexion est
+ * coupée en pleine requête, et le navigateur ne reçoit rien — d'où un
+ * « serveur injoignable » qui masque complètement l'erreur réelle.
+ *
+ * On journalise plutôt que de mourir : la requête en cours échoue proprement,
+ * les autres continuent d'être servies, et le message part dans les logs.
+ */
+process.on('unhandledRejection', (reason) => {
+  console.error('[api] rejet non géré :', reason);
+});
+
 const app = express();
 app.set('trust proxy', 1); // derrière Nginx Proxy Manager
 
@@ -66,7 +80,10 @@ app.use('/api/admin', adminRouter);
 
 app.use((req, res) => res.status(404).json({ error: `Route inconnue : ${req.path}` }));
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
+  // Le chemin et le détail dans les logs : sans eux, une erreur en production
+  // se réduit à « le serveur n'a pas pu traiter la demande ».
+  console.error(`[api] ${req.method} ${req.originalUrl} —`, err?.message ?? err);
   if (err?.name === 'ZodError') {
     return res.status(400).json({ error: 'Données invalides.', details: err.flatten() });
   }

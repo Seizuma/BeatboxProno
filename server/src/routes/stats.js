@@ -3,6 +3,13 @@ import { prisma } from '../lib/prisma.js';
 
 export const statsRouter = Router();
 
+/**
+ * Relaie les erreurs d'un gestionnaire asynchrone vers le middleware d'erreur.
+ * Sans cela, une exception devient un rejet non géré : le processus tombe et le
+ * navigateur voit une connexion coupée plutôt qu'un message.
+ */
+const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
 /** Une affiche est identifiée par sa paire de contenders, sans tenir compte du
  *  slot : c'est la même règle que le barème, où prédire Alem vs NaPoM paie même
  *  si l'officiel les fait se croiser dans l'autre moitié du tableau. */
@@ -17,7 +24,7 @@ const battleKey = (phaseId, round, a, b) => `${phaseId}:${round}:${pairKey(a, b)
  * GET /api/stats?event=gbb-2026
  */
 /** Les formats de catégorie ayant déjà existé, pour alimenter les filtres. */
-statsRouter.get('/stats/filters', async (_req, res) => {
+statsRouter.get('/stats/filters', guard(async (_req, res) => {
   const [events, kinds] = await Promise.all([
     prisma.event.findMany({
       where: { status: { not: 'DRAFT' } },
@@ -31,9 +38,9 @@ statsRouter.get('/stats/filters', async (_req, res) => {
     events,
     kinds: kinds.map((k) => ({ kind: k.kind, categories: k._count._all })),
   });
-});
+}));
 
-statsRouter.get('/stats', async (req, res) => {
+statsRouter.get('/stats', guard(async (req, res) => {
   const { event: eventSlug, kind } = req.query;
 
   let eventId = null;
@@ -243,4 +250,4 @@ statsRouter.get('/stats', async (req, res) => {
     players,
     readings: { wellRead, overRated, underRated, sampled: readings.length },
   });
-});
+}));
