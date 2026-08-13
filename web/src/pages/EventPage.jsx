@@ -144,6 +144,10 @@ export default function EventPage() {
   // enregistrement. Sans cela, une catégorie neuve restait grisée.
   const stateKey = currentId ?? `new:${activeId}`;
   const state = draft[stateKey] ?? { orders: {}, picks: {} };
+  // LIVE ferme les pronostics mais pas la consultation : les planches restent
+  // visibles en lecture seule, les boutons d'écriture sont désactivés.
+  // FINISHED masque en plus tout l'appareillage d'édition.
+  const eventLive = event.status === 'LIVE';
   const eventClosed = event.status === 'FINISHED';
 
   const update = (patch) =>
@@ -157,6 +161,7 @@ export default function EventPage() {
 
   const phaseLocked = (phase) =>
     eventClosed ||
+    eventLive ||
     deadlinePassed ||
     phase.resolved ||
     (phase.locksAt && new Date(phase.locksAt) <= new Date());
@@ -369,6 +374,7 @@ export default function EventPage() {
         {event.description && <p className="muted" style={{ maxWidth: '60ch' }}>{event.description}</p>}
 
         <p className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
+          {eventLive && <span className="tag tag--now">{t('status.LIVE')}</span>}
           <span className="tag">{t('event.judges', { n: event.judgeCount ?? 3 })}</span>
           <span className={`tag${deadlinePassed ? ' tag--done' : deadline ? ' tag--live' : ''}`}>
             {deadlinePassed
@@ -442,7 +448,9 @@ export default function EventPage() {
             <button
               className="btn btn--small"
               onClick={() => setNaming(suggestedName())}
-              disabled={saving || myVersions.length >= 10}
+              // En LIVE, relire ses brouillons reste possible (le sélecteur
+              // ci-dessus fonctionne) mais on n'en crée plus.
+              disabled={saving || eventLive || myVersions.length >= 10}
             >
               {t('draft.snapshot')}
             </button>
@@ -460,7 +468,7 @@ export default function EventPage() {
           state={state}
           update={update}
           phaseLocked={phaseLocked}
-          locked={eventClosed || !user}
+          locked={eventClosed || eventLive || !user}
         />
       )}
 
@@ -470,15 +478,15 @@ export default function EventPage() {
               chose : un seul bouton. Sur un brouillon, les deux gestes sont
               distincts — garder pour soi, ou faire compter. */}
           {activeVersion?.submitted ? (
-            <button className="btn btn--primary" onClick={save} disabled={saving}>
+            <button className="btn btn--primary" onClick={save} disabled={saving || eventLive}>
               {saving ? t('event.saving') : t('event.save.filed')}
             </button>
           ) : (
             <>
-              <button className="btn" onClick={save} disabled={saving}>
+              <button className="btn" onClick={save} disabled={saving || eventLive}>
                 {saving ? t('event.saving') : t('event.save.draft')}
               </button>
-              <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
+              <button className="btn btn--primary" onClick={submitCurrent} disabled={saving || eventLive}>
                 {saving ? t('event.saving') : t('event.save.submit')}
               </button>
             </>
@@ -489,7 +497,7 @@ export default function EventPage() {
             ? {t('help.open')}
           </button>
           <span className="faint" style={{ fontSize: '0.8rem', marginLeft: 'auto' }}>
-            {t('event.editable')}
+            {eventLive ? t('event.closed.live') : t('event.editable')}
           </span>
         </div>
       )}

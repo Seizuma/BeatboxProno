@@ -437,6 +437,13 @@ img {
   color: var(--g);
 }
 
+/* « En cours » : ça se joue maintenant, mais rien n'est ouvert aux pronos.
+   Le vert reste réservé à ce qui accepte encore des dépôts. */
+.tag--now {
+  border-color: var(--y);
+  color: var(--y);
+}
+
 .tag--done {
   border-color: var(--m);
   color: var(--m);

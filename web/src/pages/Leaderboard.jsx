@@ -21,7 +21,9 @@ export default function Leaderboard() {
   // Les périmètres disponibles viennent du serveur : tous les formats ayant
   // déjà existé, y compris ceux d'événements passés.
   useEffect(() => {
-    api.get('/stats/filters').then(setFilters).catch(() => { });
+    // « /scoreboard » et non « /stats » : les bloqueurs de pub coupent les
+    // requêtes contenant « /stats? » avant même qu'elles partent.
+    api.get('/scoreboard/filters').then(setFilters).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export default function Leaderboard() {
     const qs = params.toString();
 
     api
-      .get(`/stats${qs ? `?${qs}` : ''}`)
+      .get(`/scoreboard${qs ? `?${qs}` : ''}`)
       .then(setData)
       .catch((e) => setError(e.message));
   }, [scope, kind]);

@@ -9,7 +9,9 @@ import ScoringHelp from '../components/ScoringHelp.jsx';
 const STATUS_CLASS = {
   DRAFT: '',
   OPEN: 'tag--live',
-  LIVE: 'tag--live',
+  // Jaune, pas vert : « en cours » signifie que ça se joue en ce moment,
+  // pas que les pronostics sont ouverts.
+  LIVE: 'tag--now',
   FINISHED: 'tag--done',
 };
 
@@ -99,9 +101,15 @@ export default function Home() {
                   </span>
                 </span>
                 <span className="rail__aside">
-                  <span className="btn btn--primary btn--small">
-                    {t('home.cta.predict', { event: `${ev.name} ${ev.year}` })}
-                  </span>
+                  {/* En LIVE, on ne pronostique plus : le bouton invite à
+                      suivre, pas à parier. */}
+                  {ev.status === 'LIVE' ? (
+                    <span className="btn btn--small">{t('home.cta.browse')}</span>
+                  ) : (
+                    <span className="btn btn--primary btn--small">
+                      {t('home.cta.predict', { event: `${ev.name} ${ev.year}` })}
+                    </span>
+                  )}
                   <p className="silkscreen" style={{ margin: '0.5rem 0 0' }}>
                     {ev.location ?? t('home.venue.tbc')} · {ev._count.predictions} {t('home.predictions.short')}
                   </p>

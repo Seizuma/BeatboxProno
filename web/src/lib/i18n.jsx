@@ -86,6 +86,7 @@ const DICT = {
     'event.saved.draft': 'Draft saved.',
     'event.saved.submit': 'Prediction filed.',
     'event.editable': 'Editable until the phase closes.',
+    'event.closed.live': 'The competition has started — predictions are closed. Browsing stays open.',
     'event.phase.resolved': 'Result known',
     'event.phase.closed': 'Closed',
 
@@ -300,6 +301,7 @@ const DICT = {
     'event.saved.draft': 'Brouillon enregistré.',
     'event.saved.submit': 'Pronostic déposé.',
     'event.editable': 'Modifiable tant que la phase n’est pas fermée.',
+    'event.closed.live': 'La compétition a commencé — les pronostics sont fermés. La consultation reste ouverte.',
     'event.phase.resolved': 'Résultat connu',
     'event.phase.closed': 'Fermée',
 

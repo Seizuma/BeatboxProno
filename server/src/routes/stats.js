@@ -24,7 +24,12 @@ const battleKey = (phaseId, round, a, b) => `${phaseId}:${round}:${pairKey(a, b)
  * GET /api/stats?event=gbb-2026
  */
 /** Les formats de catégorie ayant déjà existé, pour alimenter les filtres. */
-statsRouter.get('/stats/filters', guard(async (_req, res) => {
+// « /scoreboard » et non « /stats » : les listes EasyPrivacy des bloqueurs de
+// pub (uBlock, AdGuard, Brave…) coupent côté navigateur toute requête dont
+// l'URL contient « /stats? ». Le filtre par événement devenait « serveur
+// injoignable » sans jamais atteindre l'API — d'où l'absence totale de logs.
+// L'ancien chemin reste en alias pour les onglets ouverts pendant un déploiement.
+statsRouter.get(['/scoreboard/filters', '/stats/filters'], guard(async (_req, res) => {
   const [events, kinds] = await Promise.all([
     prisma.event.findMany({
       where: { status: { not: 'DRAFT' } },
@@ -40,7 +45,7 @@ statsRouter.get('/stats/filters', guard(async (_req, res) => {
   });
 }));
 
-statsRouter.get('/stats', guard(async (req, res) => {
+statsRouter.get(['/scoreboard', '/stats'], guard(async (req, res) => {
   const { event: eventSlug, kind } = req.query;
 
   let eventId = null;
