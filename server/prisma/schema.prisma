@@ -334,15 +334,13 @@ enum PostboxKind {
   BUG        // quelque chose qui ne marche pas
 }
 
-/**
- * Un message envoyé depuis l'accueil, relayé sur Discord dans le salon qui
- * correspond à sa catégorie.
- *
- * On garde la ligne en base même après relais : c'est elle qui porte le quota
- * mensuel — dix par personne et par mois civil, comptés à la requête plutôt que
- * dans un compteur à part, qui se désynchroniserait au premier échec d'envoi.
- * Et si le webhook tombe, on sait exactement ce qui n'est jamais parti.
- */
+// Un message envoyé depuis l'accueil, relayé sur Discord dans le salon qui
+// correspond à sa catégorie.
+//
+// On garde la ligne en base même après relais : c'est elle qui porte le quota
+// mensuel — dix par personne et par mois civil, comptés à la requête plutôt que
+// dans un compteur à part, qui se désynchroniserait au premier échec d'envoi.
+// Et si le webhook tombe, on sait exactement ce qui n'est jamais parti.
 model PostboxMessage {
   id        String      @id @default(cuid())
   userId    String
