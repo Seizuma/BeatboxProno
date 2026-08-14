@@ -30,6 +30,7 @@ model User {
   lastSeenAt  DateTime @default(now())
 
   predictions Prediction[]
+  postbox     PostboxMessage[]
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -324,4 +325,36 @@ model PredictedPodium {
   contender    Contender  @relation(fields: [contenderId], references: [id], onDelete: Cascade)
 
   @@unique([predictionId, rank])
+}
+
+// --- Boîte à idées -------------------------------------------------------------
+
+enum PostboxKind {
+  SUGGESTION // une compète à ajouter, une idée de fonctionnalité
+  BUG        // quelque chose qui ne marche pas
+}
+
+/**
+ * Un message envoyé depuis l'accueil, relayé sur Discord dans le salon qui
+ * correspond à sa catégorie.
+ *
+ * On garde la ligne en base même après relais : c'est elle qui porte le quota
+ * mensuel — dix par personne et par mois civil, comptés à la requête plutôt que
+ * dans un compteur à part, qui se désynchroniserait au premier échec d'envoi.
+ * Et si le webhook tombe, on sait exactement ce qui n'est jamais parti.
+ */
+model PostboxMessage {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      PostboxKind
+  body      String
+  createdAt DateTime    @default(now())
+  // Faux tant que Discord n'a pas accusé réception : le message compte quand
+  // même dans le quota, sinon un webhook en panne ouvrirait la porte au spam.
+  delivered Boolean     @default(false)
+  failure   String?     // la raison du refus, pour savoir quoi rejouer
+
+  @@index([userId, createdAt])
+  @@index([delivered, createdAt])
 }

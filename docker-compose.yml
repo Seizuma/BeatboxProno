@@ -40,6 +40,11 @@ services:
       DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
       BOOTSTRAP_ADMIN_DISCORD_IDS: ${BOOTSTRAP_ADMIN_DISCORD_IDS}
+      # Boîte à idées : un webhook par salon. Créés dans Discord via
+      # « Paramètres du salon → Intégrations → Webhooks ». Ce sont des secrets :
+      # qui possède l'URL peut écrire dans le salon.
+      DISCORD_WEBHOOK_SUGGESTIONS: ${DISCORD_WEBHOOK_SUGGESTIONS}
+      DISCORD_WEBHOOK_BUGS: ${DISCORD_WEBHOOK_BUGS}
       ARTIST_PHOTOS_DIR: /media/artists
       ARTIST_UPLOAD_DIR: /media/uploads
 

@@ -437,16 +437,17 @@ img {
   color: var(--g);
 }
 
-/* « En cours » : ça se joue maintenant, mais rien n'est ouvert aux pronos.
-   Le vert reste réservé à ce qui accepte encore des dépôts. */
-.tag--now {
-  border-color: var(--y);
-  color: var(--y);
-}
-
 .tag--done {
   border-color: var(--m);
   color: var(--m);
+}
+
+/* « En cours » : la compète a commencé, donc les pronostics sont FERMÉS. Le
+   vert de .tag--live disait l'inverse — on prend le jaune, qui signale sans
+   inviter à cliquer. */
+.tag--now {
+  border-color: var(--y);
+  color: var(--y);
 }
 
 .notice {
@@ -725,6 +726,81 @@ td.num {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* ---------------------------------------------------------------------------
+   Boîte à idées
+
+   Vit dans une modale (.modal__* est dans board.css), qui empile déjà ses
+   enfants avec un écart d'1rem : les blocs ci-dessous n'ajoutent donc aucune
+   marge verticale de leur côté.
+   --------------------------------------------------------------------------- */
+
+.postbox__kinds {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.postbox__kinds legend {
+  padding: 0;
+  margin-bottom: 0.4rem;
+}
+
+/* Deux boutons plutôt qu'un menu déroulant : avec seulement deux choix, les
+   deux doivent être lisibles sans ouvrir quoi que ce soit. */
+.postbox__kind {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: #000;
+  color: var(--ink);
+  border: var(--border-w) solid var(--line);
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+}
+
+.postbox__kind:hover:not(:disabled) {
+  border-color: var(--c);
+}
+
+.postbox__kind:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.postbox__kind--on {
+  border-color: var(--y);
+  color: var(--y);
+}
+
+.postbox__kind-name {
+  display: block;
+  font-family: var(--font-data);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.postbox__kind-hint {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  margin-top: 0.15rem;
+}
+
+.postbox__kind--on .postbox__kind-hint {
+  color: var(--ink);
+}
+
+/* Redimensionnable en hauteur seulement : l'élargir déborderait de la modale. */
+#postbox-body {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.45;
 }
 
 @media (prefers-reduced-motion: reduce) {

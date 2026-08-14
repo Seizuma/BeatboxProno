@@ -10,6 +10,8 @@ import { statsRouter } from './routes/stats.js';
 import { predictionRouter } from './routes/predictions.js';
 import { adminRouter } from './routes/admin.js';
 import { photoRouter } from './routes/photos.js';
+import { postboxRouter } from './routes/postbox.js';
+import { missingWebhooks } from './lib/discord.js';
 import { PHOTO_DIR, UPLOAD_DIR } from './lib/photos.js';
 
 /**
@@ -75,6 +77,7 @@ app.use('/api/auth', authRouter);
 app.use('/api', publicRouter);
 app.use('/api', statsRouter);
 app.use('/api/predictions', predictionRouter);
+app.use('/api/postbox', postboxRouter);
 app.use('/api/admin/photos', photoRouter);
 app.use('/api/admin', adminRouter);
 
@@ -102,4 +105,13 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`API prête sur :${port}`);
   console.log(`Photos artistes lues dans ${PHOTO_DIR}`);
   console.log(`Photos téléversées dans ${UPLOAD_DIR}`);
+
+  // Un webhook oublié ne se voit qu'au premier message envoyé, c'est-à-dire
+  // trop tard. On le dit au démarrage.
+  const missing = missingWebhooks();
+  if (missing.length) {
+    console.warn(
+      `[postbox] webhook Discord absent pour : ${missing.join(', ')} — ces messages seront enregistrés mais pas relayés.`
+    );
+  }
 });

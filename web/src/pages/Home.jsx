@@ -5,12 +5,13 @@ import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
+import PostboxDialog from '../components/PostboxDialog.jsx';
 
 const STATUS_CLASS = {
   DRAFT: '',
   OPEN: 'tag--live',
-  // Jaune, pas vert : « en cours » signifie que ça se joue en ce moment,
-  // pas que les pronostics sont ouverts.
+  // Jaune, pas vert : « en cours » signifie que la compétition a commencé et
+  // que les pronostics sont FERMÉS — le vert laissait croire l'inverse.
   LIVE: 'tag--now',
   FINISHED: 'tag--done',
 };
@@ -24,6 +25,7 @@ const STATUS_CLASS = {
 export default function Home() {
   const [events, setEvents] = useState(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [postboxOpen, setPostboxOpen] = useState(false);
   const [error, setError] = useState(null);
   const [params] = useSearchParams();
   const { user } = useSession();
@@ -60,6 +62,14 @@ export default function Home() {
               <button className="btn btn--small" onClick={() => setHelpOpen(true)}>
                 ? {t('help.open')}
               </button>
+              {/* Réservé aux comptes connectés : sans identité Discord, pas de
+                  quota possible et pas de réponse possible non plus. Le bouton
+                  n'est donc pas grisé, il n'existe simplement pas. */}
+              {user && (
+                <button className="btn btn--small" onClick={() => setPostboxOpen(true)}>
+                  {t('postbox.open')}
+                </button>
+              )}
               {total > 0 && (
                 <span className="readout">
                   <span className="readout__value">{number(total)}</span>
@@ -101,10 +111,13 @@ export default function Home() {
                   </span>
                 </span>
                 <span className="rail__aside">
-                  {/* En LIVE, on ne pronostique plus : le bouton invite à
-                      suivre, pas à parier. */}
+                  {/* En cours : on peut suivre l'événement et relire ses
+                      pronos, mais plus en déposer — le bouton dit « voir »,
+                      pas « jouer ». */}
                   {ev.status === 'LIVE' ? (
-                    <span className="btn btn--small">{t('home.cta.browse')}</span>
+                    <span className="btn btn--small">
+                      {t('home.cta.browse')}
+                    </span>
                   ) : (
                     <span className="btn btn--primary btn--small">
                       {t('home.cta.predict', { event: `${ev.name} ${ev.year}` })}
@@ -164,6 +177,7 @@ export default function Home() {
       {events?.length === 0 && <p className="empty">{t('home.events.empty')}</p>}
 
       {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
+      {postboxOpen && user && <PostboxDialog onClose={() => setPostboxOpen(false)} />}
     </>
   );
 }
