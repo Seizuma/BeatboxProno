@@ -62,14 +62,6 @@ export default function Home() {
               <button className="btn btn--small" onClick={() => setHelpOpen(true)}>
                 ? {t('help.open')}
               </button>
-              {/* Réservé aux comptes connectés : sans identité Discord, pas de
-                  quota possible et pas de réponse possible non plus. Le bouton
-                  n'est donc pas grisé, il n'existe simplement pas. */}
-              {user && (
-                <button className="btn btn--small" onClick={() => setPostboxOpen(true)}>
-                  {t('postbox.open')}
-                </button>
-              )}
               {total > 0 && (
                 <span className="readout">
                   <span className="readout__value">{number(total)}</span>
@@ -175,6 +167,25 @@ export default function Home() {
       )}
 
       {events?.length === 0 && <p className="empty">{t('home.events.empty')}</p>}
+
+      {/* Réservé aux comptes connectés : sans identité Discord, pas de quota
+          possible et pas de réponse possible non plus. Le bouton n'est donc pas
+          grisé, il n'existe simplement pas.
+
+          Flottant plutôt que dans le bandeau : écrire au site n'est pas une
+          étape du parcours, c'est un recours. Il doit rester atteignable sans
+          jamais disputer la place à « Faire mes pronos ». */}
+      {user && !postboxOpen && (
+        <button
+          className="fab"
+          onClick={() => setPostboxOpen(true)}
+          aria-haspopup="dialog"
+          title={t('postbox.open')}
+        >
+          <span className="fab__mark" aria-hidden="true">✉</span>
+          <span className="fab__label">{t('postbox.open')}</span>
+        </button>
+      )}
 
       {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
       {postboxOpen && user && <PostboxDialog onClose={() => setPostboxOpen(false)} />}
