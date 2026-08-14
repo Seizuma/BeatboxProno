@@ -9,6 +9,60 @@ const visible = (user) =>
     ? {}
     : { status: { not: 'DRAFT' } };
 
+/** L'ordre des tours d'un tableau, pour retrouver celui qui ouvre la phase. */
+const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
+
+/**
+ * Ce qu'une phase montre aux joueurs tant qu'elle n'est pas PUBLIÉE.
+ *
+ * L'administration promet que tant qu'on n'a pas cliqué « Publier », « rien
+ * n'est encore visible des joueurs ». Ce n'était pas vrai : la route renvoyait
+ * les affiches officielles telles quelles, vainqueurs compris. Pire, les
+ * affiches des tours aval sont composées automatiquement à partir des
+ * résultats saisis — enregistrer les quarts remplissait les demi-finales
+ * officielles, et cette composition partait au joueur. Elle lui révélait le
+ * résultat réel ET gelait son arbre : son propre vainqueur de quart ne montait
+ * plus en demie.
+ *
+ * On ne laisse donc passer que le squelette, plus le tirage du premier tour —
+ * lui est public, il est connu avant que rien ne se joue.
+ */
+function redactPhase(phase) {
+  if (phase.resolved) return phase;
+
+  const rounds = new Set((phase.battles ?? []).map((b) => b.round));
+  const firstRound = MAIN_LINE.find((r) => rounds.has(r)) ?? null;
+
+  return {
+    ...phase,
+    // Un classement saisi mais pas publié est un résultat comme un autre.
+    entries: (phase.entries ?? []).map((e) => ({ ...e, rank: null, qualified: false })),
+    battles: (phase.battles ?? []).map((b) => ({
+      id: b.id,
+      phaseId: b.phaseId,
+      round: b.round,
+      slot: b.slot,
+      label: b.label,
+      // Les affiches Legacy sont composées à la main, sans tour amont : elles
+      // ne trahissent aucun résultat, on les garde.
+      contenderAId: b.round === firstRound || b.round === 'LEGACY' ? b.contenderAId : null,
+      contenderBId: b.round === firstRound || b.round === 'LEGACY' ? b.contenderBId : null,
+      winnerId: null,
+      scoreA: null,
+      scoreB: null,
+      played: false,
+    })),
+  };
+}
+
+/** Applique la redaction à toutes les phases d'un événement. */
+function redactEvent(event) {
+  for (const category of event.categories ?? []) {
+    category.phases = (category.phases ?? []).map(redactPhase);
+  }
+  return event;
+}
+
 const categoryInclude = {
   contenders: {
     include: { artists: { include: { artist: true } } },
@@ -63,7 +117,7 @@ publicRouter.get('/events/:slug', async (req, res) => {
     category.contenders = category.contenders.map(withName);
   }
 
-  res.json({ event, myPredictions });
+  res.json({ event: redactEvent(event), myPredictions });
 });
 
 /**

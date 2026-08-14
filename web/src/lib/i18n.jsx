@@ -122,6 +122,8 @@ const DICT = {
     'bracket.score': 'Score',
     'bracket.score.none': 'No call',
     'bracket.clear': 'Clear',
+    'bracket.clearAll': 'Clear the bracket',
+    'bracket.called': '{n} calls made',
 
     'leaderboard.eyebrow': 'Points, accuracy and what the crowd got wrong',
     'leaderboard.title': 'Leaderboard',
@@ -337,6 +339,8 @@ const DICT = {
     'bracket.score': 'Score',
     'bracket.score.none': 'Sans avis',
     'bracket.clear': 'Effacer',
+    'bracket.clearAll': 'Tout effacer',
+    'bracket.called': '{n} affiches tranchées',
 
     'leaderboard.eyebrow': 'Points, réussite, et ce que la foule a mal lu',
     'leaderboard.title': 'Classement',

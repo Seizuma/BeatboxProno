@@ -1453,6 +1453,7 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
         locked={false}
         seedFromRanking={seedFromRanking}
         event={event}
+        authoritative
       />
     </div>
   );

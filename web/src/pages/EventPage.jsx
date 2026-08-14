@@ -144,11 +144,11 @@ export default function EventPage() {
   // enregistrement. Sans cela, une catégorie neuve restait grisée.
   const stateKey = currentId ?? `new:${activeId}`;
   const state = draft[stateKey] ?? { orders: {}, picks: {} };
-  // LIVE ferme les pronostics mais pas la consultation : les planches restent
-  // visibles en lecture seule, les boutons d'écriture sont désactivés.
-  // FINISHED masque en plus tout l'appareillage d'édition.
-  const eventLive = event.status === 'LIVE';
   const eventClosed = event.status === 'FINISHED';
+  // En cours : la compétition a démarré, les pronostics sont figés. On peut
+  // encore tout consulter — versions comprises — mais plus rien modifier.
+  const eventLive = event.status === 'LIVE';
+  const readOnly = eventClosed || eventLive;
 
   const update = (patch) =>
     setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
@@ -161,7 +161,6 @@ export default function EventPage() {
 
   const phaseLocked = (phase) =>
     eventClosed ||
-    eventLive ||
     deadlinePassed ||
     phase.resolved ||
     (phase.locksAt && new Date(phase.locksAt) <= new Date());
@@ -374,10 +373,11 @@ export default function EventPage() {
         {event.description && <p className="muted" style={{ maxWidth: '60ch' }}>{event.description}</p>}
 
         <p className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
-          {eventLive && <span className="tag tag--now">{t('status.LIVE')}</span>}
           <span className="tag">{t('event.judges', { n: event.judgeCount ?? 3 })}</span>
-          <span className={`tag${deadlinePassed ? ' tag--done' : deadline ? ' tag--live' : ''}`}>
-            {deadlinePassed
+          {/* Un événement en cours vaut date butoir dépassée : sans cela, un
+              LIVE sans date affichait « pas encore de date de fermeture ». */}
+          <span className={`tag${(deadlinePassed || eventLive) ? ' tag--done' : deadline ? ' tag--live' : ''}`}>
+            {(deadlinePassed || eventLive)
               ? t('event.deadline.passed')
               : deadline
                 ? t('event.deadline', { date: date(deadline, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) })
@@ -415,6 +415,14 @@ export default function EventPage() {
 
       {!user && <p className="notice">{t('event.signin')}</p>}
 
+      {/* Jaune comme le tag « en cours » : c'est une information, pas une
+          erreur. */}
+      {eventLive && (
+        <p className="notice" style={{ borderColor: 'var(--y)', color: 'var(--y)' }}>
+          {t('event.closed.live')}
+        </p>
+      )}
+
       {/* Toujours visible, même avec une seule version : sans elle, on ne
           savait pas si « Enregistrer » écrivait dans un brouillon ou dans le
           pronostic déposé — et l'on cherchait ensuite un brouillon qui
@@ -445,12 +453,13 @@ export default function EventPage() {
           </span>
 
           <span className="versions__actions">
+            {/* Le sélecteur reste actif en LIVE — relire ses brouillons pendant
+                la compète fait partie du jeu — mais la copie créerait une
+                version, donc elle se ferme avec le reste. */}
             <button
               className="btn btn--small"
               onClick={() => setNaming(suggestedName())}
-              // En LIVE, relire ses brouillons reste possible (le sélecteur
-              // ci-dessus fonctionne) mais on n'en crée plus.
-              disabled={saving || eventLive || myVersions.length >= 10}
+              disabled={saving || myVersions.length >= 10 || eventLive}
             >
               {t('draft.snapshot')}
             </button>
@@ -468,25 +477,25 @@ export default function EventPage() {
           state={state}
           update={update}
           phaseLocked={phaseLocked}
-          locked={eventClosed || eventLive || !user}
+          locked={readOnly || !user}
         />
       )}
 
-      {user && !eventClosed && (
+      {user && !readOnly && (
         <div className="actionbar">
           {/* Sur la version déjà déposée, enregistrer et redéposer font la même
               chose : un seul bouton. Sur un brouillon, les deux gestes sont
               distincts — garder pour soi, ou faire compter. */}
           {activeVersion?.submitted ? (
-            <button className="btn btn--primary" onClick={save} disabled={saving || eventLive}>
+            <button className="btn btn--primary" onClick={save} disabled={saving}>
               {saving ? t('event.saving') : t('event.save.filed')}
             </button>
           ) : (
             <>
-              <button className="btn" onClick={save} disabled={saving || eventLive}>
+              <button className="btn" onClick={save} disabled={saving}>
                 {saving ? t('event.saving') : t('event.save.draft')}
               </button>
-              <button className="btn btn--primary" onClick={submitCurrent} disabled={saving || eventLive}>
+              <button className="btn btn--primary" onClick={submitCurrent} disabled={saving}>
                 {saving ? t('event.saving') : t('event.save.submit')}
               </button>
             </>
@@ -497,7 +506,7 @@ export default function EventPage() {
             ? {t('help.open')}
           </button>
           <span className="faint" style={{ fontSize: '0.8rem', marginLeft: 'auto' }}>
-            {eventLive ? t('event.closed.live') : t('event.editable')}
+            {t('event.editable')}
           </span>
         </div>
       )}
@@ -582,7 +591,19 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
   const qualifyingPhase = [...category.phases]
     .filter((p) => RANKING_TYPES.includes(p.type))
     .pop();
-  const seedFromRanking = qualifyingPhase ? state.orders[qualifyingPhase.id] ?? [] : [];
+
+  // Tant que la qualification n'est pas jouée, c'est le classement pronostiqué
+  // qui compose le tableau. Une fois la phase PUBLIÉE, c'est le classement
+  // officiel : l'arbre suit la réalité, pas un pronostic devenu sans objet — et
+  // il reste composable même si l'on a effacé son propre classement.
+  const officialSeed = (qualifyingPhase?.resolved ? qualifyingPhase.entries ?? [] : [])
+    .filter((e) => e.rank != null && (qualifyingPhase.qualifierCount ? e.qualified : true))
+    .slice()
+    .sort((a, b) => a.rank - b.rank)
+    .map((e) => e.contenderId);
+
+  const mySeed = qualifyingPhase ? state.orders[qualifyingPhase.id] ?? [] : [];
+  const seedFromRanking = officialSeed.length ? officialSeed : mySeed;
 
   return (
     <div className="stack" style={{ gap: '1.5rem' }}>
