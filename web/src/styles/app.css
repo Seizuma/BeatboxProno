@@ -728,6 +728,30 @@ td.num {
   letter-spacing: 0.06em;
 }
 
+/* La signature du pied de page. Le cœur garde ses couleurs d'origine : le reste
+   du site n'a que des aplats purs, un emoji recoloré au filtre serait plus
+   voyant que le cœur lui-même. */
+.footer__sign {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.footer__heart {
+  font-size: 0.95em;
+  line-height: 1;
+  margin: 0 0.15rem;
+}
+
+.footer__sign a {
+  color: var(--m);
+}
+
+.footer__sign a:hover,
+.footer__sign a:focus-visible {
+  color: var(--y);
+}
+
 /* ---------------------------------------------------------------------------
    Pastille flottante
 
