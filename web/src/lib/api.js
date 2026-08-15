@@ -56,6 +56,8 @@ export const api = {
   upload: (p, file) => request('POST', p, file),
   put: (p, b) => request('PUT', p, b),
   patch: (p, b) => request('PATCH', p, b),
-  del: (p) => request('DELETE', p),
+  // Un corps sur DELETE : la suppression de compte demande la saisie du pseudo,
+  // qui n'a pas sa place dans l'URL — elle finirait dans les journaux d'accès.
+  del: (p, b) => request('DELETE', p, b),
   loginUrl: `${BASE}/auth/discord`,
 };

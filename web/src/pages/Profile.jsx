@@ -5,10 +5,11 @@ import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
 import PredictionView from '../components/PredictionView.jsx';
+import DeleteAccount from '../components/DeleteAccount.jsx';
 
 export default function Profile() {
   const { id } = useParams();
-  const { user, loading } = useSession();
+  const { user, loading, refresh } = useSession();
   const { t, date } = useI18n();
   const targetId = id ?? user?.id;
 
@@ -18,6 +19,7 @@ export default function Profile() {
   // le serveur n'expose que les pronostics déposés.
   const [reading, setReading] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     if (!targetId) return;
@@ -142,7 +144,46 @@ export default function Profile() {
         </section>
       ))}
 
+      {/* La zone dangereuse, sur son propre profil seulement. En bas de page et
+          bordée de rouge : on ne la croise pas, on va la chercher. */}
+      {own && user && (
+        <section className="stack" style={{ gap: '0.6rem', marginTop: '2rem' }}>
+          <h2>{t('account.zone')}</h2>
+          <div
+            className="panel stack"
+            style={{ gap: '0.7rem', borderColor: 'var(--r)' }}
+          >
+            <p style={{ margin: 0 }}>{t('account.zone.lede')}</p>
+            <span className="row" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <a className="btn btn--small" href={`${import.meta.env.VITE_API_URL ?? '/api'}/account/export`} download>
+                {t('account.export')}
+              </a>
+              <button className="btn btn--small btn--danger" onClick={() => setClosing(true)}>
+                {t('account.delete.open')}
+              </button>
+              <Link className="btn btn--small btn--ghost" to="/privacy">
+                {t('footer.privacy')}
+              </Link>
+            </span>
+          </div>
+        </section>
+      )}
+
       {reading && <PredictionView predictionId={reading} onClose={() => setReading(null)} />}
+
+      {closing && (
+        <DeleteAccount
+          onClose={() => setClosing(false)}
+          onDeleted={async () => {
+            // La session est déjà invalidée côté serveur ; on rafraîchit pour
+            // que l'en-tête cesse d'afficher un compte qui n'existe plus, puis
+            // on quitte le profil — dont l'adresse ne mène plus nulle part.
+            setClosing(false);
+            await refresh();
+            window.location.assign('/?deleted=1');
+          }}
+        />
+      )}
     </div>
   );
 }

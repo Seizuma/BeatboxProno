@@ -264,6 +264,82 @@ const DICT = {
       'You have used all your messages for this month. The counter resets on the 1st.',
     'postbox.sent.title': 'Message sent',
     'postbox.sent.body': 'It landed on the Discord. Thanks — we read everything.',
+
+    /* --- Compte et confidentialité ---------------------------------------- */
+    'footer.privacy': 'Privacy policy',
+    'account.zone': 'Your account',
+    'account.zone.lede':
+      'Take your data with you, or close your account. Both are immediate and need no justification.',
+    'account.export': 'Download my data',
+    'account.export.hint': 'A JSON file with everything the site holds about you.',
+    'account.member': 'Member since {date}.',
+    'account.delete.open': 'Delete my account',
+    'account.delete.title': 'Delete your account',
+    'account.delete.warning': 'This is permanent. Nothing can be recovered afterwards.',
+    'account.delete.owner':
+      'The owner account cannot be deleted — nobody would be able to administer the site. Hand the role over first.',
+    'account.delete.type': 'Type {name} to confirm',
+    'account.delete.confirm': 'Delete permanently',
+    'account.delete.working': 'Deleting…',
+    'account.line.predictions': 'predictions',
+    'account.line.points': 'points',
+    'account.line.postbox': 'messages sent',
+    'account.line.visits': 'days visited',
+    'account.delete.what.predictions': 'Every prediction you made, draft or filed, with its scoring detail.',
+    'account.delete.what.leaderboard': 'Your points and your place on the leaderboard.',
+    'account.delete.what.postbox': 'The messages you sent us — though copies already relayed to Discord stay there.',
+    'account.delete.what.discord': 'Your Discord name, avatar and identifier.',
+    'account.delete.what.again': 'You can sign in again afterwards, but you will start from an empty account.',
+
+    'privacy.eyebrow': 'What the site keeps',
+    'privacy.title': 'Privacy',
+    'privacy.updated': 'Last updated August 2026.',
+    'privacy.lede':
+      'BeatboxPredictions is a small independent site. It keeps as little as it can, and only what it needs to work. This page says what, why, and how to make it disappear.',
+    'privacy.collect.title': 'What is collected',
+    'privacy.collect.lede': 'Nothing until you sign in with Discord. From then on:',
+    'privacy.collect.discord': 'Your Discord identifier, username and avatar',
+    'privacy.collect.discord.why':
+      'This is your account. The identifier links you to your predictions; the name and avatar appear on the leaderboard. Nothing else is read from your Discord profile — not your email, not your servers, not your messages.',
+    'privacy.collect.predictions': 'Your predictions',
+    'privacy.collect.predictions.why':
+      'Rankings, brackets, podiums, and the points they earn. This is the whole point of the site.',
+    'privacy.collect.visits': 'The days you visited',
+    'privacy.collect.visits.why':
+      'One line per person per day, so the site owner can see whether anyone is using it. Not which pages, not for how long, not from where — just that you came that day.',
+    'privacy.collect.postbox': 'The messages you send through the postbox',
+    'privacy.collect.postbox.why':
+      'Suggestions and bug reports, with your name attached so we can answer. They are relayed to a private Discord channel.',
+    'privacy.collect.not':
+      'No IP address is stored, no tracking cookie, no advertising, no analytics service, no profiling, and nothing is ever sold.',
+    'privacy.public.title': 'What other people see',
+    'privacy.public.lede':
+      'Your Discord name, your avatar, your points and your filed predictions are public — a leaderboard nobody can read is not a leaderboard.',
+    'privacy.public.hidden':
+      'Your drafts stay yours alone until you file them. Your messages through the postbox are never public.',
+    'privacy.cookies.title': 'Cookies',
+    'privacy.cookies.lede':
+      'One cookie holds your session so you stay signed in. It is technical, required, and readable only by the server. Your language and theme preferences stay in your browser and never reach us.',
+    'privacy.cookies.none': 'There is no other cookie, and no consent banner because there is nothing to consent to.',
+    'privacy.third.title': 'Who else is involved',
+    'privacy.third.discord':
+      'Discord, for signing in and for relaying postbox messages. Their own privacy policy applies to what happens on their side.',
+    'privacy.third.host':
+      'The site runs on a server rented in France. The database sits on that same server and is not shared.',
+    'privacy.third.none': 'Nobody else. No advertiser, no analytics provider, no data broker.',
+    'privacy.keep.title': 'How long it is kept',
+    'privacy.keep.lede':
+      'As long as your account exists. Delete it and everything goes with it, immediately. Visit records older than a year serve no purpose and are removed.',
+    'privacy.rights.title': 'Your rights',
+    'privacy.rights.lede': 'No form to fill, no email to send. Everything is a button on your profile:',
+    'privacy.rights.export': 'Download everything the site holds about you, as a JSON file.',
+    'privacy.rights.delete': 'Delete your account and all its data, immediately and permanently.',
+    'privacy.rights.fix': 'Your name and avatar refresh from Discord each time you sign in — change them there.',
+    'privacy.rights.cta': 'Go to my profile',
+    'privacy.rights.signin': 'Sign in with Discord to reach these controls.',
+    'privacy.contact.title': 'A question',
+    'privacy.contact.lede':
+      'Use the postbox on the home page, or reach the site owner on the Discord. There is one person behind this site, and they read everything.',
   },
 
   fr: {
@@ -505,6 +581,82 @@ const DICT = {
       'Vous avez utilisé vos messages du mois. Le compteur repart le 1er.',
     'postbox.sent.title': 'Message envoyé',
     'postbox.sent.body': 'Il est arrivé sur le Discord. Merci — on lit tout.',
+
+    /* --- Compte et confidentialité ---------------------------------------- */
+    'footer.privacy': 'Politique de confidentialité',
+    'account.zone': 'Votre compte',
+    'account.zone.lede':
+      'Emportez vos données, ou fermez votre compte. Les deux sont immédiats et ne demandent aucune justification.',
+    'account.export': 'Télécharger mes données',
+    'account.export.hint': 'Un fichier JSON avec tout ce que le site détient sur vous.',
+    'account.member': 'Membre depuis {date}.',
+    'account.delete.open': 'Supprimer mon compte',
+    'account.delete.title': 'Supprimer votre compte',
+    'account.delete.warning': 'Cette action est définitive. Rien ne pourra être récupéré ensuite.',
+    'account.delete.owner':
+      'Le compte propriétaire ne peut pas être supprimé — plus personne ne pourrait administrer le site. Transmettez d’abord le rôle.',
+    'account.delete.type': 'Saisissez {name} pour confirmer',
+    'account.delete.confirm': 'Supprimer définitivement',
+    'account.delete.working': 'Suppression…',
+    'account.line.predictions': 'pronostics',
+    'account.line.points': 'points',
+    'account.line.postbox': 'messages envoyés',
+    'account.line.visits': 'jours de visite',
+    'account.delete.what.predictions': 'Tous vos pronostics, brouillons comme déposés, avec le détail de leur calcul.',
+    'account.delete.what.leaderboard': 'Vos points et votre place au classement.',
+    'account.delete.what.postbox': 'Les messages que vous nous avez envoyés — les copies déjà relayées sur Discord y restent.',
+    'account.delete.what.discord': 'Votre pseudo Discord, votre avatar et votre identifiant.',
+    'account.delete.what.again': 'Vous pourrez vous reconnecter ensuite, mais vous repartirez d’un compte vide.',
+
+    'privacy.eyebrow': 'Ce que le site retient',
+    'privacy.title': 'Confidentialité',
+    'privacy.updated': 'Dernière mise à jour : août 2026.',
+    'privacy.lede':
+      'BeatboxPredictions est un petit site indépendant. Il garde le moins possible, et uniquement ce dont il a besoin pour fonctionner. Cette page dit quoi, pourquoi, et comment tout faire disparaître.',
+    'privacy.collect.title': 'Ce qui est collecté',
+    'privacy.collect.lede': 'Rien tant que vous ne vous connectez pas avec Discord. Ensuite :',
+    'privacy.collect.discord': 'Votre identifiant Discord, votre pseudo et votre avatar',
+    'privacy.collect.discord.why':
+      'C’est votre compte. L’identifiant vous relie à vos pronostics ; le pseudo et l’avatar apparaissent au classement. Rien d’autre n’est lu de votre profil Discord — ni votre adresse électronique, ni vos serveurs, ni vos messages.',
+    'privacy.collect.predictions': 'Vos pronostics',
+    'privacy.collect.predictions.why':
+      'Classements, arbres de battles, podiums, et les points qu’ils rapportent. C’est la raison d’être du site.',
+    'privacy.collect.visits': 'Les jours où vous êtes venu',
+    'privacy.collect.visits.why':
+      'Une ligne par personne et par jour, pour que le site sache si quelqu’un l’utilise. Ni quelles pages, ni combien de temps, ni d’où — seulement que vous êtes venu ce jour-là.',
+    'privacy.collect.postbox': 'Les messages envoyés par la boîte à idées',
+    'privacy.collect.postbox.why':
+      'Suggestions et rapports de bug, avec votre nom pour pouvoir vous répondre. Ils sont relayés dans un salon Discord privé.',
+    'privacy.collect.not':
+      'Aucune adresse IP conservée, aucun cookie de pistage, aucune publicité, aucun service de mesure d’audience, aucun profilage, et rien n’est jamais vendu.',
+    'privacy.public.title': 'Ce que les autres voient',
+    'privacy.public.lede':
+      'Votre pseudo Discord, votre avatar, vos points et vos pronostics déposés sont publics — un classement que personne ne peut lire n’est pas un classement.',
+    'privacy.public.hidden':
+      'Vos brouillons ne regardent que vous tant que vous ne les avez pas déposés. Vos messages par la boîte à idées ne sont jamais publics.',
+    'privacy.cookies.title': 'Cookies',
+    'privacy.cookies.lede':
+      'Un cookie porte votre session, pour vous garder connecté. Il est technique, nécessaire, et lisible du serveur seul. Votre langue et votre thème restent dans votre navigateur et ne nous parviennent jamais.',
+    'privacy.cookies.none': 'Il n’y a aucun autre cookie, et donc aucune bannière : il n’y a rien à accepter.',
+    'privacy.third.title': 'Qui d’autre intervient',
+    'privacy.third.discord':
+      'Discord, pour la connexion et pour relayer les messages de la boîte à idées. Leur propre politique s’applique à ce qui se passe chez eux.',
+    'privacy.third.host':
+      'Le site tourne sur un serveur loué en France. La base de données est sur ce même serveur et n’est partagée avec personne.',
+    'privacy.third.none': 'Personne d’autre. Aucun annonceur, aucun service de mesure, aucun courtier en données.',
+    'privacy.keep.title': 'Combien de temps',
+    'privacy.keep.lede':
+      'Tant que votre compte existe. Supprimez-le et tout part avec, immédiatement. Les traces de visite de plus d’un an ne servent à rien et sont effacées.',
+    'privacy.rights.title': 'Vos droits',
+    'privacy.rights.lede': 'Aucun formulaire, aucun courriel à envoyer. Tout est un bouton sur votre profil :',
+    'privacy.rights.export': 'Télécharger tout ce que le site détient sur vous, en fichier JSON.',
+    'privacy.rights.delete': 'Supprimer votre compte et toutes ses données, immédiatement et définitivement.',
+    'privacy.rights.fix': 'Votre pseudo et votre avatar se rafraîchissent depuis Discord à chaque connexion — modifiez-les là-bas.',
+    'privacy.rights.cta': 'Aller à mon profil',
+    'privacy.rights.signin': 'Connectez-vous avec Discord pour accéder à ces commandes.',
+    'privacy.contact.title': 'Une question',
+    'privacy.contact.lede':
+      'Passez par la boîte à idées de la page d’accueil, ou joignez le responsable du site sur le Discord. Il y a une seule personne derrière ce site, et elle lit tout.',
   },
 };
 

@@ -76,6 +76,12 @@ export default function Layout() {
         <p className="silkscreen" style={{ margin: '0.5rem 0 0' }}>
           beatboxpredictions — {t('footer.tagline')}
         </p>
+        {/* La politique de confidentialité se trouve depuis n'importe quelle
+            page : c'est le seul endroit où l'on explique ce que le site retient
+            et comment le faire effacer. */}
+        <p className="silkscreen" style={{ margin: '0.4rem 0 0' }}>
+          <Link to="/privacy">{t('footer.privacy')}</Link>
+        </p>
       </footer>
     </>
   );

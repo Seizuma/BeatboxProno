@@ -11,6 +11,7 @@ import { predictionRouter } from './routes/predictions.js';
 import { adminRouter } from './routes/admin.js';
 import { photoRouter } from './routes/photos.js';
 import { postboxRouter } from './routes/postbox.js';
+import { accountRouter } from './routes/account.js';
 import { missingWebhooks } from './lib/discord.js';
 import { touch } from './lib/presence.js';
 import { scheduleDailyReport } from './jobs/daily-report.js';
@@ -92,6 +93,7 @@ app.use('/api', publicRouter);
 app.use('/api', statsRouter);
 app.use('/api/predictions', predictionRouter);
 app.use('/api/postbox', postboxRouter);
+app.use('/api/account', accountRouter);
 app.use('/api/admin/photos', photoRouter);
 app.use('/api/admin', adminRouter);
 

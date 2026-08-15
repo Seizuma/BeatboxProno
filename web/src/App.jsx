@@ -6,6 +6,7 @@ import Leaderboard from './pages/Leaderboard.jsx';
 import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
 import { ArtistList, ArtistPage } from './pages/Artists.jsx';
+import Privacy from './pages/Privacy.jsx';
 import { useI18n } from './lib/i18n.jsx';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="me" element={<Profile />} />
         <Route path="players/:id" element={<Profile />} />
         <Route path="admin" element={<Admin />} />
+        <Route path="privacy" element={<Privacy />} />
 
         {/* Les anciennes adresses françaises restent valides. */}
         <Route path="evenements/:slug" element={<Moved to="/events" />} />
@@ -31,6 +33,7 @@ export default function App() {
         <Route path="artistes/:slug" element={<Moved to="/artists" />} />
         <Route path="moi" element={<Navigate to="/me" replace />} />
         <Route path="profil/:id" element={<Moved to="/players" param="id" />} />
+        <Route path="confidentialite" element={<Navigate to="/privacy" replace />} />
 
         <Route path="*" element={<NotFound />} />
       </Route>
