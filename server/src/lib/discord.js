@@ -42,7 +42,7 @@ export function missingWebhooks() {
  * partir d'un formulaire, le rapport quotidien à partir de la base, mais tous
  * deux partent par le même tuyau, avec les mêmes garde-fous.
  */
-export async function postToDiscord(kind, { title, description, imageUrl, footer }) {
+export async function postToDiscord(kind, { title, description, fields, imageUrl, footer }) {
     const url = WEBHOOKS[kind]?.();
     if (!url) return { ok: false, error: `Aucun webhook configuré pour ${kind}.` };
 
@@ -55,6 +55,10 @@ export async function postToDiscord(kind, { title, description, imageUrl, footer
                 description: description.slice(0, 4000),
                 color: COLORS[kind],
                 timestamp: new Date().toISOString(),
+                // Discord aligne les champs en ligne par trois, avec un filet de
+                // séparation : les chiffres saillants se lisent d'un coup d'œil au lieu
+                // d'être noyés dans un paragraphe. Vingt-cinq maximum.
+                ...(fields?.length ? { fields: fields.slice(0, 25) } : {}),
                 ...(imageUrl ? { image: { url: imageUrl } } : {}),
                 ...(footer ? { footer: { text: footer } } : {}),
             },

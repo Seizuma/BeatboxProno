@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { buildReport } from '../lib/report.js';
 import { postToDiscord } from '../lib/discord.js';
-import { TZ } from '../lib/presence.js';
+import { TZ, localDay } from '../lib/presence.js';
 
 /**
  * Le rapport de fréquentation quotidien, posté dans le salon privé.
@@ -22,28 +22,24 @@ const DAYS = Number(process.env.REPORT_DAYS ?? 30);
 // dessus, assez tard pour que la journée précédente soit close.
 const SCHEDULE = process.env.REPORT_CRON ?? '5 8 * * *';
 
-export async function runDailyReport({ dryRun = false, days = DAYS } = {}) {
-    const { text, imageUrl, day, uniques, report } = await buildReport(days);
-
-    const footer = `${days} jours · ${uniques} personnes distinctes · ${TZ}`;
+export async function runDailyReport({ dryRun = false, days = DAYS, endsOn = null } = {}) {
+    const built = await buildReport(days, endsOn);
+    const { title, description, fields, imageUrl, footer, uniques, report } = built;
 
     if (dryRun) {
-        console.log(`— rapport du ${day} —\n`);
-        console.log(text);
-        console.log(`\n${footer}`);
+        console.log(`— ${title} —\n`);
+        for (const f of fields) console.log(`${f.name} : ${f.value.replace(/\*\*/g, '').replace(/\n/g, ' ')}`);
+        console.log();
+        console.log(description);
+        console.log(`\n${footer} · ${uniques} personnes distinctes`);
         if (imageUrl) console.log(`\nGraphique : ${imageUrl}`);
         return { ok: true, dryRun: true, report };
     }
 
-    const sent = await postToDiscord('REPORT', {
-        title: `Fréquentation — ${day}`,
-        description: text,
-        imageUrl,
-        footer,
-    });
+    const sent = await postToDiscord('REPORT', { title, description, fields, imageUrl, footer });
 
     if (!sent.ok) console.error('[rapport] envoi échoué :', sent.error);
-    else console.log(`[rapport] ${day} posté.`);
+    else console.log(`[rapport] ${report.end} posté.`);
 
     return sent;
 }
@@ -70,12 +66,17 @@ export function scheduleDailyReport() {
 // Exécution directe, pour tester ou rattraper un envoi :
 //   node src/jobs/daily-report.js --dry-run
 //   node src/jobs/daily-report.js --days=7
+//   node src/jobs/daily-report.js --today        (inclure la journée en cours)
+//   node src/jobs/daily-report.js --day=2026-08-10  (rattraper une journée)
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
     const args = process.argv.slice(2);
-    const daysArg = args.find((a) => a.startsWith('--days='));
+    const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
     runDailyReport({
         dryRun: args.includes('--dry-run'),
-        days: daysArg ? Number(daysArg.split('=')[1]) : DAYS,
+        days: value('days') ? Number(value('days')) : DAYS,
+        // Sans précision la période s'arrête hier ; --today la prolonge jusqu'à
+        // maintenant, ce qui n'a de sens que pour un essai en cours de journée.
+        endsOn: value('day') ?? (args.includes('--today') ? localDay() : null),
     })
         .then(() => process.exit(0))
         .catch((err) => {

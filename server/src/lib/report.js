@@ -10,14 +10,14 @@ import { TZ, lastDays, localDay } from './presence.js';
  */
 
 /** Regroupe une table par journée locale, sur une colonne d'horodatage. */
-async function countByDay(table, column, from) {
+async function countByDay(table, column, from, extra = '') {
     // Le regroupement se fait en SQL et dans le bon fuseau : ramener toutes les
     // lignes pour les compter en JavaScript coûterait de plus en plus cher chaque
     // mois, pour un résultat identique.
     const rows = await prisma.$queryRawUnsafe(
         `SELECT to_char("${column}" AT TIME ZONE $1, 'YYYY-MM-DD') AS day, count(*)::int AS n
      FROM "${table}"
-     WHERE "${column}" >= $2
+     WHERE "${column}" >= $2 ${extra}
      GROUP BY 1`,
         TZ,
         from
@@ -26,30 +26,33 @@ async function countByDay(table, column, from) {
 }
 
 /**
- * Rassemble les chiffres des `days` derniers jours.
+ * Rassemble les chiffres des `days` journées se terminant à `endsOn` incluse.
  *
- * @returns {Promise<{days: string[], rows: object[], totals: object, previous: object}>}
+ * Par défaut la période s'arrête HIER, pas aujourd'hui. Un rapport envoyé à
+ * 8 h 05 sur la journée en cours ne parlerait que de ses cinq premières
+ * minutes : la première version annonçait « Hier — 0 personne sur le site »
+ * alors qu'elle lisait la journée qui commençait à peine.
  */
-export async function collect(days = 30) {
-    const range = lastDays(days);
-    // Une marge d'un jour : la conversion de fuseau peut décaler une ligne du
-    // premier jour, autant la capturer et la filtrer ensuite.
-    const from = new Date(Date.now() - (days + 1) * 86_400_000);
+export async function collect(days = 30, endsOn = null) {
+    const end = endsOn ?? localDay(new Date(Date.now() - 86_400_000));
+    // On construit la fenêtre à reculons depuis la fin voulue.
+    const endMs = new Date(`${end}T12:00:00Z`).getTime();
+    const range = lastDays(days, new Date(endMs));
+    const from = new Date(endMs - (days + 1) * 86_400_000);
 
     const [visits, newUsers, predictions, submitted] = await Promise.all([
         prisma.visit
-            .groupBy({ by: ['day'], where: { day: { gte: range[0] } }, _count: { _all: true } })
+            .groupBy({
+                by: ['day'],
+                where: { day: { gte: range[0], lte: end } },
+                _count: { _all: true },
+            })
             .then((rows) => new Map(rows.map((r) => [r.day, r._count._all]))),
         countByDay('User', 'createdAt', from),
         countByDay('Prediction', 'createdAt', from),
         // Un pronostic déposé n'est pas un brouillon : c'est lui qui compte comme
         // participation réelle.
-        prisma.$queryRawUnsafe(
-            `SELECT to_char("createdAt" AT TIME ZONE $1, 'YYYY-MM-DD') AS day, count(*)::int AS n
-       FROM "Prediction" WHERE "submitted" = true AND "createdAt" >= $2 GROUP BY 1`,
-            TZ,
-            from
-        ).then((rows) => new Map(rows.map((r) => [r.day, Number(r.n)]))),
+        countByDay('Prediction', 'createdAt', from, 'AND "submitted" = true'),
     ]);
 
     const rows = range.map((day) => {
@@ -59,7 +62,7 @@ export async function collect(days = 30) {
             day,
             active,
             fresh,
-            // Un compte créé aujourd'hui est forcément actif aujourd'hui : le
+            // Un compte créé ce jour-là est forcément actif ce jour-là : le
             // soustraire évite de compter la même personne dans les deux colonnes.
             returning: Math.max(0, active - fresh),
             predictions: predictions.get(day) ?? 0,
@@ -73,18 +76,15 @@ export async function collect(days = 30) {
     return {
         days: range,
         rows,
-        today: rows[rows.length - 1],
-        yesterday: rows[rows.length - 2] ?? null,
+        end,
+        last: rows[rows.length - 1],
+        previous: rows[rows.length - 2] ?? null,
         totals: {
             active: sum(rows, 'active'),
             fresh: sum(rows, 'fresh'),
             returning: sum(rows, 'returning'),
             predictions: sum(rows, 'predictions'),
             submitted: sum(rows, 'submitted'),
-            // Le total des actifs additionne les journées : quelqu'un qui vient tous
-            // les jours y figure trente fois. Les personnes distinctes se comptent à
-            // part, sinon on croit avoir trente joueurs quand on en a un assidu.
-            uniques: 0,
         },
         // Les deux moitiés de la période, pour dire si ça monte ou si ça descend.
         firstHalf: rows.slice(0, half),
@@ -93,52 +93,78 @@ export async function collect(days = 30) {
 }
 
 /** Le nombre de personnes distinctes vues sur la période. */
-export async function uniqueVisitors(since) {
+export async function uniqueVisitors(since, until) {
     const rows = await prisma.visit.findMany({
-        where: { day: { gte: since } },
+        where: { day: { gte: since, lte: until } },
         select: { userId: true },
         distinct: ['userId'],
     });
     return rows.length;
 }
 
+/* ---------------------------------------------------------------------------
+   Le graphique
+   --------------------------------------------------------------------------- */
+
 const BLOCKS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
 /**
- * Une série en barres verticales d'un caractère de large.
+ * Un vrai graphique en barres, sur plusieurs lignes.
  *
- * Discord ne sait pas afficher un graphique, mais il affiche des blocs à
- * chasse fixe : trente colonnes tiennent sur une ligne, y compris sur
- * téléphone, et se lisent d'un coup d'œil. C'est aussi la seule solution qui ne
- * dépende d'aucun service extérieur — un rapport interne qui cesse d'arriver
- * parce qu'une API tierce est tombée ne sert à rien.
+ * La première version tenait sur une ligne, une colonne par jour : avec un
+ * maximum à 1, tout ce qui n'était pas zéro devenait un bloc plein de la même
+ * hauteur, et la courbe ne disait plus rien. Sur plusieurs lignes, les
+ * proportions redeviennent lisibles, et les blocs partiels donnent la précision
+ * entre deux niveaux.
+ *
+ * La hauteur s'adapte au maximum : trois lignes suffisent quand on compte en
+ * unités, huit deviennent utiles quand on compte en dizaines. Réserver huit
+ * lignes pour un maximum de 1 ne dessinerait que du vide.
  */
-function sparkline(values) {
+export function barChart(values, { height = 6 } = {}) {
     const max = Math.max(...values, 1);
-    return values
-        .map((v) => (v === 0 ? '·' : BLOCKS[Math.min(BLOCKS.length - 1, Math.ceil((v / max) * BLOCKS.length) - 1)]))
-        .join('');
+    const h = Math.min(height, Math.max(3, max));
+    const width = String(max).length;
+    const lines = [];
+
+    for (let r = h; r >= 1; r -= 1) {
+        const cells = values.map((v) => {
+            const scaled = (v / max) * h;
+            if (scaled >= r) return '█';
+            if (scaled > r - 1) {
+                return BLOCKS[Math.min(7, Math.max(0, Math.ceil((scaled - (r - 1)) * 8) - 1))];
+            }
+            return ' ';
+        });
+        // Seule la ligne du haut porte sa graduation : répéter le maximum à chaque
+        // ligne encombrerait sans rien apprendre.
+        lines.push(`${(r === h ? String(max) : '').padStart(width)} │${cells.join('')}`);
+    }
+    lines.push(`${'0'.padStart(width)} └${'─'.repeat(values.length)}`);
+    return { lines, gutter: width + 2 };
 }
 
 const dm = (day) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 
-/** Le graphique sur toute la période, en bloc de code. */
+/** Les deux graphiques et leur axe des dates, dans un seul bloc de code. */
 export function chart(report) {
     const { rows } = report;
-    const line = (label, field) => {
-        const values = rows.map((r) => r[field]);
-        const max = Math.max(...values);
-        return `${label.padEnd(9)} ${sparkline(values)}  max ${String(max).padStart(3)}`;
-    };
+    const active = barChart(rows.map((r) => r.active));
+    const preds = barChart(rows.map((r) => r.predictions));
 
-    const width = rows.length;
-    const axis = `${' '.repeat(10)}${dm(rows[0].day)}${' '.repeat(Math.max(1, width - 10))}${dm(rows[rows.length - 1].day)}`;
+    const gutter = Math.max(active.gutter, preds.gutter);
+    const pad = (block) => block.lines.map((l) => ' '.repeat(gutter - block.gutter) + l);
+
+    const span = Math.max(1, rows.length - 10);
+    const axis = `${' '.repeat(gutter)}${dm(rows[0].day)}${' '.repeat(span)}${dm(rows[rows.length - 1].day)}`;
 
     return [
         '```',
-        line('Actifs', 'active'),
-        line('Nouveaux', 'fresh'),
-        line('Pronos', 'predictions'),
+        'ACTIFS',
+        ...pad(active),
+        '',
+        'PRONOS CRÉÉS',
+        ...pad(preds),
         axis,
         '```',
     ].join('\n');
@@ -160,68 +186,112 @@ export function table(report) {
     return ['```', head, '─'.repeat(head.length), ...lines, '```'].join('\n');
 }
 
-/** Une flèche et un écart, pour lire la tendance sans faire le calcul. */
-function trend(current, previous, unit = '') {
-    if (previous === 0) return current === 0 ? '→ stable' : `↑ +${current}${unit}`;
-    const pct = Math.round(((current - previous) / previous) * 100);
-    if (pct === 0) return '→ stable';
-    return `${pct > 0 ? '↑' : '↓'} ${pct > 0 ? '+' : ''}${pct} %`;
+/* ---------------------------------------------------------------------------
+   La rédaction
+   --------------------------------------------------------------------------- */
+
+/**
+ * L'écart entre deux valeurs.
+ *
+ * En pourcentage seulement au-dessus de cinq : sur de petits nombres, un
+ * passage de 1 à 0 donnait « ↓ -100 % », ce qui dramatise une variation d'une
+ * seule personne. En dessous, l'écart brut est plus honnête.
+ */
+function delta(current, previous) {
+    const diff = current - previous;
+    if (diff === 0) return '→ stable';
+    const sign = diff > 0 ? '+' : '';
+    if (previous < 5) return `${diff > 0 ? '↑' : '↓'} ${sign}${diff}`;
+    return `${diff > 0 ? '↑' : '↓'} ${sign}${Math.round((diff / previous) * 100)} %`;
+}
+
+const plural = (n, word, suffix = 's') => `${n} ${word}${n > 1 ? suffix : ''}`;
+
+/** Le jour, écrit en toutes lettres : « vendredi 15 août ». */
+function longDay(day) {
+    return new Intl.DateTimeFormat('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        timeZone: 'UTC',
+    }).format(new Date(`${day}T12:00:00Z`));
 }
 
 /**
- * Le rapport écrit.
+ * Les champs de l'encart Discord.
  *
- * Un rapport quotidien qu'on ne lit pas est un rapport inutile : celui-ci dit
- * d'abord ce qui s'est passé hier, puis seulement ensuite la tendance du mois.
+ * Discord aligne trois champs en ligne : les chiffres saillants se lisent d'un
+ * coup d'œil, sans les extraire d'un paragraphe. Le texte peut alors se
+ * concentrer sur ce que les chiffres ne disent pas.
  */
-export function prose(report, uniques) {
-    const { today, yesterday, rows, firstHalf, secondHalf } = report;
-    const avg = (list, f) => (list.length ? list.reduce((n, r) => n + r[f], 0) / list.length : 0);
-    const days = rows.length;
+export function fields(report, uniques) {
+    const { last, previous, totals, rows } = report;
+    const avg = (totals.active / rows.length).toFixed(1);
 
+    const withDelta = (value, field) =>
+        previous ? `**${value}**\n${delta(last[field], previous[field])}` : `**${value}**`;
+
+    return [
+        { name: 'Actifs', value: withDelta(last.active, 'active'), inline: true },
+        { name: 'Nouveaux comptes', value: withDelta(last.fresh, 'fresh'), inline: true },
+        { name: 'Pronostics créés', value: withDelta(last.predictions, 'predictions'), inline: true },
+        {
+            name: `Sur ${rows.length} jours`,
+            value: `**${uniques}** personne${uniques > 1 ? 's' : ''} distincte${uniques > 1 ? 's' : ''}`,
+            inline: true,
+        },
+        { name: 'Inscriptions', value: `**${totals.fresh}**`, inline: true },
+        {
+            name: 'Pronostics',
+            value: `**${totals.predictions}** dont ${totals.submitted} déposé${totals.submitted > 1 ? 's' : ''}`,
+            inline: true,
+        },
+        { name: 'Moyenne quotidienne', value: `**${avg}** actifs par jour`, inline: true },
+    ];
+}
+
+/**
+ * Le commentaire.
+ *
+ * Court et volontairement : les chiffres sont déjà dans les champs au-dessus.
+ * Ce qui reste ici, c'est ce qu'un tableau ne dit pas — la tendance, et le fait
+ * que la courbe de fréquentation soit encore en train de se constituer.
+ */
+export function prose(report) {
+    const { last, rows, firstHalf, secondHalf, totals } = report;
     const lines = [];
 
-    lines.push(
-        `**Hier** — ${today.active} personne${today.active > 1 ? 's' : ''} sur le site, ` +
-        `dont ${today.fresh} nouveau${today.fresh > 1 ? 'x' : ''} et ${today.returning} de retour. ` +
-        `${today.predictions} pronostic${today.predictions > 1 ? 's' : ''} créé${today.predictions > 1 ? 's' : ''}` +
-        (today.submitted ? `, dont ${today.submitted} déposé${today.submitted > 1 ? 's' : ''}.` : '.')
-    );
-
-    if (yesterday) {
+    if (totals.active === 0 && totals.predictions === 0) {
+        lines.push('Aucune activité sur la période.');
+    } else if (last.active === 0 && last.predictions === 0) {
+        lines.push('Journée sans visite ni pronostic.');
+    } else {
         lines.push(
-            `**Par rapport à la veille** — fréquentation ${trend(today.active, yesterday.active)}, ` +
-            `pronostics ${trend(today.predictions, yesterday.predictions)}.`
+            `Journée à ${plural(last.active, 'personne')} sur le site` +
+            (last.returning ? `, dont ${plural(last.returning, 'de retour', '')}` : '') +
+            (last.predictions ? `, pour ${plural(last.predictions, 'pronostic')}.` : '.')
         );
     }
 
-    lines.push(
-        `**Sur ${days} jours** — ${uniques} personne${uniques > 1 ? 's' : ''} distincte${uniques > 1 ? 's' : ''} ` +
-        `${report.totals.fresh > 0 ? `(${report.totals.fresh} inscription${report.totals.fresh > 1 ? 's' : ''})` : '(aucune inscription)'}, ` +
-        `${report.totals.predictions} pronostic${report.totals.predictions > 1 ? 's' : ''} créé${report.totals.predictions > 1 ? 's' : ''}, ` +
-        `${report.totals.submitted} déposé${report.totals.submitted > 1 ? 's' : ''}. ` +
-        `Moyenne de ${avg(rows, 'active').toFixed(1)} actifs par jour.`
-    );
-
-    const a = avg(firstHalf, 'active');
-    const b = avg(secondHalf, 'active');
-    lines.push(
-        `**Tendance** — la seconde quinzaine tourne à ${b.toFixed(1)} actifs par jour ` +
-        `contre ${a.toFixed(1)} pour la première : ${trend(Math.round(b * 10), Math.round(a * 10))}.`
-    );
+    const avg = (list) => (list.length ? list.reduce((n, r) => n + r.active, 0) / list.length : 0);
+    const a = avg(firstHalf);
+    const b = avg(secondHalf);
+    if (a > 0 || b > 0) {
+        const half = Math.round(rows.length / 2);
+        lines.push(
+            `Les ${half} derniers jours tournent à **${b.toFixed(1)}** actifs par jour, ` +
+            `contre ${a.toFixed(1)} sur les ${rows.length - half} précédents.`
+        );
+    }
 
     // Le chiffre qui compte vraiment : un site qu'on visite sans y jouer a un
-    // problème que la courbe de fréquentation seule ne montre pas.
-    const idle = report.totals.active > 0
-        ? Math.round((1 - report.totals.predictions / report.totals.active) * 100)
-        : 0;
-    if (report.totals.active >= 10) {
-        lines.push(
-            `**Conversion** — ${100 - idle} pronostic${100 - idle > 1 ? 's' : ''} pour 100 visites de la période.`
-        );
+    // problème que la seule courbe de fréquentation ne montre pas.
+    if (totals.active >= 20) {
+        const ratio = Math.round((totals.predictions / totals.active) * 100);
+        lines.push(`**${ratio}** pronostics pour 100 visites sur la période.`);
     }
 
-    return lines.join('\n\n');
+    return lines.join('\n');
 }
 
 /**
@@ -249,8 +319,8 @@ export function chartUrl(report) {
         options: {
             plugins: { legend: { labels: { color: '#e8e8e8' } } },
             scales: {
-                x: { stacked: false, ticks: { color: '#8a8a8a' }, grid: { color: '#3a3a3a' } },
-                y: { beginAtZero: true, ticks: { color: '#8a8a8a' }, grid: { color: '#3a3a3a' } },
+                x: { ticks: { color: '#8a8a8a' }, grid: { color: '#3a3a3a' } },
+                y: { beginAtZero: true, ticks: { color: '#8a8a8a', precision: 0 }, grid: { color: '#3a3a3a' } },
             },
         },
     };
@@ -264,14 +334,17 @@ export function chartUrl(report) {
 }
 
 /** Assemble le message complet destiné au salon privé. */
-export async function buildReport(days = 30) {
-    const report = await collect(days);
-    const uniques = await uniqueVisitors(report.days[0]);
+export async function buildReport(days = 30, endsOn = null) {
+    const report = await collect(days, endsOn);
+    const uniques = await uniqueVisitors(report.days[0], report.end);
+
     return {
         report,
         uniques,
-        day: localDay(),
-        text: [prose(report, uniques), chart(report), table(report)].join('\n'),
+        title: `Fréquentation — ${longDay(report.end)}`,
+        description: [prose(report), chart(report), table(report)].join('\n'),
+        fields: fields(report, uniques),
         imageUrl: chartUrl(report),
+        footer: `${days} jours jusqu'au ${dm(report.end)} · ${TZ}`,
     };
 }
