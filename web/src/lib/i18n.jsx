@@ -267,6 +267,11 @@ const DICT = {
 
     /* --- Compte et confidentialité ---------------------------------------- */
     'footer.privacy': 'Privacy policy',
+    // Découpé autour du cœur : celui-ci est un élément à part, pour rester
+    // annonçable aux lecteurs d'écran. Les espaces comptent.
+    'footer.madeby.before': 'Made with ',
+    'footer.madeby.heart': 'love',
+    'footer.madeby.after': ' by ',
     'account.zone': 'Your account',
     'account.zone.lede':
       'Take your data with you, or close your account. Both are immediate and need no justification.',
@@ -584,6 +589,11 @@ const DICT = {
 
     /* --- Compte et confidentialité ---------------------------------------- */
     'footer.privacy': 'Politique de confidentialité',
+    // Découpé autour du cœur : celui-ci est un élément à part, pour rester
+    // annonçable aux lecteurs d'écran. Les espaces comptent.
+    'footer.madeby.before': 'Fait avec ',
+    'footer.madeby.heart': 'amour',
+    'footer.madeby.after': ' par ',
     'account.zone': 'Votre compte',
     'account.zone.lede':
       'Emportez vos données, ou fermez votre compte. Les deux sont immédiats et ne demandent aucune justification.',

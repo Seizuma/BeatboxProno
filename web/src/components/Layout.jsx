@@ -82,6 +82,20 @@ export default function Layout() {
         <p className="silkscreen" style={{ margin: '0.4rem 0 0' }}>
           <Link to="/privacy">{t('footer.privacy')}</Link>
         </p>
+        {/* La signature. Le cœur est un emoji, donc invisible aux lecteurs
+            d'écran s'il reste nu : `role="img"` et son libellé le rendent
+            audible. `rel="noopener"` est nécessaire sur toute cible _blank —
+            sans lui la page ouverte garde une prise sur celle-ci. */}
+        <p className="silkscreen footer__sign" style={{ margin: '0.9rem 0 0' }}>
+          {t('footer.madeby.before')}
+          <span className="footer__heart" role="img" aria-label={t('footer.madeby.heart')}>
+            ❤️
+          </span>
+          {t('footer.madeby.after')}
+          <a href="https://seizuma.com" target="_blank" rel="noopener noreferrer">
+            Seizuma
+          </a>
+        </p>
       </footer>
     </>
   );
