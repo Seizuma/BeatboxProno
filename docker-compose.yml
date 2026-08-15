@@ -65,7 +65,12 @@ services:
       - api
     ports:
       # Nginx Proxy Manager tape ici. Rien d'autre n'est exposé sur le VPS.
-      - "127.0.0.1:8080:80"
+      #
+      # 8080 est déjà pris par beatbox-games-prod-client, qui écoute sur
+      # 0.0.0.0 : même en se limitant à la boucle locale, la réservation entre
+      # en collision. 8081 est libre, et WEB_PORT permet d'en changer sans
+      # toucher au fichier le jour où il ne le sera plus.
+      - "127.0.0.1:${WEB_PORT:-8083}:80"
 
 volumes:
   db-data:
