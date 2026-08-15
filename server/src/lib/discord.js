@@ -13,16 +13,19 @@
 const WEBHOOKS = {
     SUGGESTION: () => process.env.DISCORD_WEBHOOK_SUGGESTIONS,
     BUG: () => process.env.DISCORD_WEBHOOK_BUGS,
+    REPORT: () => process.env.DISCORD_WEBHOOK_REPORTS,
 };
 
 const COLORS = {
     SUGGESTION: 0x00d648, // vert
     BUG: 0xff2222, // rouge
+    REPORT: 0x00e8e8, // cyan
 };
 
 const TITLES = {
     SUGGESTION: "Suggestion d'événement",
     BUG: 'Rapport de bug',
+    REPORT: 'Rapport de fréquentation',
 };
 
 /** Les webhooks manquants, pour le prévenir au démarrage plutôt qu'à l'usage. */
@@ -30,6 +33,49 @@ export function missingWebhooks() {
     return Object.entries(WEBHOOKS)
         .filter(([, read]) => !read())
         .map(([kind]) => kind);
+}
+
+/**
+ * Poste un contenu déjà mis en forme dans un salon.
+ *
+ * Sépare le transport de la rédaction : la boîte à idées compose un message à
+ * partir d'un formulaire, le rapport quotidien à partir de la base, mais tous
+ * deux partent par le même tuyau, avec les mêmes garde-fous.
+ */
+export async function postToDiscord(kind, { title, description, imageUrl, footer }) {
+    const url = WEBHOOKS[kind]?.();
+    if (!url) return { ok: false, error: `Aucun webhook configuré pour ${kind}.` };
+
+    const payload = {
+        username: 'BeatboxPredictions',
+        allowed_mentions: { parse: [] },
+        embeds: [
+            {
+                title: title ?? TITLES[kind] ?? kind,
+                description: description.slice(0, 4000),
+                color: COLORS[kind],
+                timestamp: new Date().toISOString(),
+                ...(imageUrl ? { image: { url: imageUrl } } : {}),
+                ...(footer ? { footer: { text: footer } } : {}),
+            },
+        ],
+    };
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            return { ok: false, error: `Discord ${res.status} ${text.slice(0, 200)}` };
+        }
+        return { ok: true };
+    } catch (err) {
+        return { ok: false, error: err?.message ?? 'Envoi impossible.' };
+    }
 }
 
 /**

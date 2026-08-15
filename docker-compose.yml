@@ -45,6 +45,16 @@ services:
       # qui possède l'URL peut écrire dans le salon.
       DISCORD_WEBHOOK_SUGGESTIONS: ${DISCORD_WEBHOOK_SUGGESTIONS}
       DISCORD_WEBHOOK_BUGS: ${DISCORD_WEBHOOK_BUGS}
+      # Salon privé du rapport quotidien de fréquentation.
+      DISCORD_WEBHOOK_REPORTS: ${DISCORD_WEBHOOK_REPORTS}
+      # Fenêtre du rapport, planification (fuseau REPORT_TZ) et fuseau des
+      # journées. Tout est facultatif : 30 jours, 8 h 05, Europe/Paris.
+      REPORT_DAYS: ${REPORT_DAYS:-30}
+      REPORT_CRON: ${REPORT_CRON:-5 8 * * *}
+      REPORT_TZ: ${REPORT_TZ:-Europe/Paris}
+      # Facultatif : instance QuickChart pour joindre un vrai graphique en
+      # image. Vide = seul le graphique en blocs est envoyé.
+      QUICKCHART_URL: ${QUICKCHART_URL:-}
       ARTIST_PHOTOS_DIR: /media/artists
       ARTIST_UPLOAD_DIR: /media/uploads
 

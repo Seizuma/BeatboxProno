@@ -31,6 +31,7 @@ model User {
 
   predictions Prediction[]
   postbox     PostboxMessage[]
+  visits      Visit[]
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -355,4 +356,28 @@ model PostboxMessage {
 
   @@index([userId, createdAt])
   @@index([delivered, createdAt])
+}
+
+// --- Fréquentation -------------------------------------------------------------
+
+// Une ligne par personne et par journée où elle s'est manifestée.
+//
+// User.lastSeenAt ne retient que la dernière visite : il dit qui est là
+// aujourd'hui, jamais qui était là mardi dernier. Impossible d'en tirer une
+// courbe. Cette table garde la trace, une ligne par jour et par personne, ce
+// qui donne les actifs quotidiens sans jamais compter deux fois la même
+// personne qui recharge la page vingt fois.
+//
+// `day` est une chaîne AAAA-MM-JJ calculée en Europe/Paris, pas un DateTime :
+// une journée est une notion locale, et un horodatage UTC coupe les journées à
+// 2 h du matin l'été. Le tri lexicographique d'une date ISO est chronologique,
+// les intervalles fonctionnent donc normalement.
+model Visit {
+  userId String
+  day    String
+  seenAt DateTime @default(now())
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@index([day])
 }

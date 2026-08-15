@@ -7,6 +7,7 @@ import {
   issueSession,
   clearSession,
 } from '../lib/auth.js';
+import { touch } from '../lib/presence.js';
 
 export const authRouter = Router();
 
@@ -34,6 +35,15 @@ authRouter.get('/discord/callback', async (req, res) => {
     const profile = await exchangeCode(String(code));
     const user = await upsertDiscordUser(profile);
     issueSession(res, user);
+
+    // Un passage complet par Discord compte comme une visite du jour. La
+    // session vient tout juste d'être ouverte, donc `req.user` était encore
+    // vide quand attachUser s'est exécuté : sans cette ligne, la personne ne
+    // serait comptée qu'à sa requête suivante. Sans `await` — la fréquentation
+    // est une statistique, elle ne doit pas retarder la redirection ni la faire
+    // échouer.
+    touch(user.id);
+
     res.redirect(`${home}/me`);
   } catch (err) {
     console.error('[auth]', err.message);

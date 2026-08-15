@@ -12,6 +12,8 @@ import { adminRouter } from './routes/admin.js';
 import { photoRouter } from './routes/photos.js';
 import { postboxRouter } from './routes/postbox.js';
 import { missingWebhooks } from './lib/discord.js';
+import { touch } from './lib/presence.js';
+import { scheduleDailyReport } from './jobs/daily-report.js';
 import { PHOTO_DIR, UPLOAD_DIR } from './lib/photos.js';
 
 /**
@@ -71,6 +73,18 @@ app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyH
 
 app.use(attachUser);
 
+// La fréquentation quotidienne, notée juste après la résolution de la session.
+//
+// Posée ici plutôt que dans attachUser : compter les visites n'est pas
+// authentifier, et le middleware d'authentification n'a pas à savoir qu'un
+// rapport existe. Sans `await` et sans `next` conditionnel — une statistique ne
+// doit ni ralentir une requête ni la faire échouer. Une seule écriture par
+// personne et par jour, le reste est absorbé par le cache de presence.js.
+app.use((req, _res, next) => {
+  if (req.user) touch(req.user.id);
+  next();
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, at: new Date().toISOString() }));
 
 app.use('/api/auth', authRouter);
@@ -114,4 +128,6 @@ app.listen(port, '0.0.0.0', () => {
       `[postbox] webhook Discord absent pour : ${missing.join(', ')} — ces messages seront enregistrés mais pas relayés.`
     );
   }
+
+  scheduleDailyReport();
 });
