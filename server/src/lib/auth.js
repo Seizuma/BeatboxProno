@@ -11,6 +11,7 @@
 
 import jwt from 'jsonwebtoken';
 import { prisma } from './prisma.js';
+import { avatarUrlFor } from './avatar.js';
 
 const COOKIE = 'bbp_session';
 const MAX_AGE_DAYS = 30;
@@ -69,9 +70,12 @@ export async function exchangeCode(code) {
 
 /** Crée ou rafraîchit le compte local. Le tout premier inscrit est admin. */
 export async function upsertDiscordUser(profile) {
-  const avatarUrl = profile.avatar
-    ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=128`
-    : null;
+  // Discord ne renvoie `avatar` que si la personne en a téléversé un. Les
+  // comptes qui n'ont jamais changé leur image — une bonne part des comptes
+  // récents — restaient donc sans avatar du tout, alors que Discord en fournit
+  // un par défaut à une autre adresse. Le calcul vit dans avatar.js, où sont
+  // aussi traités les avatars animés et les deux systèmes de pseudo.
+  const avatarUrl = avatarUrlFor(profile);
 
   const existing = await prisma.user.findUnique({ where: { discordId: profile.id } });
 
