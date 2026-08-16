@@ -270,11 +270,30 @@ export default function EventPage() {
     }
   }
 
-  /** Range l'état actuel dans un nouveau brouillon, sous le nom choisi. */
-  async function snapshot(label) {
+  /**
+   * Crée une version, soit en copiant l'état actuel, soit vierge.
+   *
+   * Les deux gestes n'ont pas la même suite. Une copie est une sauvegarde : on
+   * reste où l'on était, la version ouverte ne change pas. Un brouillon vierge
+   * est un point de départ : y basculer est tout l'intérêt, sans quoi on
+   * l'aurait créé pour rien.
+   */
+  async function createVersion(label, blank) {
     setSaving(true);
     setFlash(null);
     try {
+      if (blank) {
+        const { prediction } = await api.post(`/predictions/categories/${activeId}`, { label });
+        // La feuille blanche est posée AVANT le rechargement : `readVersion`
+        // renverrait un contenu vide de toute façon, mais l'écran garderait
+        // l'ancien affiché le temps de l'aller-retour.
+        setDraft((d) => ({ ...d, [prediction.id]: { orders: {}, picks: {} } }));
+        await refreshVersions(activeId, prediction.id);
+        setNaming(null);
+        setFlash({ ok: true, at: Date.now(), text: t('draft.blank.done', { name: prediction.label }) });
+        return;
+      }
+
       const id = await ensureVersion();
       await api.put(`/predictions/${id}`, payload());
       const { prediction } = await api.post(`/predictions/categories/${activeId}`, {
@@ -458,10 +477,19 @@ export default function EventPage() {
                 version, donc elle se ferme avec le reste. */}
             <button
               className="btn btn--small"
-              onClick={() => setNaming(suggestedName())}
+              onClick={() => setNaming({ label: suggestedName(), blank: false })}
               disabled={saving || myVersions.length >= 10 || eventLive}
             >
               {t('draft.snapshot')}
+            </button>
+            {/* Repartir de zéro sans tout effacer à la main. Distinct de la
+                copie : celle-ci sauvegarde ce qu'on a, celui-là recommence. */}
+            <button
+              className="btn btn--small"
+              onClick={() => setNaming({ label: t('draft.blank.name'), blank: true })}
+              disabled={saving || myVersions.length >= 10 || eventLive}
+            >
+              {t('draft.blank')}
             </button>
             <span className="faint" style={{ fontSize: '0.82rem' }}>
               {myVersions.length}/10 · {t('draft.manage')}
@@ -567,15 +595,15 @@ export default function EventPage() {
 
       {naming !== null && (
         <PromptDialog
-          title={t('draft.copy.title')}
+          title={t(naming.blank ? 'draft.blank.title' : 'draft.copy.title')}
           subtitle={category?.name}
           label={t('draft.copy.label')}
-          hint={t('draft.copy.hint')}
-          initialValue={naming}
-          confirmLabel={t('draft.copy.confirm')}
+          hint={t(naming.blank ? 'draft.blank.hint' : 'draft.copy.hint')}
+          initialValue={naming.label}
+          confirmLabel={t(naming.blank ? 'draft.blank.confirm' : 'draft.copy.confirm')}
           cancelLabel={t('draft.cancel')}
           busy={saving}
-          onConfirm={snapshot}
+          onConfirm={(label) => createVersion(label, naming.blank)}
           onCancel={() => setNaming(null)}
         />
       )}
@@ -605,6 +633,38 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
   const mySeed = qualifyingPhase ? state.orders[qualifyingPhase.id] ?? [] : [];
   const seedFromRanking = officialSeed.length ? officialSeed : mySeed;
 
+  /**
+   * Un classement vidé remet les arbres à zéro.
+   *
+   * Effacer sa qualification et voir le tableau garder ses vainqueurs est
+   * déroutant, et ça l'est d'autant plus quand l'organisateur a publié le
+   * tirage du premier tour : les affiches ne dépendent alors plus du
+   * classement, donc rien ne bouge tout seul. Le geste « tout effacer » du
+   * classement doit valoir pour la catégorie entière.
+   *
+   * Uniquement sur un vidage complet : réordonner ne doit rien effacer, la
+   * résolution invalide déjà d'elle-même les choix devenus impossibles.
+   */
+  const clearedPicks = () =>
+    Object.fromEntries(
+      Object.entries(state.picks).map(([phaseId, byBattle]) => [
+        phaseId,
+        Object.fromEntries(
+          Object.entries(byBattle).map(([k, p]) => [
+            k,
+            { ...p, winnerId: null, scoreA: null, scoreB: null },
+          ])
+        ),
+      ])
+    );
+
+  function changeOrder(phase, order) {
+    const patch = { orders: { ...state.orders, [phase.id]: order } };
+    const emptied = order.length === 0 && (state.orders[phase.id] ?? []).length > 0;
+    if (emptied && phase.id === qualifyingPhase?.id) patch.picks = clearedPicks();
+    update(patch);
+  }
+
   return (
     <div className="stack" style={{ gap: '1.5rem' }}>
       {category.phases.map((phase) => {
@@ -630,9 +690,7 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 contenders={contenders}
                 order={state.orders[phase.id] ?? []}
                 locked={isLocked}
-                onChange={(order) =>
-                  update({ orders: { ...state.orders, [phase.id]: order } })
-                }
+                onChange={(order) => changeOrder(phase, order)}
               />
             ) : (
               <BracketBoard

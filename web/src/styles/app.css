@@ -731,16 +731,20 @@ td.num {
 /* La signature du pied de page. Le cœur garde ses couleurs d'origine : le reste
    du site n'a que des aplats purs, un emoji recoloré au filtre serait plus
    voyant que le cœur lui-même. */
+/* Surtout PAS `display: flex` ici. Un conteneur flex enveloppe chaque nœud de
+   texte dans un élément anonyme et en rogne les espaces de bord : le « par »
+   de « Fait avec ❤️ par Seizuma » perdait le sien et se collait au lien. En
+   flux normal, les espaces des chaînes sont respectés. */
 .footer__sign {
-  display: flex;
-  align-items: center;
-  gap: 0;
+  line-height: 1.6;
 }
 
 .footer__heart {
   font-size: 0.95em;
-  line-height: 1;
-  margin: 0 0.15rem;
+  /* Aligné sur la ligne de base du texte, sans marge : les espaces qui
+     l'entourent viennent des chaînes traduites, où ils sont visibles à la
+     relecture. En ajouter ici les doublerait. */
+  vertical-align: -0.05em;
 }
 
 .footer__sign a {
