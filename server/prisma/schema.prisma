@@ -183,6 +183,14 @@ model Phase {
   locksAt        DateTime? // fermeture des pronostics
   resolved       Boolean   @default(false)
 
+  // Le tirage du premier tour, pour un BRACKET : une liste d'affiches exprimées
+  // en rangs de qualification, une par slot. [[1,8],[2,7],[3,6],[4,5]] est le
+  // tableau classique, mais rien n'oblige une compète à le suivre — GBB a déjà
+  // opposé 1-5, 2-6, 3-7, 4-8, et une catégorie Crew peut faire autrement.
+  // Vide : on retombe sur le classique, qui reste le cas le plus fréquent.
+  // Un null dans une paire est un bye : ce rang passe le tour sans adversaire.
+  seedPairs      Json?
+
   entries         PhaseEntry[]
   battles         Battle[]
   predictedRanks  PredictedRank[]

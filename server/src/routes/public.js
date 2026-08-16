@@ -41,6 +41,9 @@ function redactPhase(phase, drawPublished = true) {
     ...phase,
     // Un classement saisi mais pas publié est un résultat comme un autre.
     entries: (phase.entries ?? []).map((e) => ({ ...e, rank: null, qualified: false })),
+    // seedPairs reste exposé : c'est le FORMAT du tableau, pas un résultat.
+    // Le joueur doit savoir qui affrontera qui avant de classer ses wildcards,
+    // sinon il compose à l'aveugle.
     battles: (phase.battles ?? []).map((b) => ({
       id: b.id,
       phaseId: b.phaseId,

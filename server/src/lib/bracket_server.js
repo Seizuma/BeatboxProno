@@ -1,4 +1,28 @@
-import { scoreMatchesWinner } from './scores.js';
+/**
+ * La résolution d'un tableau, côté serveur.
+ *
+ * COPIE DÉLIBÉRÉE de web/src/lib/bracket.js. Les deux paquets sont construits
+ * séparément — chaque Dockerfile ne copie que son propre dossier — et un
+ * dossier partagé demanderait de changer les deux contextes de build. La
+ * duplication est le moindre mal, à condition de la surveiller : le test
+ * tests/bracket_parity.js compare les deux implémentations et échoue à la
+ * première divergence. Toute modification ici doit être reportée là-bas, et
+ * réciproquement.
+ *
+ * Le serveur en a besoin pour une raison précise : quand l'organisateur change
+ * le tirage, les pronostics déjà enregistrés doivent suivre. Les laisser en
+ * l'état ferait perdre des points à des gens qui avaient rempli correctement
+ * l'ancien format — le score apparie les affiches par couple de participants,
+ * une affiche périmée ne correspond donc à rien et ne rapporte rien.
+ */
+
+/** Un score ne peut confirmer un vainqueur que s'il le donne gagnant. */
+function scoreMatchesWinner(scoreA, scoreB, side) {
+    if (scoreA == null || scoreB == null) return true;
+    if (side === 'a') return scoreA > scoreB;
+    if (side === 'b') return scoreB > scoreA;
+    return false;
+}
 
 /** La ligne principale du tableau : chaque tour alimente le suivant. */
 export const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];

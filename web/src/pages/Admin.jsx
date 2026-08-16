@@ -12,6 +12,7 @@ import BracketBoard from '../components/BracketBoard.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
+import SeedingEditor from '../components/SeedingEditor.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -1443,7 +1444,7 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
           main, ou saisissez d'abord la phase d'éliminations.
         </p>
       )}
-
+      <SeedingEditor phase={phase} onDone={onDone} run={run} />
       <BracketBoard
         phase={phase}
         phaseBattles={phase.battles ?? []}

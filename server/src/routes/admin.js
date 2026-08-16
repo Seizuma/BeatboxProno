@@ -5,6 +5,7 @@ import { requireRole } from '../lib/auth.js';
 import { contenderName, withName } from '../lib/naming.js';
 import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
+import { validateSeedPairs, patternFor, reresolvePhase, firstRoundOf } from '../lib/seeding.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireRole('ADMIN', 'OWNER'));
@@ -769,6 +770,91 @@ adminRouter.get('/events/:eventId/max-score', async (req, res) => {
   if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
 
   res.json(maxScoreForEvent(event));
+});
+
+/**
+ * Le tirage du premier tour d'un tableau.
+ *
+ * Renvoie aussi de quoi le composer : le tour concerné, le nombre d'affiches,
+ * et les modèles courants déjà calculés à la bonne taille. L'interface n'a donc
+ * aucune de ces constantes à redire de son côté.
+ */
+adminRouter.get('/phases/:id/seeding', async (req, res) => {
+  const phase = await prisma.phase.findUnique({
+    where: { id: req.params.id },
+    include: { battles: true },
+  });
+  if (!phase) return res.status(404).json({ error: 'Phase introuvable.' });
+
+  const { round, count } = firstRoundOf(phase.battles);
+  const size = count * 2;
+
+  res.json({
+    round,
+    battles: count,
+    size,
+    seedPairs: phase.seedPairs ?? null,
+    patterns: {
+      standard: patternFor('standard', size),
+      halves: patternFor('halves', size),
+      adjacent: patternFor('adjacent', size),
+    },
+  });
+});
+
+/**
+ * Enregistre le tirage, puis reconvertit les pronostics déjà déposés.
+ *
+ * Le recalcul n'est pas optionnel. Le score apparie les affiches par couple de
+ * participants : un pronostic laissé sous l'ancien tirage ne correspondrait à
+ * aucune affiche officielle et ne rapporterait rien, alors que la personne
+ * avait rempli correctement ce qu'on lui demandait. Changer le format sans
+ * reconvertir, c'est faire payer aux joueurs une décision d'organisateur.
+ */
+adminRouter.put('/phases/:id/seeding', async (req, res) => {
+  const { seedPairs, pattern } = z
+    .object({
+      seedPairs: z.array(z.array(z.number().int().nullable()).length(2)).nullable().optional(),
+      pattern: z.enum(['standard', 'halves', 'adjacent']).nullable().optional(),
+    })
+    .parse(req.body);
+
+  const phase = await prisma.phase.findUnique({
+    where: { id: req.params.id },
+    include: { battles: true },
+  });
+  if (!phase) return res.status(404).json({ error: 'Phase introuvable.' });
+  if (!['BRACKET', 'LEGACY'].includes(phase.type)) {
+    return res.status(400).json({ error: "Un tirage ne concerne qu'un tableau." });
+  }
+
+  const { count } = firstRoundOf(phase.battles);
+  if (count === 0) {
+    return res.status(400).json({ error: "Ce tableau n'a pas encore d'affiches." });
+  }
+
+  // Un modèle nommé l'emporte sur une liste : c'est le geste le plus courant,
+  // et il évite à l'interface de recalculer ce que le serveur sait déjà faire.
+  const wanted = pattern ? patternFor(pattern, count * 2) : seedPairs ?? null;
+
+  const check = validateSeedPairs(wanted, count);
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  await prisma.phase.update({
+    where: { id: phase.id },
+    data: { seedPairs: check.pairs },
+  });
+
+  const converted = await reresolvePhase(phase.id);
+
+  // Les points suivent : une affiche qui change de participants change de
+  // résultat. Ne rescorer que si la catégorie a déjà été scorée une fois.
+  const scored = await prisma.prediction.count({
+    where: { categoryId: phase.categoryId, scoredAt: { not: null } },
+  });
+  if (scored > 0) await rescoreCategory(phase.categoryId);
+
+  res.json({ phase: { id: phase.id, seedPairs: check.pairs }, converted, rescored: scored > 0 });
 });
 
 /** Change le nombre de qualifiés d'une phase après coup. */
