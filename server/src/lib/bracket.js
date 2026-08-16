@@ -128,12 +128,28 @@ export function resolveBracket({
      * laissait BLACKROLL en demi-finale, parce que la demie « officielle »
      * avait été déduite du vrai résultat et gelait l'arbre du joueur.
      */
+    /**
+     * Le premier tour est traité à part, y compris en vue organisateur.
+     *
+     * `authoritative` ne le couvre PAS. Chez l'organisateur, une affiche de tour
+     * aval enregistrée est la vérité — elle vient d'un résultat saisi. Mais le
+     * premier tour, lui, se DÉDUIT du classement de qualification : c'est tout le
+     * principe de l'écran. Le laisser sous l'autorité de la base figeait un
+     * appariement déduit d'un classement périmé, et enregistrer un nouveau
+     * classement ne changeait plus rien à l'arbre.
+     *
+     * `officialDraw` porte donc, ici, la question « faut-il s'en tenir à ce qui
+     * est enregistré ? ». Vrai chez le joueur quand le tirage est publié ; vrai
+     * chez l'organisateur quand aucun classement n'existe pour le déduire — une
+     * Loopstation sans phase d'éliminations, dont les affiches sont composées à
+     * la main.
+     */
     const trustsOfficial = (battle) =>
-        authoritative ||
         battle.round === 'LEGACY' ||
-        (battle.round === firstMainRound && officialDraw) ||
-        resolvedPhase ||
-        battle.played;
+        battle.played ||
+        (battle.round === firstMainRound
+            ? officialDraw
+            : authoritative || resolvedPhase);
 
     const pairOf = (round, slot) => out.get(key(round, slot)) ?? null;
 

@@ -437,6 +437,15 @@ function EventSettings({ event, onDone, run }) {
 
 function CategoryPanel({ category, onDone, run, askDelete }) {
   const [open, setOpen] = useState(false);
+  // Le tirage réglé, s'il y en a un d'ouvert. Un seul à la fois : deux tableaux
+  // ouverts côte à côte n'aideraient personne à s'y retrouver.
+  const [seeding, setSeeding] = useState(null);
+
+  // Un tirage ne concerne qu'un tableau, et seulement une fois ses affiches
+  // créées : sans elles, il n'y a rien à apparier.
+  const brackets = category.phases.filter(
+    (p) => ['BRACKET', 'LEGACY'].includes(p.type) && (p.battles?.length ?? 0) > 0
+  );
 
   return (
     <div className="panel stack" style={{ gap: '0.6rem' }}>
@@ -476,6 +485,32 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           </span>
         ))}
       </div>
+
+      {/* Le tirage est une décision de STRUCTURE — qui affronte qui au premier
+          tour — pas une saisie de résultat. Sa place est ici, à côté du format,
+          et non dans l'écran où l'on enregistre ce qui s'est passé. */}
+      {brackets.length > 0 && (
+        <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+          {brackets.map((p) => (
+            <button
+              key={p.id}
+              className={`btn btn--small${seeding === p.id ? ' btn--primary' : ''}`}
+              onClick={() => setSeeding(seeding === p.id ? null : p.id)}
+            >
+              Tirage — {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {seeding && (
+        <SeedingEditor
+          key={seeding}
+          phase={brackets.find((p) => p.id === seeding)}
+          onDone={onDone}
+          run={run}
+        />
+      )}
 
       {open && <ContenderManager category={category} onDone={onDone} run={run} askDelete={askDelete} />}
     </div>
@@ -1347,11 +1382,16 @@ function ResultsAdmin() {
  * suivant.
  */
 function BracketResults({ phase, event, category, contenders, onDone, run }) {
-  // Le classement de la dernière phase de qualification RÉSOLUE alimente
-  // l'arbre : c'est l'officiel, pas un pronostic.
+  // Le classement de la dernière phase de qualification alimente l'arbre.
+  //
+  // Publié ou non : côté organisateur, un classement enregistré en brouillon
+  // est déjà une décision, et l'arbre doit le refléter pour qu'on puisse
+  // préparer la suite avant de publier. Le tri par `position` est nécessaire —
+  // `pop()` sur un tableau non trié prenait une phase au hasard.
   const seedFromRanking = useMemo(() => {
-    const qualifying = (category?.phases ?? [])
+    const qualifying = [...(category?.phases ?? [])]
       .filter((p) => ['SEEDING', 'WILDCARD', 'ELIMINATION'].includes(p.type))
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .pop();
     if (!qualifying?.entries?.length) return [];
     return [...qualifying.entries]
@@ -1438,12 +1478,6 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
 
       <PublishState phase={phase} />
 
-      {/* Le tirage se règle AVANT de saisir quoi que ce soit : il décide qui
-          affronte qui au premier tour, donc la forme de tout le reste. */}
-      <div className="panel">
-        <SeedingEditor phase={phase} onDone={onDone} run={run} />
-      </div>
-
       {seedFromRanking.length === 0 && (
         <p className="faint" style={{ fontSize: '0.86rem', margin: 0 }}>
           Aucun classement de qualification enregistré : composez les affiches du premier tour à la
@@ -1461,6 +1495,12 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
         seedFromRanking={seedFromRanking}
         event={event}
         authoritative
+        // Un classement existe : le premier tour s'en déduit, il ne doit pas
+        // rester figé sur ce qui est enregistré — sinon saisir un nouveau
+        // classement ne changerait plus rien à l'arbre. Sans classement — une
+        // Loopstation sans éliminations — les affiches composées à la main
+        // tiennent.
+        officialDraw={seedFromRanking.length === 0}
       />
     </div>
   );
