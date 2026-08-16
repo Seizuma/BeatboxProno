@@ -34,7 +34,16 @@ export const bracketSignature = (obj) =>
             })
     );
 
-export function resolveBracket({ battlesOf, rounds, picks, seedFromRanking, resolvedPhase, authoritative }) {
+export function resolveBracket({
+    battlesOf,
+    rounds,
+    picks,
+    seedFromRanking,
+    resolvedPhase,
+    authoritative,
+    // Le tirage du premier tour a-t-il vraiment été publié ? Voir `trustsOfficial`.
+    officialDraw = true,
+}) {
     const out = new Map();
     const firstMainRound = MAIN_LINE.find((r) => rounds.includes(r));
     const hasSemi = rounds.includes('SEMI');
@@ -43,9 +52,21 @@ export function resolveBracket({ battlesOf, rounds, picks, seedFromRanking, reso
      * Une affiche enregistrée en base ne prime sur l'arbre pronostiqué que si
      * elle est réellement officielle :
      *   — la vue organisateur, où la base EST la vérité ;
-     *   — le tirage du premier tour, publié avant que rien ne se joue ;
+     *   — le tirage du premier tour, MAIS seulement une fois publié ;
      *   — les affiches Legacy, composées à la main et sans tour amont ;
      *   — une affiche déjà jouée, ou une phase publiée.
+     *
+     * Le « seulement une fois publié » est essentiel. L'éditeur d'organisateur
+     * compose automatiquement les affiches à partir du classement officiel et les
+     * enregistre, même en simple brouillon : la base contient donc des
+     * appariements de premier tour qui ne sont le tirage de personne. Les prendre
+     * pour argent comptant figeait les quarts d'un joueur qui venait pourtant de
+     * vider sa qualification — l'arbre gardait huit noms qu'il n'avait jamais
+     * choisis.
+     *
+     * Un tirage ne peut exister qu'une fois la qualification jouée et publiée :
+     * c'est ce que porte `officialDraw`, décidé par l'appelant qui, lui, voit la
+     * catégorie entière.
      *
      * Sans cette condition, l'affiche d'un tour AVAL enregistrée par
      * l'organisateur écrasait le pronostic : désigner WAALI vainqueur en quart
@@ -55,7 +76,7 @@ export function resolveBracket({ battlesOf, rounds, picks, seedFromRanking, reso
     const trustsOfficial = (battle) =>
         authoritative ||
         battle.round === 'LEGACY' ||
-        battle.round === firstMainRound ||
+        (battle.round === firstMainRound && officialDraw) ||
         resolvedPhase ||
         battle.played;
 

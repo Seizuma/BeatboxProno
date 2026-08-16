@@ -23,7 +23,11 @@ const DISPLAY_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL',
  * @param {string[]} seedFromRanking  ordre pronostiqué de la phase précédente
  * @param {boolean}  authoritative  vue organisateur : l'affiche enregistrée en
  *   base EST l'officiel, elle prime toujours. Côté joueur c'est l'inverse —
- *   voir `trustsOfficial` plus bas.
+ *   voir `trustsOfficial` dans bracket.js.
+ * @param {boolean}  officialDraw   le tirage du premier tour est-il publié ?
+ *   Faux tant que la qualification n'est pas jouée : la base contient alors des
+ *   appariements composés automatiquement par l'éditeur d'organisateur, qui ne
+ *   sont le tirage de personne.
  */
 export default function BracketBoard({
   phase,
@@ -35,6 +39,7 @@ export default function BracketBoard({
   seedFromRanking = [],
   event,
   authoritative = false,
+  officialDraw = true,
 }) {
   const { t } = useI18n();
   // Les splits proposables découlent du panel de juges : inutile d'offrir un
@@ -88,8 +93,9 @@ export default function BracketBoard({
         seedFromRanking,
         resolvedPhase: phase.resolved,
         authoritative,
+        officialDraw,
       }),
-    [battlesOf, rounds, picks, seedFromRanking, phase.resolved, authoritative]
+    [battlesOf, rounds, picks, seedFromRanking, phase.resolved, authoritative, officialDraw]
   );
 
   /* -------------------------------------------------------------------------

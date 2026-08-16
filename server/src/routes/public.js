@@ -27,11 +27,15 @@ const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
  * On ne laisse donc passer que le squelette, plus le tirage du premier tour —
  * lui est public, il est connu avant que rien ne se joue.
  */
-function redactPhase(phase) {
+function redactPhase(phase, drawPublished = true) {
   if (phase.resolved) return phase;
 
   const rounds = new Set((phase.battles ?? []).map((b) => b.round));
-  const firstRound = MAIN_LINE.find((r) => rounds.has(r)) ?? null;
+  // Le tirage du premier tour n'est public qu'une fois la qualification jouée.
+  // Avant, les appariements en base sont ceux que l'éditeur d'organisateur
+  // compose seul à partir du classement officiel : ils révèlent qui est qualifié
+  // et s'imposent à l'arbre du joueur alors qu'ils ne sont le tirage de personne.
+  const firstRound = drawPublished ? MAIN_LINE.find((r) => rounds.has(r)) ?? null : null;
 
   return {
     ...phase,
@@ -55,10 +59,21 @@ function redactPhase(phase) {
   };
 }
 
-/** Applique la redaction à toutes les phases d'un événement. */
+const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
+
+/**
+ * Applique la redaction à toutes les phases d'un événement.
+ *
+ * La décision se prend au niveau de la CATÉGORIE, pas de la phase : savoir si
+ * le tirage d'un tableau est public suppose de regarder la qualification qui
+ * l'alimente, laquelle est une autre phase.
+ */
 function redactEvent(event) {
   for (const category of event.categories ?? []) {
-    category.phases = (category.phases ?? []).map(redactPhase);
+    const phases = category.phases ?? [];
+    const qualifying = [...phases].filter((p) => RANKING_TYPES.includes(p.type)).pop();
+    const drawPublished = !qualifying || Boolean(qualifying.resolved);
+    category.phases = phases.map((p) => redactPhase(p, drawPublished));
   }
   return event;
 }

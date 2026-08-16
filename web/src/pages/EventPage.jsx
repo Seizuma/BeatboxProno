@@ -633,6 +633,13 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
   const mySeed = qualifyingPhase ? state.orders[qualifyingPhase.id] ?? [] : [];
   const seedFromRanking = officialSeed.length ? officialSeed : mySeed;
 
+  // Un tirage de premier tour ne peut exister qu'une fois la qualification
+  // jouée et publiée. Avant cela, les appariements présents en base sont ceux
+  // que l'éditeur d'organisateur compose tout seul : ils ne doivent pas
+  // s'imposer au joueur. Une catégorie sans phase de qualification n'a rien à
+  // attendre — son tableau est composé directement par l'organisateur.
+  const officialDraw = !qualifyingPhase || Boolean(qualifyingPhase.resolved);
+
   /**
    * Un classement vidé remet les arbres à zéro.
    *
@@ -701,6 +708,7 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 picks={state.picks[phase.id] ?? {}}
                 locked={isLocked}
                 seedFromRanking={seedFromRanking}
+                officialDraw={officialDraw}
                 onChange={(picks) =>
                   update({ picks: { ...state.picks, [phase.id]: picks } })
                 }
