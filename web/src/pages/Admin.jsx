@@ -9,10 +9,10 @@ import { shrinkImage, humanSize } from '../lib/image.js';
 import MenuButton from '../components/MenuButton.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
+import SeedingEditor from '../components/SeedingEditor.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
-import SeedingEditor from '../components/SeedingEditor.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -1438,13 +1438,19 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
 
       <PublishState phase={phase} />
 
+      {/* Le tirage se règle AVANT de saisir quoi que ce soit : il décide qui
+          affronte qui au premier tour, donc la forme de tout le reste. */}
+      <div className="panel">
+        <SeedingEditor phase={phase} onDone={onDone} run={run} />
+      </div>
+
       {seedFromRanking.length === 0 && (
         <p className="faint" style={{ fontSize: '0.86rem', margin: 0 }}>
           Aucun classement de qualification enregistré : composez les affiches du premier tour à la
           main, ou saisissez d'abord la phase d'éliminations.
         </p>
       )}
-      <SeedingEditor phase={phase} onDone={onDone} run={run} />
+
       <BracketBoard
         phase={phase}
         phaseBattles={phase.battles ?? []}
