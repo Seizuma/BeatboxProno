@@ -53,8 +53,9 @@ export default function Profile() {
   };
 
   // Le tri suit le statut de l'ÉVÉNEMENT, pas `scoredAt` : celui-ci est posé à
-  // chaque publication de résultat, donc un pronostic en cours de compétition
-  // l'a déjà. S'y fier rangeait des pronostics vivants parmi les terminés.
+  // chaque recalcul, donc au gré des manipulations d'organisateur. S'y fier
+  // rangeait des pronostics vivants parmi les terminés. Les compteurs
+  // ci-dessus suivent désormais la même règle — ils étaient restés en arrière.
   const buckets = [
     ['profile.bucket.live', data.predictions.filter((p) => p.submitted && p.event.status !== 'FINISHED')],
     ['profile.bucket.done', data.predictions.filter((p) => p.submitted && p.event.status === 'FINISHED')],
@@ -77,7 +78,7 @@ export default function Profile() {
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <Stat value={data.totals.points} label={t('profile.points')} accent />
-        <Stat value={data.totals.finished} label={t('profile.scored')} />
+        <Stat value={data.totals.submitted} label={t('profile.submitted')} />
         <Stat value={data.totals.pending} label={t('profile.pending')} />
         <Stat value={data.totals.drafts} label={t('profile.drafts')} />
       </div>

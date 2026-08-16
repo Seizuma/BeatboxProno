@@ -1099,6 +1099,23 @@ export async function rescoreCategory(categoryId) {
 
   category.podium = await prisma.podiumSlot.findMany({ where: { categoryId } });
 
+  /**
+   * Y a-t-il seulement quelque chose à scorer ?
+   *
+   * `scoredAt` disait « ce pronostic a été confronté aux résultats ». Il était
+   * posé à CHAQUE recalcul, y compris quand rien n'avait encore été publié :
+   * changer un nombre de qualifiés ou un tirage suffisait à marquer « scoré »
+   * tous les pronostics de la catégorie, avec zéro point puisqu'il n'y avait
+   * rien à comparer.
+   *
+   * D'où deux joueurs du même événement affichant des états différents : celui
+   * qui avait déposé avant une manipulation d'organisateur passait pour scoré,
+   * l'autre restait en attente. La différence ne disait rien de leurs
+   * pronostics, seulement du moment où ils avaient cliqué.
+   */
+  const hasResults =
+    category.phases.some((p) => p.resolved) || category.podium.length > 0;
+
   const predictions = await prisma.prediction.findMany({
     where: { categoryId, submitted: true },
     include: { ranks: true, battles: true, podium: true },
@@ -1109,7 +1126,13 @@ export async function rescoreCategory(categoryId) {
     const { total, sections } = scorePrediction(prediction, category);
     await prisma.prediction.update({
       where: { id: prediction.id },
-      data: { points: total, breakdown: sections, scoredAt: new Date() },
+      data: {
+        points: total,
+        breakdown: sections,
+        // Remis à null quand il n'y a rien de publié : un recalcul doit pouvoir
+        // corriger un marquage abusif, pas seulement éviter d'en poser un neuf.
+        scoredAt: hasResults ? new Date() : null,
+      },
     });
     updated += 1;
   }

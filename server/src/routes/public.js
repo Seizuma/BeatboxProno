@@ -243,16 +243,34 @@ publicRouter.get('/users/:id', async (req, res) => {
     orderBy: { updatedAt: 'desc' },
   });
 
+  /**
+   * Les compteurs suivent le statut de l'ÉVÉNEMENT, jamais `scoredAt`.
+   *
+   * `scoredAt` dit « ce pronostic est passé par le calculateur », ce qui n'est
+   * pas la même chose que « son résultat est connu ». Il se pose au gré des
+   * recalculs, donc au gré des manipulations d'organisateur : deux personnes du
+   * même événement affichaient des états différents selon le moment où elles
+   * avaient déposé. La question posée à l'écran — « où en est mon pronostic ? »
+   * — se répond avec l'état de la compète, pas avec un horodatage technique.
+   *
+   *   déposés  : tous les pronostics déposés, compète en cours ou terminée
+   *   attente  : déposés dont la compète n'est pas terminée
+   *   terminés : déposés dont la compète l'est
+   *   brouillons : jamais déposés
+   */
   const totals = predictions.reduce(
     (acc, p) => {
-      if (!p.submitted) acc.drafts += 1;
-      else if (p.scoredAt) {
-        acc.finished += 1;
-        acc.points += p.points;
-      } else acc.pending += 1;
+      if (!p.submitted) {
+        acc.drafts += 1;
+        return acc;
+      }
+      acc.submitted += 1;
+      acc.points += p.points;
+      if (p.event.status === 'FINISHED') acc.finished += 1;
+      else acc.pending += 1;
       return acc;
     },
-    { points: 0, finished: 0, pending: 0, drafts: 0 }
+    { points: 0, submitted: 0, finished: 0, pending: 0, drafts: 0 }
   );
 
   res.json({ user, predictions, totals });
