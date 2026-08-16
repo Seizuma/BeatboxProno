@@ -1,5 +1,5 @@
 import { prisma } from './prisma.js';
-import { resolveBracket, bracketKey, MAIN_LINE, SEED_PATTERNS } from './bracket.js';
+import { resolveBracket, bracketKey, MAIN_LINE, SEED_PATTERNS } from '../../../web/src/lib/bracket.js';
 
 /**
  * Le tirage du premier tour d'un tableau, et ce qu'il faut faire des pronostics
