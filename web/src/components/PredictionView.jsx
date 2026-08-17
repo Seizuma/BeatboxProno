@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
 import Modal from './Modal.jsx';
 import ArtistFigure from './ArtistFigure.jsx';
+import CommentThread from './CommentThread.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -13,7 +14,7 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
  * d'autrui. On y voit ce que la personne avait annoncé : ses classements et
  * ses vainqueurs, dans l'ordre des phases.
  */
-export default function PredictionView({ predictionId, onClose }) {
+export default function PredictionView({ predictionId, onClose, groupSlug, groupName }) {
     const { t, date } = useI18n();
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
@@ -57,6 +58,13 @@ export default function PredictionView({ predictionId, onClose }) {
             {!data && !error && <p className="faint">{t('common.loading')}</p>}
 
             {data && <Body prediction={data} />}
+
+            {/* Le fil de commentaires n'apparaît que si la fiche a été ouverte
+                depuis un groupe : le même pronostic lu depuis un profil public
+                n'a pas de conversation attachée, et n'en montre donc aucune. */}
+            {data && groupSlug && (
+                <CommentThread predictionId={predictionId} groupSlug={groupSlug} groupName={groupName} />
+            )}
         </Modal>
     );
 }

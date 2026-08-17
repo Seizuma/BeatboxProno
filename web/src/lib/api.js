@@ -60,4 +60,9 @@ export const api = {
   // qui n'a pas sa place dans l'URL — elle finirait dans les journaux d'accès.
   del: (p, b) => request('DELETE', p, b),
   loginUrl: `${BASE}/auth/discord`,
+  // La même porte, avec une destination de retour. Sert aux liens
+  // d'invitation : quelqu'un qui se connecte depuis une invitation doit
+  // revenir sur cette invitation, pas sur « mes pronostics ». Le serveur
+  // refuse toute destination qui n'est pas un chemin interne.
+  loginWith: (next) => `${BASE}/auth/discord?next=${encodeURIComponent(next)}`,
 };

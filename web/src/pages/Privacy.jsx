@@ -33,6 +33,7 @@ export default function Privacy() {
                     <Item term={t('privacy.collect.predictions')} def={t('privacy.collect.predictions.why')} />
                     <Item term={t('privacy.collect.visits')} def={t('privacy.collect.visits.why')} />
                     <Item term={t('privacy.collect.postbox')} def={t('privacy.collect.postbox.why')} />
+                    <Item term={t('privacy.collect.groups')} def={t('privacy.collect.groups.why')} />
                 </dl>
                 <p className="faint">{t('privacy.collect.not')}</p>
             </Section>
@@ -40,6 +41,11 @@ export default function Privacy() {
             <Section title={t('privacy.public.title')}>
                 <p>{t('privacy.public.lede')}</p>
                 <p>{t('privacy.public.hidden')}</p>
+            </Section>
+
+            <Section title={t('privacy.groups.title')}>
+                <p>{t('privacy.groups.lede')}</p>
+                <p className="faint">{t('privacy.groups.delete')}</p>
             </Section>
 
             <Section title={t('privacy.cookies.title')}>

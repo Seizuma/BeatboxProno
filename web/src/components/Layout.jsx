@@ -77,6 +77,10 @@ export default function Layout() {
               <NavLink to="/" end>{t('nav.events')}</NavLink>
               <NavLink to="/leaderboard">{t('nav.leaderboard')}</NavLink>
               <NavLink to="/artists">{t('nav.artists')}</NavLink>
+              {/* Les groupes ne s'affichent que connecté : déconnecté, la page
+                  n'aurait rien à montrer, et un cercle privé n'a pas à figurer
+                  dans la navigation de quelqu'un qui n'en a aucun. */}
+              {user && <NavLink to="/groups">{t('nav.groups')}</NavLink>}
               {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
               {isStaff(user) && <NavLink to="/admin">{t('nav.admin')}</NavLink>}
             </span>

@@ -6,9 +6,22 @@ const Glyph = () => (
   </svg>
 );
 
-export default function DiscordButton({ small = false, children = 'Se connecter avec Discord' }) {
+/**
+ * La connexion Discord.
+ *
+ * `next` indique où revenir une fois la connexion faite. Sans lui on retombe
+ * sur « mes pronostics », ce qui convient partout sauf pour une invitation à un
+ * groupe : quelqu'un qui clique sur un lien reçu doit revenir sur ce lien, pas
+ * sur une page qui n'a aucun rapport avec ce qu'il voulait faire.
+ *
+ * Le serveur revérifie la destination : seul un chemin interne est accepté.
+ */
+export default function DiscordButton({ small = false, next, children = 'Se connecter avec Discord' }) {
   return (
-    <a className={`btn btn--discord${small ? ' btn--small' : ''}`} href={api.loginUrl}>
+    <a
+      className={`btn btn--discord${small ? ' btn--small' : ''}`}
+      href={next ? api.loginWith(next) : api.loginUrl}
+    >
       <Glyph />
       {children}
     </a>

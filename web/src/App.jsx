@@ -7,6 +7,9 @@ import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
 import { ArtistList, ArtistPage } from './pages/Artists.jsx';
 import Privacy from './pages/Privacy.jsx';
+import Groups from './pages/Groups.jsx';
+import GroupPage from './pages/GroupPage.jsx';
+import JoinGroup from './pages/JoinGroup.jsx';
 import { useI18n } from './lib/i18n.jsx';
 
 export default function App() {
@@ -21,6 +24,12 @@ export default function App() {
         <Route path="stats" element={<Navigate to="/leaderboard" replace />} />
         <Route path="artists" element={<ArtistList />} />
         <Route path="artists/:slug" element={<ArtistPage />} />
+        {/* Les groupes privés. L'invitation est plus spécifique que la fiche,
+            et React Router classe par spécificité : un groupe ne pourra
+            jamais s'appeler « join » au point de la masquer. */}
+        <Route path="groups" element={<Groups />} />
+        <Route path="groups/join/:code" element={<JoinGroup />} />
+        <Route path="groups/:slug" element={<GroupPage />} />
         <Route path="me" element={<Profile />} />
         <Route path="players/:id" element={<Profile />} />
         <Route path="admin" element={<Admin />} />
