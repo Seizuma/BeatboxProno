@@ -5,9 +5,15 @@
 
    Pourquoi une organisation à part. Un groupe qui ressemblerait au reste du
    site ne serait qu'un filtre de plus sur le classement général. Ici le
-   classement cesse d'être un tableau posé sous un titre : il devient l'échelle
-   qui tient la colonne de gauche, et c'est elle qui sert de navigation — on
-   clique un membre, la mosaïque de droite se réduit à ses pronostics.
+   classement n'est pas un tableau posé sous un titre : c'est l'échelle qui
+   tient la colonne de gauche, et elle sert de navigation — on clique un
+   membre, la mosaïque de droite se réduit à ses pronostics.
+
+   Le principe de répartition : la colonne principale ne contient QUE des
+   pronostics. Tout ce qui relève du réglage — l'invitation, l'administration
+   des membres, le périmètre — vit dans le rail ou derrière une fenêtre. Un
+   réglage qu'on touche trois fois dans la vie d'un groupe n'a pas à occuper le
+   tiers de l'écran en permanence.
 
    La couleur d'accent vient du serveur (`accent` : y, c, g ou m) et se pose en
    `--grp` sur la racine de la coquille. Ni le bleu, réservé aux bandeaux, ni le
@@ -33,16 +39,21 @@
     --grp: var(--m);
 }
 
-/* --- La ligne de service du groupe --------------------------------------- */
+/* --- La ligne de service du groupe ---------------------------------------
+   Deux étages plutôt qu'un long ruban : le nom sur sa ligne, l'effectif et
+   les compétitions en dessous. Sur un seul rang, un nom de groupe un peu long
+   suivi de deux compétitions repoussait le menu hors de vue. */
+
+.grp__head {
+    border-top: var(--border-w) solid var(--grp);
+    border-bottom: var(--border-w) solid var(--grp);
+    padding: 0.5rem 0;
+}
 
 .grp__bar {
     display: flex;
     align-items: baseline;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-    border-top: var(--border-w) solid var(--grp);
-    border-bottom: var(--border-w) solid var(--grp);
-    padding: 0.5rem 0;
+    gap: 0.7rem;
 }
 
 .grp__sigil {
@@ -50,17 +61,35 @@
     background: var(--grp);
     color: #000;
     padding: 0 0.4em;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     letter-spacing: 0.1em;
+    align-self: center;
+    flex: none;
 }
 
 .grp__name {
     font-family: var(--font-display);
     font-size: 2rem;
+    line-height: 1.1;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--grp);
     margin: 0;
+    /* Un nom très long ne doit pas pousser le menu hors de l'écran. */
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.grp__spacer {
+    margin-left: auto;
+}
+
+.grp__strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.8rem;
+    margin-top: 0.35rem;
 }
 
 .grp__meta {
@@ -69,17 +98,20 @@
     letter-spacing: 0.08em;
     color: var(--ink-faint);
     text-transform: uppercase;
+    margin: 0;
 }
 
-.grp__spacer {
-    margin-left: auto;
+.grp__note {
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+    margin: 0.6rem 0 0;
 }
 
 /* --- Deux colonnes : l'échelle, puis les pronostics ------------------------ */
 
 .grp__layout {
     display: grid;
-    grid-template-columns: minmax(15rem, 19rem) 1fr;
+    grid-template-columns: minmax(17rem, 21rem) 1fr;
     gap: 1.4rem;
     align-items: start;
     margin-top: 1.2rem;
@@ -112,7 +144,21 @@
     text-transform: uppercase;
 }
 
-/* --- L'échelle : le classement EST la navigation --------------------------- */
+/* Le pied du rail : ce qui règle le groupe, hors du chemin de lecture. */
+.grp__railfoot {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line);
+    padding: 0.5rem;
+}
+
+/* --- L'échelle : le classement EST la navigation ---------------------------
+   Deux étages par ligne. Sur un seul, le pseudo se retrouvait coincé entre le
+   rang, l'avatar et les points, et se faisait tronquer dès sept caractères —
+   « Seizuma » devenait « Sei… ». Les chiffres descendent d'un cran, le nom
+   prend toute la largeur. */
 
 .ladder {
     list-style: none;
@@ -121,15 +167,28 @@
 }
 
 .ladder__row {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid var(--line);
+}
+
+.ladder__row:last-child {
+    border-bottom: 0;
+}
+
+.ladder__pick {
+    flex: 1;
+    min-width: 0;
     display: grid;
-    grid-template-columns: 2.4rem auto 1fr auto;
+    grid-template-columns: 2.6rem 1fr;
+    grid-template-areas:
+        'rank who'
+        'rank sub';
+    column-gap: 0.55rem;
     align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.35rem 0.5rem;
+    padding: 0.4rem 0.5rem;
     background: none;
     border: 0;
-    border-bottom: 1px solid var(--line);
     color: var(--ink);
     text-align: left;
     cursor: pointer;
@@ -137,21 +196,26 @@
     font-size: 1rem;
 }
 
-.ladder__row:hover {
+.ladder__pick:hover {
     background: var(--surface-2);
 }
 
-/* La sélection est un liseré, pas un fond : le fond plein volerait la couleur
+/* La sélection est un liseré, pas un fond plein : le fond volerait la couleur
    du bandeau et l'écran finirait bariolé. */
 .ladder__row--on {
     border-left: 3px solid var(--grp);
+}
+
+.ladder__row--on .ladder__pick {
     padding-left: calc(0.5rem - 3px);
     background: var(--surface-2);
 }
 
 .ladder__rank {
+    grid-area: rank;
+    align-self: center;
     font-family: var(--font-display);
-    font-size: 1.6rem;
+    font-size: 1.7rem;
     line-height: 1;
     color: var(--grp);
     text-align: right;
@@ -161,15 +225,30 @@
     color: var(--ink-faint);
 }
 
+.ladder__who {
+    grid-area: who;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
 .ladder__name {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.ladder__pts {
+.ladder__sub {
+    grid-area: sub;
     font-family: var(--font-data);
-    font-size: 0.95rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+}
+
+.ladder__pts {
     color: var(--ok);
 }
 
@@ -181,6 +260,15 @@
     font-family: var(--font-data);
     font-size: 0.7rem;
     color: var(--grp);
+    flex: none;
+}
+
+/* Le menu d'administration, sur la ligne du membre plutôt que dans une
+   seconde liste plus bas : la personne y est déjà affichée. */
+.ladder__acts {
+    display: flex;
+    align-items: center;
+    padding-right: 0.25rem;
 }
 
 /* --- La mosaïque des pronostics -------------------------------------------- */
@@ -217,12 +305,20 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    min-width: 0;
+}
+
+.mosaic__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .mosaic__line {
     font-family: var(--font-data);
-    font-size: 0.8rem;
-    margin: 0.4rem 0 0;
+    font-size: 0.78rem;
+    margin: 0.35rem 0 0;
     color: var(--ink-faint);
 }
 
@@ -236,7 +332,8 @@
     border: 1px solid var(--grp);
     color: var(--grp);
     padding: 0 0.35em;
-    margin-left: 0.3rem;
+    margin-left: auto;
+    flex: none;
 }
 
 /* --- Le périmètre : les compétitions suivies -------------------------------- */
@@ -261,10 +358,6 @@
 .scope__chip--on {
     border-color: var(--grp);
     color: var(--grp);
-}
-
-.scope__chip:disabled {
-    cursor: default;
 }
 
 /* ===========================================================================

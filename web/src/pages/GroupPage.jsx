@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
 import { useSession } from '../lib/context.jsx';
@@ -18,13 +18,18 @@ import Toast from '../components/Toast.jsx';
  * l'échelle qui tient la colonne de gauche, et elle sert de navigation : on
  * clique un membre, la mosaïque de droite se réduit à ses pronostics.
  *
+ * La règle de répartition, tenue partout : la colonne principale ne contient
+ * QUE des pronostics. L'invitation, l'administration des membres et le choix
+ * des compétitions vivent dans le rail ou derrière une fenêtre — ce sont des
+ * réglages qu'on touche trois fois dans la vie d'un groupe.
+ *
  * Un groupe dont on n'est pas membre répond 404, comme un groupe qui n'existe
  * pas. On affiche donc la même chose dans les deux cas, sans chercher à
  * distinguer.
  */
 export default function GroupPage() {
     const { slug } = useParams();
-    const { t, date, number } = useI18n();
+    const { t, number } = useI18n();
     const { user, loading } = useSession();
     const navigate = useNavigate();
 
@@ -40,6 +45,7 @@ export default function GroupPage() {
     const [renaming, setRenaming] = useState(false);
     const [transferring, setTransferring] = useState(false);
     const [scoping, setScoping] = useState(false);
+    const [inviting, setInviting] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const reload = useCallback(
@@ -76,7 +82,6 @@ export default function GroupPage() {
         return (
             <div className="empty" style={{ marginTop: '4rem' }}>
                 <p>{t('groups.lede')}</p>
-                <Link className="btn" to="/groups">{t('groups.title')}</Link>
             </div>
         );
     }
@@ -85,7 +90,6 @@ export default function GroupPage() {
         return (
             <div className="stack" style={{ paddingTop: '2.5rem' }}>
                 <p className="notice">{error}</p>
-                <p><Link className="btn btn--ghost" to="/groups">{t('groups.title')}</Link></p>
             </div>
         );
     }
@@ -111,70 +115,61 @@ export default function GroupPage() {
         }
     };
 
-    const copyInvite = async () => {
-        try {
-            await navigator.clipboard.writeText(inviteUrl);
-            setToast({ ok: true, message: t('group.invite.copied') });
-        } catch {
-            // Presse-papiers refusé : le champ reste sélectionnable, la copie
-            // manuelle fonctionne toujours.
-            setToast({ ok: false, message: inviteUrl });
-        }
-    };
-
     return (
         <div className="shell grp" data-accent={group.accent}>
-            {/* --- La ligne de service ------------------------------------------- */}
-            <header className="grp__bar">
-                <span className="grp__sigil">GRP</span>
-                <h1 className="grp__name">{group.name}</h1>
-                <span className="grp__meta">
-                    {t('groups.members', { n: group.memberCount })}
-                    {' · '}
-                    {configured
-                        ? group.events.map((e) => `${e.name} ${e.year}`).join(' · ')
-                        : t('groups.events.none')}
-                </span>
-                <span className="grp__spacer" />
-                <MenuButton
-                    label={t('nav.menu')}
-                    items={[
-                        isOwner && { label: t('group.scope.edit'), onClick: () => setScoping(true) },
-                        isOwner && { label: t('group.rename'), onClick: () => setRenaming(true) },
-                        isOwner && group.memberCount > 1 && {
-                            label: t('group.transfer'),
-                            onClick: () => setTransferring(true),
-                        },
-                        { separator: true },
-                        !isOwner && {
-                            label: t('group.leave'),
-                            danger: true,
-                            onClick: () => {
-                                if (!window.confirm(t('group.leave.confirm'))) return;
-                                act(async () => {
-                                    await api.post(`/groups/${slug}/leave`);
-                                    navigate('/groups');
-                                }, t('group.left'));
+            {/* --- La ligne de service, sur deux étages -------------------------- */}
+            <header className="grp__head">
+                <div className="grp__bar">
+                    <span className="grp__sigil">GRP</span>
+                    <h1 className="grp__name">{group.name}</h1>
+                    <span className="grp__spacer" />
+                    <MenuButton
+                        label={t('nav.menu')}
+                        items={[
+                            isOwner && { label: t('group.scope.edit'), onClick: () => setScoping(true) },
+                            isOwner && { label: t('group.rename'), onClick: () => setRenaming(true) },
+                            isOwner && group.memberCount > 1 && {
+                                label: t('group.transfer'),
+                                onClick: () => setTransferring(true),
                             },
-                        },
-                        isOwner && {
-                            label: t('group.dissolve'),
-                            danger: true,
-                            onClick: () => {
-                                if (!window.confirm(t('group.dissolve.confirm'))) return;
-                                act(async () => {
-                                    await api.del(`/groups/${slug}`);
-                                    navigate('/groups');
-                                }, t('group.gone'));
+                            { separator: true },
+                            !isOwner && {
+                                label: t('group.leave'),
+                                danger: true,
+                                onClick: () => {
+                                    if (!window.confirm(t('group.leave.confirm'))) return;
+                                    act(async () => {
+                                        await api.post(`/groups/${slug}/leave`);
+                                        navigate('/groups');
+                                    }, t('group.left'));
+                                },
                             },
-                        },
-                    ]}
-                />
+                            isOwner && {
+                                label: t('group.dissolve'),
+                                danger: true,
+                                onClick: () => {
+                                    if (!window.confirm(t('group.dissolve.confirm'))) return;
+                                    act(async () => {
+                                        await api.del(`/groups/${slug}`);
+                                        navigate('/groups');
+                                    }, t('group.gone'));
+                                },
+                            },
+                        ]}
+                    />
+                </div>
+
+                <div className="grp__strip">
+                    <p className="grp__meta">{t('groups.members', { n: group.memberCount })}</p>
+                    <p className="grp__meta">
+                        {configured
+                            ? group.events.map((e) => `${e.name} ${e.year}`).join(' · ')
+                            : t('groups.events.none')}
+                    </p>
+                </div>
             </header>
 
-            {group.description && (
-                <p className="muted" style={{ margin: '0.6rem 0 0' }}>{group.description}</p>
-            )}
+            {group.description && <p className="grp__note">{group.description}</p>}
 
             {!configured && (
                 <p className="empty" style={{ marginTop: '1rem' }}>
@@ -191,7 +186,7 @@ export default function GroupPage() {
             )}
 
             <div className="grp__layout">
-                {/* --- L'échelle : le classement, et la navigation ----------------- */}
+                {/* --- L'échelle : classement, navigation et administration -------- */}
                 <aside className="grp__rail">
                     <p className="grp__railhead">{t('group.ladder')}</p>
 
@@ -204,46 +199,101 @@ export default function GroupPage() {
                             {board.players.map((p, i) => {
                                 const id = p.user?.id;
                                 const on = focus === id;
+                                const member = group.members.find((m) => m.id === id);
                                 return (
-                                    <li key={id ?? i}>
+                                    <li
+                                        key={id ?? i}
+                                        className={
+                                            'ladder__row' +
+                                            (on ? ' ladder__row--on' : '') +
+                                            (p.predictions === 0 ? ' ladder__row--idle' : '')
+                                        }
+                                    >
                                         <button
                                             type="button"
-                                            className={
-                                                'ladder__row' +
-                                                (on ? ' ladder__row--on' : '') +
-                                                (p.predictions === 0 ? ' ladder__row--idle' : '')
-                                            }
+                                            className="ladder__pick"
                                             // Recliquer le même membre lève le filtre : sans ça il
                                             // faudrait chercher un bouton « tout » ailleurs à l'écran.
                                             onClick={() => setFocus(on ? null : id)}
                                             aria-pressed={on}
                                         >
                                             <span className="ladder__rank">{String(i + 1).padStart(2, '0')}</span>
-                                            {p.user?.avatarUrl ? (
-                                                <img className="avatar" src={p.user.avatarUrl} alt="" />
-                                            ) : (
-                                                <span />
-                                            )}
-                                            <span className="ladder__name">
-                                                {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
-                                                {group.members.find((m) => m.id === id)?.role === 'OWNER' && (
-                                                    <span className="ladder__crown"> ★</span>
-                                                )}
+
+                                            <span className="ladder__who">
+                                                {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
+                                                <span className="ladder__name">
+                                                    {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                                                </span>
+                                                {member?.role === 'OWNER' && <span className="ladder__crown">★</span>}
                                             </span>
-                                            <span className="ladder__pts">{number(p.points)}</span>
+
+                                            {/* Les chiffres en sous-ligne. Sur la même ligne que le
+                          pseudo, ils le tronquaient dès sept caractères. */}
+                                            <span className="ladder__sub">
+                                                <span className="ladder__pts">{number(p.points)} {t('common.points')}</span>
+                                                {' · '}
+                                                {p.predictions > 0
+                                                    ? t('group.ladder.picks', { n: p.predictions })
+                                                    : t('group.ladder.none')}
+                                            </span>
                                         </button>
+
+                                        {/* L'administration se fait ici, sur la ligne du membre —
+                        une seconde liste plus bas répétait les mêmes gens. */}
+                                        {isOwner && id && id !== user.id && (
+                                            <span className="ladder__acts">
+                                                <MenuButton
+                                                    label={t('nav.menu')}
+                                                    items={[
+                                                        {
+                                                            label: t('group.transfer'),
+                                                            onClick: () => {
+                                                                const name = p.user?.globalName ?? p.user?.username;
+                                                                if (!window.confirm(t('group.transfer.confirm', { name }))) return;
+                                                                act(async () => {
+                                                                    await api.post(`/groups/${slug}/transfer`, { userId: id });
+                                                                    await reload();
+                                                                });
+                                                            },
+                                                        },
+                                                        {
+                                                            label: t('group.kick'),
+                                                            danger: true,
+                                                            onClick: () => {
+                                                                const name = p.user?.globalName ?? p.user?.username;
+                                                                if (!window.confirm(t('group.kick.confirm', { name }))) return;
+                                                                act(async () => {
+                                                                    await api.del(`/groups/${slug}/members/${id}`);
+                                                                    await reload();
+                                                                });
+                                                            },
+                                                        },
+                                                    ]}
+                                                />
+                                            </span>
+                                        )}
                                     </li>
                                 );
                             })}
                         </ol>
                     )}
+
+                    {/* --- Le pied du rail : l'invitation, réduite à une porte ------- */}
+                    <div className="grp__railfoot">
+                        <button className="btn btn--small" onClick={() => setInviting(true)}>
+                            {t('group.invite.short')}
+                        </button>
+                        {!group.inviteOpen && <span className="grp__meta">{t('group.invite.closed')}</span>}
+                    </div>
                 </aside>
 
-                {/* --- La mosaïque des pronostics ---------------------------------- */}
+                {/* --- La mosaïque des pronostics, et rien d'autre ----------------- */}
                 <main className="grp__main stack">
                     <div className="row" style={{ justifyContent: 'space-between' }}>
                         <h2 style={{ margin: 0 }}>
-                            {focused ? t('group.picks.of', { name: focused.globalName ?? focused.username }) : t('group.picks')}
+                            {focused
+                                ? t('group.picks.of', { name: focused.globalName ?? focused.username })
+                                : t('group.picks')}
                         </h2>
                         {focus && (
                             <button className="btn btn--small btn--ghost" onClick={() => setFocus(null)}>
@@ -262,123 +312,30 @@ export default function GroupPage() {
                                 <button key={p.id} type="button" className="mosaic__card" onClick={() => setReading(p.id)}>
                                     <span className="mosaic__who">
                                         {p.user.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
-                                        <strong>{p.user.globalName ?? p.user.username}</strong>
+                                        <strong className="mosaic__name">{p.user.globalName ?? p.user.username}</strong>
                                         {p.comments > 0 && (
-                                            <span className="mosaic__bubbles">{t('group.picks.comments', { n: p.comments })}</span>
+                                            <span className="mosaic__bubbles">
+                                                {t('group.picks.comments', { n: p.comments })}
+                                            </span>
                                         )}
                                     </span>
+
+                                    {/* Deux lignes fixes, quelle que soit la situation. Les
+                      vignettes non scorées perdaient leur seconde ligne, et la
+                      mosaïque paraissait dépareillée. */}
+                                    <p className="mosaic__line">{p.event.name} {p.event.year}</p>
                                     <p className="mosaic__line">
-                                        {p.event.name} {p.event.year} · {p.category.name}
-                                        {p.scoredAt && (
-                                            <>
-                                                {' · '}
-                                                <span className="mosaic__pts">{number(p.points)} {t('common.points')}</span>
-                                            </>
+                                        {p.category.name}
+                                        {' · '}
+                                        {p.scoredAt ? (
+                                            <span className="mosaic__pts">{number(p.points)} {t('common.points')}</span>
+                                        ) : (
+                                            t('group.picks.pending')
                                         )}
                                     </p>
                                 </button>
                             ))}
                         </div>
-                    )}
-
-                    {/* --- L'invitation, en pied de colonne ------------------------- */}
-                    <section className="panel stack" style={{ gap: '0.5rem' }}>
-                        <h2>{t('group.invite')}</h2>
-                        <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
-                            {group.inviteOpen ? t('group.invite.lede') : t('group.invite.closed')}
-                        </p>
-                        <div className="row">
-                            <input
-                                readOnly
-                                value={inviteUrl}
-                                onFocus={(e) => e.target.select()}
-                                style={{ flex: '1 1 18rem', minWidth: 0 }}
-                                aria-label={t('group.invite')}
-                            />
-                            <button className="btn btn--small" onClick={copyInvite}>{t('group.invite.copy')}</button>
-                            {isOwner && (
-                                <>
-                                    <button
-                                        className="btn btn--small btn--ghost"
-                                        disabled={busy}
-                                        onClick={() => {
-                                            if (!window.confirm(t('group.invite.rotate.confirm'))) return;
-                                            act(async () => {
-                                                await api.post(`/groups/${slug}/invite`);
-                                                await reload();
-                                            });
-                                        }}
-                                    >
-                                        {t('group.invite.rotate')}
-                                    </button>
-                                    <button
-                                        className="btn btn--small btn--ghost"
-                                        disabled={busy}
-                                        onClick={() =>
-                                            act(async () => {
-                                                await api.patch(`/groups/${slug}/invite`, { open: !group.inviteOpen });
-                                                await reload();
-                                            })
-                                        }
-                                    >
-                                        {group.inviteOpen ? t('group.invite.close') : t('group.invite.reopen')}
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    </section>
-
-                    {/* --- Les membres, pour l'administration ----------------------- */}
-                    {isOwner && (
-                        <section className="panel panel--flush">
-                            <table>
-                                <tbody>
-                                    {group.members.map((m) => (
-                                        <tr key={m.id}>
-                                            <td>
-                                                <span className="stat-row">
-                                                    {m.avatarUrl && <img className="avatar" src={m.avatarUrl} alt="" />}
-                                                    <Link to={`/players/${m.id}`}>{m.globalName ?? m.username}</Link>
-                                                </span>
-                                            </td>
-                                            <td className="muted data" style={{ fontSize: '0.78rem' }}>
-                                                {t('group.joined', { date: date(m.joinedAt) })}
-                                            </td>
-                                            <td style={{ width: '2.5rem' }}>
-                                                {m.id !== user.id && (
-                                                    <MenuButton
-                                                        label={t('nav.menu')}
-                                                        items={[
-                                                            {
-                                                                label: t('group.transfer'),
-                                                                onClick: () => {
-                                                                    if (!window.confirm(t('group.transfer.confirm', { name: m.globalName ?? m.username }))) return;
-                                                                    act(async () => {
-                                                                        await api.post(`/groups/${slug}/transfer`, { userId: m.id });
-                                                                        await reload();
-                                                                    });
-                                                                },
-                                                            },
-                                                            {
-                                                                label: t('group.kick'),
-                                                                danger: true,
-                                                                onClick: () => {
-                                                                    if (!window.confirm(t('group.kick.confirm', { name: m.globalName ?? m.username }))) return;
-                                                                    act(async () => {
-                                                                        await api.del(`/groups/${slug}/members/${m.id}`);
-                                                                        await reload();
-                                                                    });
-                                                                },
-                                                            },
-                                                        ]}
-                                                    />
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </section>
                     )}
                 </main>
             </div>
@@ -395,6 +352,69 @@ export default function GroupPage() {
                         reloadPicks();
                     }}
                 />
+            )}
+
+            {inviting && (
+                <Modal title={t('group.invite')} onClose={() => setInviting(false)}>
+                    <p className="muted" style={{ marginTop: 0 }}>
+                        {group.inviteOpen ? t('group.invite.lede') : t('group.invite.closed')}
+                    </p>
+
+                    <div className="row" style={{ marginTop: '0.8rem' }}>
+                        <input
+                            readOnly
+                            value={inviteUrl}
+                            onFocus={(e) => e.target.select()}
+                            style={{ flex: '1 1 16rem', minWidth: 0 }}
+                            aria-label={t('group.invite')}
+                        />
+                        <button
+                            className="btn btn--small"
+                            onClick={async () => {
+                                try {
+                                    await navigator.clipboard.writeText(inviteUrl);
+                                    setToast({ ok: true, message: t('group.invite.copied') });
+                                } catch {
+                                    // Presse-papiers refusé : le champ reste sélectionnable, la
+                                    // copie manuelle fonctionne toujours.
+                                    setToast({ ok: false, message: inviteUrl });
+                                }
+                            }}
+                        >
+                            {t('group.invite.copy')}
+                        </button>
+                    </div>
+
+                    {isOwner && (
+                        <div className="row" style={{ marginTop: '0.8rem' }}>
+                            <button
+                                className="btn btn--small btn--ghost"
+                                disabled={busy}
+                                onClick={() => {
+                                    if (!window.confirm(t('group.invite.rotate.confirm'))) return;
+                                    act(async () => {
+                                        await api.post(`/groups/${slug}/invite`);
+                                        await reload();
+                                    });
+                                }}
+                            >
+                                {t('group.invite.rotate')}
+                            </button>
+                            <button
+                                className="btn btn--small btn--ghost"
+                                disabled={busy}
+                                onClick={() =>
+                                    act(async () => {
+                                        await api.patch(`/groups/${slug}/invite`, { open: !group.inviteOpen });
+                                        await reload();
+                                    })
+                                }
+                            >
+                                {group.inviteOpen ? t('group.invite.close') : t('group.invite.reopen')}
+                            </button>
+                        </div>
+                    )}
+                </Modal>
             )}
 
             {scoping && (
@@ -445,7 +465,8 @@ export default function GroupPage() {
                                     className="btn btn--ghost"
                                     disabled={busy}
                                     onClick={() => {
-                                        if (!window.confirm(t('group.transfer.confirm', { name: m.globalName ?? m.username }))) return;
+                                        const name = m.globalName ?? m.username;
+                                        if (!window.confirm(t('group.transfer.confirm', { name }))) return;
                                         act(async () => {
                                             await api.post(`/groups/${slug}/transfer`, { userId: m.id });
                                             await reload();
