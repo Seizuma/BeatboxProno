@@ -32,6 +32,8 @@ model User {
   predictions Prediction[]
   postbox     PostboxMessage[]
   visits      Visit[]
+  memberships GroupMember[]
+  comments    GroupComment[]
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -286,6 +288,9 @@ model Prediction {
   battles PredictedBattle[]
   podium  PredictedPodium[]
 
+  // Les fils de discussion ouverts sur ce pronostic, un par groupe privé.
+  comments GroupComment[]
+
   // Plus d'unicité stricte : c'est elle qui écrasait le pronostic précédent.
   @@index([userId, categoryId])
   @@index([categoryId, submitted])
@@ -334,6 +339,96 @@ model PredictedPodium {
   contender    Contender  @relation(fields: [contenderId], references: [id], onDelete: Cascade)
 
   @@unique([predictionId, rank])
+}
+
+// --- Groupes privés -------------------------------------------------------------
+
+enum GroupRole {
+  OWNER   // crée le groupe, le transmet, le dissout
+  MEMBER
+}
+
+// Un cercle privé : le classement général restreint à quelques personnes, et
+// des commentaires sur les pronostics les uns des autres.
+//
+// Rien ici n'est visible du public. Un groupe n'apparaît nulle part sur le
+// site : on y entre par un lien, jamais par une recherche.
+model Group {
+  id          String   @id @default(cuid())
+  // Le slug sert l'URL. Dérivé du nom, suffixé d'un fragment aléatoire :
+  // deux groupes peuvent légitimement s'appeler « Les potes ».
+  slug        String   @unique
+  name        String
+  description String?
+
+  // Le code d'invitation, porté par le groupe plutôt que par une table de
+  // jetons : une invitation n'a ni destinataire ni échéance, elle ouvre la
+  // porte à qui possède le lien. Une table apporterait une traçabilité dont
+  // personne n'a besoin, et un cycle de vie à purger. Le renouvellement du
+  // code est le seul geste qui referme un lien ayant fuité.
+  inviteCode  String   @unique
+  // Fermer les inscriptions sans changer le code : le lien déjà partagé cesse
+  // d'ouvrir, et rouvrir plus tard ne demande pas de le repartager.
+  inviteOpen  Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+
+  members     GroupMember[]
+  comments    GroupComment[]
+}
+
+// L'appartenance, et avec elle la propriété.
+//
+// Un `ownerId` sur Group permettrait de désigner quelqu'un qui n'est pas
+// membre, et le transfert deviendrait deux écritures à garder cohérentes. Ici
+// le propriétaire est membre par construction, et transmettre le titre est un
+// seul UPDATE sur deux lignes.
+//
+// « Un seul propriétaire par groupe » est un index partiel PostgreSQL
+// (WHERE role = 'OWNER'), que Prisma ne sait pas décrire : il est créé dans la
+// migration et vit dans la base — comme celui du pronostic déposé. Ne le
+// retirez pas si un `prisma migrate dev` propose un jour de le supprimer.
+model GroupMember {
+  groupId  String
+  group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  @@id([groupId, userId])
+  // « Mes groupes » interroge par personne : sans cet index, la requête
+  // parcourt toutes les adhésions du site.
+  @@index([userId])
+}
+
+// Un commentaire sur le pronostic de quelqu'un, à l'intérieur d'un groupe.
+//
+// La clé est le couple (groupe, pronostic), pas le pronostic seul : le même
+// pronostic commenté dans deux cercles garde deux fils distincts, et personne
+// ne lit les remarques d'un groupe auquel il n'appartient pas.
+//
+// Pas de réponses imbriquées ni de mentions : la demande était de pouvoir
+// réagir aux pronostics, pas d'ouvrir une messagerie. Un fil plat se lit d'un
+// coup d'œil et ne réclame ni notifications ni modération.
+model GroupComment {
+  id           String     @id @default(cuid())
+  groupId      String
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  predictionId String
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body         String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  // Renseigné à la première modification : un commentaire retouché après coup
+  // ne doit pas pouvoir se faire passer pour l'original.
+  editedAt     DateTime?
+
+  // L'ordre de lecture d'un fil : groupe, pronostic, chronologie.
+  @@index([groupId, predictionId, createdAt])
+  @@index([authorId])
 }
 
 // --- Boîte à idées -------------------------------------------------------------
