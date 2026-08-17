@@ -1,3 +1,13 @@
+# Ce fichier sert les deux environnements. Rien n'y est écrit en dur qui
+# distingue la production de la préproduction : tout passe par le .env du
+# dossier depuis lequel `docker compose` est lancé.
+#
+# L'isolation entre les deux piles repose sur le nom de projet Compose, qui
+# préfixe les conteneurs, le réseau et les volumes. Par défaut il vaut le nom du
+# dossier ; en dev on le fixe explicitement (COMPOSE_PROJECT_NAME=bbp-dev).
+# À NE JAMAIS toucher côté production : changer le nom de projet d'une pile
+# existante la ferait repartir sur des volumes vides.
+
 services:
   db:
     image: postgres:16-alpine
@@ -10,7 +20,11 @@ services:
       - db-data:/var/lib/postgresql/data
     ports:
       # Boucle locale uniquement : pour psql, les sauvegardes et prisma migrate.
-      - "127.0.0.1:5432:5432"
+      #
+      # Le port est paramétrable pour la même raison que WEB_PORT plus bas :
+      # deux piles sur la même machine ne peuvent pas réserver 5432 toutes les
+      # deux. La production garde 5432 par défaut, la préproduction prend 5433.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -26,12 +40,21 @@ services:
     volumes:
       # Les photos de beatboxers vivent dans l'autre projet du VPS. On les monte
       # en lecture seule : ce conteneur ne doit jamais pouvoir les modifier.
+      # Les deux piles peuvent donc partager le même dossier sans risque.
       - ${ARTIST_PHOTOS_HOST_DIR}:/media/artists:ro
       # Les photos ajoutées depuis l'administration. Volume nommé : elles
-      # survivent aux `docker compose up --build`.
+      # survivent aux `docker compose up --build`. Préfixé par le nom de projet,
+      # donc les téléversements de dev ne remontent pas en production.
       - artist-uploads:/media/uploads
     environment:
+      # Reste « production » même en préproduction : c'est ce drapeau qui pose
+      # le cookie de session en `secure`, et dev.beatboxpredictions.com est
+      # servi en HTTPS comme le reste. Le mettre à « development » ici
+      # casserait la connexion Discord sans rien apporter.
       NODE_ENV: production
+      # L'environnement applicatif, lui, est déclaratif : il sert à distinguer
+      # les deux piles dans les journaux et l'interface.
+      APP_ENV: ${APP_ENV:-prod}
       PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       JWT_SECRET: ${JWT_SECRET}
@@ -43,9 +66,14 @@ services:
       # Boîte à idées : un webhook par salon. Créés dans Discord via
       # « Paramètres du salon → Intégrations → Webhooks ». Ce sont des secrets :
       # qui possède l'URL peut écrire dans le salon.
+      #
+      # En préproduction, les laisser vides : les messages sont enregistrés en
+      # base mais pas relayés, et les salons ne reçoivent pas de doublons de
+      # test. Le code prévoit déjà ce cas et le signale au démarrage.
       DISCORD_WEBHOOK_SUGGESTIONS: ${DISCORD_WEBHOOK_SUGGESTIONS}
       DISCORD_WEBHOOK_BUGS: ${DISCORD_WEBHOOK_BUGS}
-      # Salon privé du rapport quotidien de fréquentation.
+      # Salon privé du rapport quotidien de fréquentation. Vide en dev : sans
+      # webhook, la planification ne s'installe pas du tout.
       DISCORD_WEBHOOK_REPORTS: ${DISCORD_WEBHOOK_REPORTS}
       # Fenêtre du rapport, planification (fuseau REPORT_TZ) et fuseau des
       # journées. Tout est facultatif : 30 jours, 8 h 05, Europe/Paris.
@@ -59,7 +87,13 @@ services:
       ARTIST_UPLOAD_DIR: /media/uploads
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        # Vite fige les `import.meta.env` au moment du build : l'environnement
+        # doit donc entrer dans l'image, pas dans le conteneur. C'est ce qui
+        # allume le marqueur DEL dans l'en-tête de la préproduction.
+        VITE_APP_ENV: ${APP_ENV:-prod}
     restart: unless-stopped
     depends_on:
       - api
@@ -68,8 +102,8 @@ services:
       #
       # 8080 est déjà pris par beatbox-games-prod-client, qui écoute sur
       # 0.0.0.0 : même en se limitant à la boucle locale, la réservation entre
-      # en collision. 8081 est libre, et WEB_PORT permet d'en changer sans
-      # toucher au fichier le jour où il ne le sera plus.
+      # en collision. 8083 sert la production, 8084 la préproduction, et
+      # WEB_PORT permet d'en changer sans toucher au fichier.
       - "127.0.0.1:${WEB_PORT:-8083}:80"
 
 volumes:

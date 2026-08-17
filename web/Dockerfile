@@ -1,6 +1,14 @@
 # --- build ---
 FROM node:20-alpine AS build
 WORKDIR /app
+
+# L'environnement applicatif doit être connu ICI, pas à l'exécution : Vite
+# remplace les `import.meta.env.VITE_*` par leur valeur littérale pendant
+# `npm run build`. Une variable passée au conteneur nginx arriverait trop tard,
+# le paquet étant déjà écrit sur le disque.
+ARG VITE_APP_ENV=prod
+ENV VITE_APP_ENV=$VITE_APP_ENV
+
 COPY package*.json ./
 RUN npm ci || npm install
 COPY . .

@@ -12,11 +12,26 @@ import DiscordButton from './DiscordButton.jsx';
    les vraies pages 411, 412, 413 des services de résultats sportifs.
    --------------------------------------------------------------------------- */
 
+/**
+ * Vrai sur la préproduction. La valeur est figée au build par Vite, depuis
+ * l'argument VITE_APP_ENV du Dockerfile — elle ne peut donc pas être vraie par
+ * accident en production, où l'argument vaut « prod ».
+ *
+ * Sans ce repère, deux onglets ouverts côte à côte sont indiscernables : on
+ * finit par saisir un résultat de test dans la vraie base.
+ */
+const IS_DEV_ENV = import.meta.env.VITE_APP_ENV === 'dev';
 
 export default function Layout() {
   const { user, logout } = useSession();
   const { t } = useI18n();
   const { pathname } = useLocation();
+
+  // Le titre de l'onglet aussi : c'est ce qu'on lit quand la fenêtre est
+  // réduite, donc là où la confusion coûte le plus cher.
+  useEffect(() => {
+    if (IS_DEV_ENV) document.title = 'DEV — beatboxpredictions';
+  }, []);
 
   return (
     <>
@@ -24,6 +39,7 @@ export default function Layout() {
         <div className="masthead__inner">
           <Link to="/" className="wordmark">
             <span className="wordmark__name">beatbox<em>predictions</em></span>
+            {IS_DEV_ENV && <span className="tag tag--now">dev</span>}
           </Link>
 
           <Clock />
