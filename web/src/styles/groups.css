@@ -111,7 +111,7 @@
 
 .grp__layout {
     display: grid;
-    grid-template-columns: minmax(17rem, 21rem) 1fr;
+    grid-template-columns: minmax(19rem, 23rem) 1fr;
     gap: 1.4rem;
     align-items: start;
     margin-top: 1.2rem;
@@ -166,8 +166,16 @@
     padding: 0;
 }
 
+/* Une grille, pas un flex, et des minimums explicitement nuls.
+   `flex: 1` laissait la largeur du bouton se négocier avec son contenu, et un
+   `1fr` de grille porte un minimum implicite `auto` qui interdit à la colonne
+   de descendre sous la taille min-content de ce qu'elle contient. Entre les
+   deux, la colonne du nom se refermait alors même que le rail avait cent
+   trente pixels libres à droite. `minmax(0, 1fr)` et une largeur imposée
+   suppriment la négociation : la ligne occupe le rail, point. */
 .ladder__row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
     border-bottom: 1px solid var(--line);
 }
@@ -177,10 +185,10 @@
 }
 
 .ladder__pick {
-    flex: 1;
+    width: 100%;
     min-width: 0;
     display: grid;
-    grid-template-columns: 2.6rem 1fr;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
     grid-template-areas:
         'rank who'
         'rank sub';
@@ -233,19 +241,30 @@
     min-width: 0;
 }
 
+/* `flex: 1 1 auto` : le nom prend tout ce qui reste après l'avatar et
+   l'étoile. Sans lui, il garde sa largeur de contenu et c'est le conteneur
+   qui décide de le rogner. L'ellipse reste, mais comme filet de sécurité pour
+   les pseudos vraiment longs — plus comme comportement ordinaire. */
 .ladder__name {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+/* Sur une seule ligne : repliée sur deux, elle doublait la hauteur des lignes
+   et poussait la colonne du nom à se rétrécir pour lui faire de la place. */
 .ladder__sub {
     grid-area: sub;
     font-family: var(--font-data);
     font-size: 0.75rem;
     letter-spacing: 0.04em;
     color: var(--ink-faint);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .ladder__pts {
@@ -470,4 +489,87 @@
     display: flex;
     gap: 0.3rem;
     margin-top: 0.2rem;
+}
+
+
+/* ===========================================================================
+   LA PAGE « MES GROUPES »
+
+   Quatre blocs empilés dans une colonne étroite donnaient une impression
+   d'entassement : le formulaire de création avait des champs plus courts que
+   leurs propres exemples, et le compteur flottait seul à droite du titre.
+   Les vignettes reçoivent une hiérarchie — nom en display à la couleur du
+   groupe, chiffres en sous-ligne — et le formulaire passe en bande
+   horizontale, qui ne se replie qu'à l'étroit.
+   =========================================================================== */
+
+.grouplist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 0.7rem;
+}
+
+.groupcard {
+    display: block;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--grp);
+    background: var(--surface);
+    padding: 0.7rem 0.8rem;
+    color: var(--ink);
+}
+
+.groupcard:hover {
+    background: var(--surface-2);
+}
+
+.groupcard__top {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.groupcard__name {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    line-height: 1.1;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--grp);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.groupcard__note {
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+    margin: 0.35rem 0 0;
+}
+
+.groupcard__meta {
+    font-family: var(--font-data);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0.45rem 0 0;
+}
+
+/* La bande de création. Les deux champs partagent la largeur — la description
+   en reçoit davantage, elle en a besoin — et le bouton reste à droite. */
+.newgroup {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) auto;
+    gap: 0.7rem;
+    align-items: end;
+}
+
+.newgroup input {
+    width: 100%;
+}
+
+@media (max-width: 700px) {
+    .newgroup {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
 }
