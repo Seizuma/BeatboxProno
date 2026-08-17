@@ -5,9 +5,9 @@ import { prisma } from './prisma.js';
  *
  * Ce calcul vivait dans `routes/stats.js`, où il servait une seule page. Les
  * groupes privés demandent exactement le même travail sur un sous-ensemble de
- * joueurs : le copier aurait créé deux barèmes qui divergent au premier
- * ajustement. Il sort donc de la route, qui n'a plus qu'à lire ses paramètres
- * et rendre le résultat.
+ * joueurs et de compétitions : le copier aurait créé deux barèmes qui divergent
+ * au premier ajustement. Il sort donc de la route, qui n'a plus qu'à lire ses
+ * paramètres et rendre le résultat.
  *
  * Rien n'est écrit ici : une fonction pure de la base, comme `lib/scoring.js`
  * l'est du pronostic.
@@ -48,7 +48,10 @@ export async function resolveScope({ event, kind } = {}) {
 /**
  * Le classement, ses totaux et — sur demande — les lectures de la foule.
  *
- * @param {string|null}   eventId       restreint à un événement
+ * @param {string|null}   eventId       restreint à un événement (site entier)
+ * @param {string[]|null} eventIds      restreint à ces événements (périmètre
+ *                                      d'un groupe). Une liste vide donne un
+ *                                      classement vide, jamais « tous ».
  * @param {string|null}   categoryKind  restreint à un format de catégorie
  * @param {string[]|null} userIds       restreint à ces personnes (un groupe)
  * @param {boolean}       pad           fait figurer à zéro les `userIds` qui
@@ -58,25 +61,37 @@ export async function resolveScope({ event, kind } = {}) {
  */
 export async function buildScoreboard({
     eventId = null,
+    eventIds = null,
     categoryKind = null,
     userIds = null,
     pad = false,
     readings = true,
     take = 200,
 } = {}) {
-    // Un groupe sans membre — cas théorique, mais un `in: []` coûterait cinq
-    // requêtes pour rendre du vide.
-    if (userIds && userIds.length === 0) {
-        return {
-            totals: { players: 0, submitted: 0, points: 0, battlesPlayed: 0, battlePicks: 0, accuracy: null },
-            players: [],
-            readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 },
-        };
+    const empty = {
+        totals: { players: 0, submitted: 0, points: 0, battlesPlayed: 0, battlePicks: 0, accuracy: null },
+        players: [],
+        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 },
+    };
+
+    // Un groupe sans membre, ou sans périmètre : cinq requêtes pour rendre du
+    // vide n'apprendraient rien à personne. Et surtout, une liste d'événements
+    // vide ne doit JAMAIS être traitée comme « tous » — c'est exactement le
+    // glissement que le périmètre explicite existe pour empêcher.
+    if ((userIds && userIds.length === 0) || (eventIds && eventIds.length === 0)) {
+        return { ...empty, players: pad ? [] : [] };
     }
+
+    const eventFilter = eventIds ? { eventId: { in: eventIds } } : eventId ? { eventId } : {};
+    const categoryEventFilter = eventIds
+        ? { eventId: { in: eventIds } }
+        : eventId
+            ? { eventId }
+            : {};
 
     const predictionWhere = {
         submitted: true,
-        ...(eventId ? { eventId } : {}),
+        ...eventFilter,
         // Filtrer par format : « qui lit le mieux les crews » n'est pas la même
         // question que « qui marque le plus ».
         ...(categoryKind ? { category: { kind: categoryKind } } : {}),
@@ -84,16 +99,11 @@ export async function buildScoreboard({
     };
 
     // Le même périmètre, exprimé côté phases.
-    const phaseScope = {
-        ...(eventId || categoryKind
-            ? {
-                category: {
-                    ...(eventId ? { eventId } : {}),
-                    ...(categoryKind ? { kind: categoryKind } : {}),
-                },
-            }
-            : {}),
+    const categoryScope = {
+        ...categoryEventFilter,
+        ...(categoryKind ? { kind: categoryKind } : {}),
     };
+    const phaseScope = Object.keys(categoryScope).length ? { category: categoryScope } : {};
 
     const [grouped, battles, picks, officialRanks, predictedRanks] = await Promise.all([
         prisma.prediction.groupBy({
@@ -173,8 +183,9 @@ export async function buildScoreboard({
     }
 
     // Les inactifs d'un groupe figurent quand même au tableau. Sur le classement
-    // général, faire apparaître les 4 000 comptes qui n'ont jamais rien déposé
-    // n'aurait aucun sens ; dans un cercle de huit, l'absent est une information.
+    // général, faire apparaître les milliers de comptes qui n'ont jamais rien
+    // déposé n'aurait aucun sens ; dans un cercle de huit, l'absent est une
+    // information.
     const scored = new Set(grouped.map((g) => g.userId));
     const idle = pad && userIds ? userIds.filter((id) => !scored.has(id)) : [];
 

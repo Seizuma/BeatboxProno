@@ -95,6 +95,7 @@ model Event {
 
   categories  Category[]
   predictions Prediction[]
+  groups      GroupEvent[]
 }
 
 enum CategoryKind {
@@ -344,12 +345,13 @@ model PredictedPodium {
 // --- Groupes privés -------------------------------------------------------------
 
 enum GroupRole {
-  OWNER   // crée le groupe, le transmet, le dissout
+  OWNER   // crée le groupe, choisit son périmètre, le transmet, le dissout
   MEMBER
 }
 
-// Un cercle privé : le classement général restreint à quelques personnes, et
-// des commentaires sur les pronostics les uns des autres.
+// Un cercle privé : le classement du site restreint à quelques personnes et à
+// quelques compétitions, et des commentaires sur les pronostics les uns des
+// autres.
 //
 // Rien ici n'est visible du public. Un groupe n'apparaît nulle part sur le
 // site : on y entre par un lien, jamais par une recherche.
@@ -374,7 +376,29 @@ model Group {
   createdAt   DateTime @default(now())
 
   members     GroupMember[]
+  events      GroupEvent[]
   comments    GroupComment[]
+}
+
+// Les compétitions que le groupe suit, choisies par son propriétaire.
+//
+// La liste peut être vide, et vide ne signifie PAS « toutes ». Un groupe monté
+// pour GBB 2026 ne doit pas se mettre à compter les points d'une compète
+// ajoutée six mois plus tard sans que personne l'ait décidé : le classement
+// changerait tout seul, et des pronostics hors sujet apparaîtraient à
+// commenter. Vide signifie « rien de configuré », et la fiche le dit.
+//
+// Ce périmètre gouverne les trois choses ensemble : le classement, les
+// pronostics affichés, et ce qui est commentable.
+model GroupEvent {
+  groupId String
+  group   Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  addedAt DateTime @default(now())
+
+  @@id([groupId, eventId])
+  @@index([eventId])
 }
 
 // L'appartenance, et avec elle la propriété.
@@ -397,8 +421,9 @@ model GroupMember {
   joinedAt DateTime  @default(now())
 
   @@id([groupId, userId])
-  // « Mes groupes » interroge par personne : sans cet index, la requête
-  // parcourt toutes les adhésions du site.
+  // « Mes groupes » interroge par personne, et le quota de cinq adhésions se
+  // compte de la même façon : sans cet index, chaque contrôle parcourt toutes
+  // les adhésions du site.
   @@index([userId])
 }
 
@@ -409,8 +434,7 @@ model GroupMember {
 // ne lit les remarques d'un groupe auquel il n'appartient pas.
 //
 // Pas de réponses imbriquées ni de mentions : la demande était de pouvoir
-// réagir aux pronostics, pas d'ouvrir une messagerie. Un fil plat se lit d'un
-// coup d'œil et ne réclame ni notifications ni modération.
+// réagir aux pronostics, pas d'ouvrir une messagerie.
 model GroupComment {
   id           String     @id @default(cuid())
   groupId      String
@@ -420,13 +444,32 @@ model GroupComment {
   authorId     String
   author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
   body         String
+
+  // Le point de la fiche auquel la bulle est accrochée.
+  //
+  // Une clé, pas des coordonnées d'écran : « rank:<phaseId>:<contenderId> »,
+  // « battle:<phaseId>:<ROUND>:<slot> », « podium:<rang> ». Des pixels absolus
+  // seraient justes le jour de la pose et faux à la première largeur d'écran
+  // différente, au premier repli de colonne, au premier ajout de phase. La clé
+  // désigne un élément du pronostic, qui se retrouve quel que soit l'affichage.
+  //
+  // Vide : commentaire général, sans ancre, affiché dans le fil du bas.
+  anchorKey    String?
+  // Le décalage DANS la boîte de l'élément visé, en fractions de sa largeur et
+  // de sa hauteur (0 à 1). C'est ce qui permet de poser deux bulles à deux
+  // endroits d'une même affiche sans qu'elles se superposent.
+  anchorX      Float?
+  anchorY      Float?
+
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   // Renseigné à la première modification : un commentaire retouché après coup
   // ne doit pas pouvoir se faire passer pour l'original.
   editedAt     DateTime?
 
-  // L'ordre de lecture d'un fil : groupe, pronostic, chronologie.
+  // L'ordre de lecture d'un fil : groupe, pronostic, chronologie. Les ancres
+  // sont regroupées côté client — une fiche en porte quelques dizaines au
+  // maximum, un index de plus ne gagnerait rien.
   @@index([groupId, predictionId, createdAt])
   @@index([authorId])
 }

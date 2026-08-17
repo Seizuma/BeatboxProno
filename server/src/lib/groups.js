@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import { prisma } from './prisma.js';
 
 /**
- * Les outils des groupes privés : identifiants d'URL, codes d'invitation, et
- * les gardes qui répondent à « cette personne a-t-elle le droit d'être là ».
+ * Les outils des groupes privés : identifiants d'URL, codes d'invitation,
+ * couleur d'accent, et les gardes qui répondent à « cette personne a-t-elle le
+ * droit d'être là ».
  *
  * Ces gardes ne vivent pas dans les routes parce qu'ils y seraient recopiés
  * quinze fois : un oubli sur une seule route ouvrirait tout un groupe à
@@ -15,10 +16,19 @@ import { prisma } from './prisma.js';
 // Toutes côté serveur. Une limite affichée à l'écran est une indication ; une
 // limite vérifiée à l'écriture est une règle.
 
-/** Groupes qu'une même personne peut posséder. Rejoindre n'est pas limité. */
-export const MAX_GROUPS_OWNED = 5;
+/**
+ * Groupes par personne, ADHÉSIONS COMPRISES.
+ *
+ * Pas cinq possédés plus autant de rejoints : cinq en tout. Chaque groupe
+ * multiplie les classements à recalculer et les fils à charger, et le coût ne
+ * dépend pas du titre qu'on y porte. Vérifié à la création ET à l'adhésion —
+ * une limite qui ne tient que d'un côté n'en est pas une.
+ */
+export const MAX_GROUPS_PER_USER = 5;
 /** Membres par groupe. Au-delà, le classement général fait le même travail. */
 export const MAX_MEMBERS = 50;
+/** Compétitions suivies par un groupe. */
+export const MAX_EVENTS = 10;
 /** Longueur d'un commentaire. */
 export const MAX_COMMENT_LENGTH = 2000;
 /** Commentaires par personne et par heure glissante. */
@@ -71,8 +81,8 @@ export async function uniqueSlug(name) {
  *
  * Alphabet sans I, l, 1, O ni 0 : le lien se recopie parfois à la main depuis
  * une capture d'écran, et rien n'est plus frustrant qu'un code refusé parce
- * qu'on a lu un zéro pour un O. Douze caractères sur 32 valeurs font 60 bits :
- * hors de portée d'une tentative au hasard.
+ * qu'on a lu un zéro pour un O. Douze caractères sur 31 valeurs font près de
+ * 60 bits : hors de portée d'une tentative au hasard.
  */
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 
@@ -93,10 +103,30 @@ export async function uniqueInviteCode() {
     return makeInviteCode(20);
 }
 
+/**
+ * La couleur d'accent du groupe, tirée de son slug.
+ *
+ * Quatre des six couleurs pures seulement : le bleu est réservé aux bandeaux
+ * de section, le rouge aux alertes — un groupe entièrement rouge annoncerait
+ * une panne. Calculée plutôt que stockée : elle découle du slug, qui ne change
+ * jamais, donc un groupe garde sa couleur à vie sans qu'une colonne la porte.
+ *
+ * Ce n'est pas de la décoration. C'est ce qui dit du premier coup d'œil dans
+ * quel cercle on se trouve quand on en fréquente trois.
+ */
+const ACCENTS = ['y', 'c', 'g', 'm'];
+
+export function accentOf(slug) {
+    let hash = 0;
+    for (let i = 0; i < slug.length; i += 1) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+    return ACCENTS[hash % ACCENTS.length];
+}
+
 // --- Gardes ----------------------------------------------------------------------
 
 /**
- * Charge le groupe désigné par `:slug` et l'adhésion de la personne connectée.
+ * Charge le groupe désigné par `:slug`, son périmètre et l'adhésion de la
+ * personne connectée.
  *
  * Un groupe inconnu et un groupe dont on n'est pas membre renvoient tous deux
  * 404. C'est délibéré : un 403 confirmerait l'existence du groupe à qui teste
@@ -114,6 +144,12 @@ export const loadGroup = async (req, res, next) => {
                         user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
                     },
                 },
+                events: {
+                    orderBy: { addedAt: 'asc' },
+                    include: {
+                        event: { select: { id: true, slug: true, name: true, year: true, status: true } },
+                    },
+                },
             },
         });
 
@@ -124,13 +160,16 @@ export const loadGroup = async (req, res, next) => {
 
         req.group = group;
         req.membership = membership;
+        // Le périmètre, sous la forme dont toutes les routes ont besoin. Une liste
+        // vide reste une liste vide : elle ne signifie jamais « tous ».
+        req.groupEventIds = group.events.map((e) => e.eventId);
         next();
     } catch (err) {
         next(err);
     }
 };
 
-/** Réservé au propriétaire : renommer, inviter, exclure, transmettre, dissoudre. */
+/** Réservé au propriétaire : renommer, choisir le périmètre, inviter, exclure, transmettre, dissoudre. */
 export const requireGroupOwner = (req, res, next) => {
     if (req.membership?.role !== 'OWNER') {
         return res.status(403).json({ error: 'Seul le propriétaire du groupe peut faire cela.' });
@@ -150,14 +189,17 @@ export function serializeGroup(group, membership) {
         name: group.name,
         description: group.description,
         createdAt: group.createdAt,
+        accent: accentOf(group.slug),
         inviteCode: group.inviteCode,
         inviteOpen: group.inviteOpen,
         myRole: membership.role,
         memberCount: group.members.length,
+        events: (group.events ?? []).map((e) => e.event),
         members: group.members.map((m) => ({
             ...m.user,
             role: m.role,
             joinedAt: m.joinedAt,
         })),
+        limits: { members: MAX_MEMBERS, events: MAX_EVENTS, comment: MAX_COMMENT_LENGTH },
     };
 }

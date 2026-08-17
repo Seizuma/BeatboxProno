@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
-import { buildScoreboard, resolveScope } from '../lib/scoreboard.js';
+import { buildScoreboard } from '../lib/scoreboard.js';
 import {
     COMMENTS_PER_HOUR,
     MAX_COMMENT_LENGTH,
-    MAX_GROUPS_OWNED,
+    MAX_EVENTS,
+    MAX_GROUPS_PER_USER,
     MAX_MEMBERS,
+    accentOf,
     loadGroup,
     requireGroupOwner,
     serializeGroup,
@@ -16,8 +18,8 @@ import {
 } from '../lib/groups.js';
 
 /**
- * Les groupes privés : le classement du site restreint à quelques personnes,
- * et des commentaires sur les pronostics les uns des autres.
+ * Les groupes privés : le classement du site restreint à quelques personnes et
+ * à quelques compétitions, et des commentaires accrochés aux pronostics.
  *
  * Aucun groupe n'est listé nulle part. On y entre par un lien d'invitation,
  * jamais par une recherche — c'est la seule porte, et c'est ce qui permet de
@@ -32,6 +34,23 @@ export const groupRouter = Router();
  * navigateur voit une connexion coupée plutôt qu'un message.
  */
 const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+/**
+ * Le périmètre effectif d'une requête : les événements du groupe, éventuellement
+ * réduits à un seul par le filtre de la page.
+ *
+ * Renvoie `null` si le filtre demande un événement que le groupe ne suit pas.
+ * On ne l'ignore pas silencieusement : afficher le classement complet en
+ * réponse à une demande précise ferait croire à un résultat filtré.
+ */
+function scopeEvents(group, groupEventIds, eventSlug) {
+    if (!eventSlug) return groupEventIds;
+    const match = group.events.find((e) => e.event.slug === String(eventSlug));
+    return match ? [match.eventId] : null;
+}
+
+const KINDS = ['SOLO', 'TAG_TEAM', 'LOOPSTATION', 'CREW', 'LEGACY'];
+const readKind = (value) => (KINDS.includes(String(value)) ? String(value) : null);
 
 // --- Aperçu d'une invitation ------------------------------------------------------
 //
@@ -49,6 +68,7 @@ groupRouter.get('/join/:code', guard(async (req, res) => {
             description: true,
             inviteOpen: true,
             _count: { select: { members: true } },
+            events: { select: { event: { select: { name: true, year: true } } }, orderBy: { addedAt: 'asc' } },
         },
     });
 
@@ -61,13 +81,23 @@ groupRouter.get('/join/:code', guard(async (req, res) => {
         })
         : null;
 
+    // Le quota s'annonce AVANT la connexion : mieux vaut le lire sur la page
+    // d'invitation que se voir refuser l'entrée après un aller-retour Discord.
+    const mine = req.user
+        ? await prisma.groupMember.count({ where: { userId: req.user.id } })
+        : 0;
+
     res.json({
         invite: {
             name: group.name,
             description: group.description,
+            accent: accentOf(group.slug),
             memberCount: group._count.members,
+            events: group.events.map((e) => `${e.event.name} ${e.event.year}`),
             open: group.inviteOpen && group._count.members < MAX_MEMBERS,
             full: group._count.members >= MAX_MEMBERS,
+            atLimit: Boolean(req.user) && !membership && mine >= MAX_GROUPS_PER_USER,
+            maxGroups: MAX_GROUPS_PER_USER,
             // Le slug n'est rendu qu'à qui est déjà membre : sinon il permettrait de
             // deviner l'adresse du groupe sans y entrer.
             alreadyMember: Boolean(membership),
@@ -92,7 +122,7 @@ groupRouter.get('/mine', guard(async (req, res) => {
                     name: true,
                     description: true,
                     createdAt: true,
-                    _count: { select: { members: true } },
+                    _count: { select: { members: true, events: true } },
                 },
             },
         },
@@ -104,11 +134,13 @@ groupRouter.get('/mine', guard(async (req, res) => {
             name: m.group.name,
             description: m.group.description,
             createdAt: m.group.createdAt,
+            accent: accentOf(m.group.slug),
             memberCount: m.group._count.members,
+            eventCount: m.group._count.events,
             myRole: m.role,
             joinedAt: m.joinedAt,
         })),
-        limits: { ownedMax: MAX_GROUPS_OWNED, membersMax: MAX_MEMBERS },
+        limits: { groups: MAX_GROUPS_PER_USER, members: MAX_MEMBERS, events: MAX_EVENTS },
     });
 }));
 
@@ -120,12 +152,12 @@ const groupInput = z.object({
 groupRouter.post('/', guard(async (req, res) => {
     const { name, description } = groupInput.parse(req.body ?? {});
 
-    const owned = await prisma.groupMember.count({
-        where: { userId: req.user.id, role: 'OWNER' },
-    });
-    if (owned >= MAX_GROUPS_OWNED) {
+    // Adhésions comprises : posséder cinq groupes ou en avoir rejoint cinq coûte
+    // la même chose, la limite ne distingue donc pas.
+    const mine = await prisma.groupMember.count({ where: { userId: req.user.id } });
+    if (mine >= MAX_GROUPS_PER_USER) {
         return res.status(409).json({
-            error: `Vous possédez déjà ${MAX_GROUPS_OWNED} groupes. Transmettez-en un ou dissolvez-en un pour en créer un autre.`,
+            error: `Vous êtes déjà dans ${MAX_GROUPS_PER_USER} groupes. Quittez-en un pour en créer un autre.`,
         });
     }
 
@@ -148,6 +180,7 @@ groupRouter.post('/', guard(async (req, res) => {
                     user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
                 },
             },
+            events: { include: { event: { select: { id: true, slug: true, name: true, year: true, status: true } } } },
         },
     });
 
@@ -167,7 +200,8 @@ groupRouter.patch('/:slug', loadGroup, requireGroupOwner, guard(async (req, res)
         where: { id: req.group.id },
         // Le slug ne suit PAS le nom : les liens déjà partagés dans une
         // conversation Discord ne doivent pas cesser de fonctionner parce que
-        // quelqu'un a corrigé une faute de frappe.
+        // quelqu'un a corrigé une faute de frappe. La couleur d'accent en découle,
+        // elle ne bouge donc pas non plus.
         data: {
             ...(name !== undefined ? { name } : {}),
             ...(description !== undefined ? { description: description || null } : {}),
@@ -179,6 +213,10 @@ groupRouter.patch('/:slug', loadGroup, requireGroupOwner, guard(async (req, res)
                     user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
                 },
             },
+            events: {
+                orderBy: { addedAt: 'asc' },
+                include: { event: { select: { id: true, slug: true, name: true, year: true, status: true } } },
+            },
         },
     });
 
@@ -186,26 +224,80 @@ groupRouter.patch('/:slug', loadGroup, requireGroupOwner, guard(async (req, res)
 }));
 
 groupRouter.delete('/:slug', loadGroup, requireGroupOwner, guard(async (req, res) => {
-    // Les adhésions et les commentaires partent en cascade, comme déclaré au
-    // schéma. Les pronostics, eux, appartiennent à leurs auteurs : dissoudre un
-    // groupe n'efface que la conversation, jamais le jeu.
+    // Le périmètre, les adhésions et les commentaires partent en cascade, comme
+    // déclaré au schéma. Les pronostics, eux, appartiennent à leurs auteurs :
+    // dissoudre un groupe n'efface que la conversation, jamais le jeu.
     await prisma.group.delete({ where: { id: req.group.id } });
     console.log(`[groupes] ${req.group.slug} dissous par ${req.user.username}.`);
     res.json({ ok: true });
 }));
 
+// --- Périmètre : les compétitions suivies ------------------------------------------------
+
+/**
+ * Remplace la liste des événements suivis.
+ *
+ * Un remplacement complet plutôt qu'un ajout et un retrait séparés : la liste
+ * est courte, l'écran la manipule comme un tout, et deux routes ouvriraient la
+ * porte aux états intermédiaires — un groupe momentanément sans périmètre
+ * pendant qu'on en change.
+ *
+ * Retirer un événement ne supprime aucun commentaire. Ils redeviennent
+ * simplement invisibles, et réapparaissent si l'événement est remis. Effacer
+ * des échanges parce qu'on a décoché une case serait une surprise coûteuse.
+ */
+groupRouter.put('/:slug/events', loadGroup, requireGroupOwner, guard(async (req, res) => {
+    const { slugs } = z
+        .object({ slugs: z.array(z.string()).max(MAX_EVENTS) })
+        .parse(req.body ?? {});
+
+    const events = await prisma.event.findMany({
+        where: { slug: { in: slugs }, status: { not: 'DRAFT' } },
+        select: { id: true },
+    });
+
+    if (events.length !== new Set(slugs).size) {
+        return res.status(400).json({ error: 'Un des événements demandés est introuvable.' });
+    }
+
+    await prisma.$transaction([
+        prisma.groupEvent.deleteMany({ where: { groupId: req.group.id } }),
+        prisma.groupEvent.createMany({
+            data: events.map((e) => ({ groupId: req.group.id, eventId: e.id })),
+        }),
+    ]);
+
+    const group = await prisma.group.findUnique({
+        where: { id: req.group.id },
+        include: {
+            members: {
+                orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
+                include: {
+                    user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+                },
+            },
+            events: {
+                orderBy: { addedAt: 'asc' },
+                include: { event: { select: { id: true, slug: true, name: true, year: true, status: true } } },
+            },
+        },
+    });
+
+    res.json({ group: serializeGroup(group, req.membership) });
+}));
+
 // --- Classement interne -----------------------------------------------------------------
 
 groupRouter.get('/:slug/scoreboard', loadGroup, guard(async (req, res) => {
-    const scope = await resolveScope({ event: req.query.event, kind: req.query.kind });
-    if (scope.notFound) return res.status(404).json({ error: 'Événement introuvable.' });
-
-    const userIds = req.group.members.map((m) => m.userId);
+    const eventIds = scopeEvents(req.group, req.groupEventIds, req.query.event);
+    if (eventIds === null) {
+        return res.status(404).json({ error: 'Cet événement n’est pas suivi par le groupe.' });
+    }
 
     const board = await buildScoreboard({
-        eventId: scope.eventId,
-        categoryKind: scope.categoryKind,
-        userIds,
+        eventIds,
+        categoryKind: readKind(req.query.kind),
+        userIds: req.group.members.map((m) => m.userId),
         // Un membre qui n'a rien déposé figure quand même, à zéro. Dans un cercle
         // de huit, l'absent est une information ; sur le classement général, faire
         // apparaître des milliers de comptes vides n'en serait pas une.
@@ -217,32 +309,37 @@ groupRouter.get('/:slug/scoreboard', loadGroup, guard(async (req, res) => {
     });
 
     res.json({
-        scope: { event: scope.eventSlug, kind: scope.categoryKind },
+        scope: { event: req.query.event ?? null, kind: readKind(req.query.kind) },
+        configured: req.groupEventIds.length > 0,
         totals: board.totals,
         players: board.players,
     });
 }));
 
 /**
- * Les pronostics déposés des membres — la matière à commenter.
+ * Les pronostics déposés des membres, dans le périmètre du groupe — la matière
+ * à commenter.
  *
  * Les brouillons n'y sont jamais : ce sont des hésitations, elles restent
  * privées jusqu'au dépôt, à l'intérieur d'un groupe comme ailleurs.
  */
 groupRouter.get('/:slug/predictions', loadGroup, guard(async (req, res) => {
-    const scope = await resolveScope({ event: req.query.event, kind: req.query.kind });
-    if (scope.notFound) return res.status(404).json({ error: 'Événement introuvable.' });
+    const eventIds = scopeEvents(req.group, req.groupEventIds, req.query.event);
+    if (eventIds === null) {
+        return res.status(404).json({ error: 'Cet événement n’est pas suivi par le groupe.' });
+    }
+    if (eventIds.length === 0) return res.json({ predictions: [], configured: false });
 
-    const userIds = req.group.members.map((m) => m.userId);
+    const kind = readKind(req.query.kind);
 
     const predictions = await prisma.prediction.findMany({
         where: {
             submitted: true,
-            userId: { in: userIds },
-            ...(scope.eventId ? { eventId: scope.eventId } : {}),
-            ...(scope.categoryKind ? { category: { kind: scope.categoryKind } } : {}),
-            // Un événement encore en brouillon n'est visible de personne, pas même
-            // dans un cercle privé.
+            userId: { in: req.group.members.map((m) => m.userId) },
+            eventId: { in: eventIds },
+            ...(kind ? { category: { kind } } : {}),
+            // Un événement passé en brouillon après coup cesse d'être visible, même
+            // s'il figure encore au périmètre du groupe.
             event: { status: { not: 'DRAFT' } },
         },
         orderBy: [{ updatedAt: 'desc' }],
@@ -269,6 +366,7 @@ groupRouter.get('/:slug/predictions', loadGroup, guard(async (req, res) => {
     const byPrediction = new Map(counts.map((c) => [c.predictionId, c._count._all]));
 
     res.json({
+        configured: true,
         predictions: predictions.map((p) => ({ ...p, comments: byPrediction.get(p.id) ?? 0 })),
     });
 }));
@@ -308,6 +406,13 @@ groupRouter.post('/join/:code', guard(async (req, res) => {
     }
     if (group.members.length >= MAX_MEMBERS) {
         return res.status(409).json({ error: `Ce groupe est complet (${MAX_MEMBERS} membres).` });
+    }
+
+    const mine = await prisma.groupMember.count({ where: { userId: req.user.id } });
+    if (mine >= MAX_GROUPS_PER_USER) {
+        return res.status(409).json({
+            error: `Vous êtes déjà dans ${MAX_GROUPS_PER_USER} groupes. Quittez-en un pour rejoindre celui-ci.`,
+        });
     }
 
     await prisma.groupMember.create({
@@ -384,33 +489,80 @@ groupRouter.post('/:slug/transfer', loadGroup, requireGroupOwner, guard(async (r
 
 // --- Commentaires ----------------------------------------------------------------------------
 
-const commentInput = z.object({
+/**
+ * L'ancre d'une bulle.
+ *
+ * Une clé lisible et bornée : « rank:<phaseId>:<contenderId> »,
+ * « battle:<phaseId>:<ROUND>:<slot> », « podium:<rang> ». Le serveur ne vérifie
+ * PAS qu'elle correspond à un élément réel du pronostic — il faudrait rejouer
+ * toute la composition de la fiche à chaque commentaire, pour un cas que le
+ * client sait dégrader : une ancre introuvable retombe dans le fil général.
+ *
+ * Ce qui est vérifié, c'est la forme : longueur bornée, alphabet restreint,
+ * fractions dans [0,1]. De quoi empêcher qu'une chaîne arbitraire finisse
+ * stockée et réinjectée dans un attribut.
+ */
+const anchor = z.object({
+    anchorKey: z
+        .string()
+        .max(120)
+        .regex(/^[A-Za-z0-9:_-]+$/)
+        .optional()
+        .nullable(),
+    anchorX: z.number().min(0).max(1).optional().nullable(),
+    anchorY: z.number().min(0).max(1).optional().nullable(),
+});
+
+const commentInput = anchor.extend({
     body: z.string().trim().min(1).max(MAX_COMMENT_LENGTH),
 });
 
 /**
  * Vérifie qu'un pronostic est commentable dans ce groupe.
  *
- * Deux conditions, et les deux comptent. Le pronostic doit être DÉPOSÉ — un
- * brouillon reste privé. Et son auteur doit être MEMBRE du groupe : sans cela,
- * un identifiant collé dans l'URL suffirait à ouvrir un fil sur le pronostic
- * de n'importe qui, dans un cercle où l'intéressé n'entrera jamais lire ce
- * qu'on dit de lui.
+ * Trois conditions, et les trois comptent. Le pronostic doit être DÉPOSÉ — un
+ * brouillon reste privé. Son auteur doit être MEMBRE du groupe. Et son
+ * événement doit figurer au PÉRIMÈTRE : sans cela, un identifiant collé dans
+ * l'URL rouvrirait la porte à tout ce que le périmètre venait justement de
+ * refermer.
  */
-async function commentablePrediction(group, predictionId) {
+async function commentablePrediction(group, groupEventIds, predictionId) {
+    if (groupEventIds.length === 0) return null;
+
     const prediction = await prisma.prediction.findUnique({
         where: { id: predictionId },
-        select: { id: true, userId: true, submitted: true, event: { select: { status: true } } },
+        select: {
+            id: true,
+            userId: true,
+            eventId: true,
+            submitted: true,
+            event: { select: { status: true } },
+        },
     });
 
     if (!prediction || !prediction.submitted) return null;
     if (prediction.event.status === 'DRAFT') return null;
+    if (!groupEventIds.includes(prediction.eventId)) return null;
     if (!group.members.some((m) => m.userId === prediction.userId)) return null;
     return prediction;
 }
 
+const shape = (c, userId, role) => ({
+    id: c.id,
+    body: c.body,
+    anchorKey: c.anchorKey,
+    anchorX: c.anchorX,
+    anchorY: c.anchorY,
+    createdAt: c.createdAt,
+    editedAt: c.editedAt,
+    author: c.author,
+    mine: c.authorId === userId,
+    // Le propriétaire fait le ménage dans son groupe ; chacun efface le sien.
+    canDelete: c.authorId === userId || role === 'OWNER',
+});
+
 groupRouter.get('/:slug/predictions/:predictionId/comments', loadGroup, guard(async (req, res) => {
-    const prediction = await commentablePrediction(req.group, req.params.predictionId);
+    const prediction = await commentablePrediction(req.group, req.groupEventIds, req.params.predictionId);
     if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable dans ce groupe.' });
 
     const comments = await prisma.groupComment.findMany({
@@ -421,25 +573,14 @@ groupRouter.get('/:slug/predictions/:predictionId/comments', loadGroup, guard(as
         },
     });
 
-    res.json({
-        comments: comments.map((c) => ({
-            id: c.id,
-            body: c.body,
-            createdAt: c.createdAt,
-            editedAt: c.editedAt,
-            author: c.author,
-            mine: c.authorId === req.user.id,
-            // Le propriétaire fait le ménage dans son groupe ; chacun efface le sien.
-            canDelete: c.authorId === req.user.id || req.membership.role === 'OWNER',
-        })),
-    });
+    res.json({ comments: comments.map((c) => shape(c, req.user.id, req.membership.role)) });
 }));
 
 groupRouter.post('/:slug/predictions/:predictionId/comments', loadGroup, guard(async (req, res) => {
-    const prediction = await commentablePrediction(req.group, req.params.predictionId);
+    const prediction = await commentablePrediction(req.group, req.groupEventIds, req.params.predictionId);
     if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable dans ce groupe.' });
 
-    const { body } = commentInput.parse(req.body ?? {});
+    const { body, anchorKey, anchorX, anchorY } = commentInput.parse(req.body ?? {});
 
     // Le quota est compté en base plutôt que gardé en mémoire : un compteur en
     // mémoire repart à zéro à chaque redémarrage du conteneur, et le seul moment
@@ -460,23 +601,17 @@ groupRouter.post('/:slug/predictions/:predictionId/comments', loadGroup, guard(a
             predictionId: prediction.id,
             authorId: req.user.id,
             body,
+            // Une ancre est un tout : sans clé, les coordonnées ne désignent rien.
+            anchorKey: anchorKey || null,
+            anchorX: anchorKey ? anchorX ?? 0.5 : null,
+            anchorY: anchorKey ? anchorY ?? 0.5 : null,
         },
         include: {
             author: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
         },
     });
 
-    res.status(201).json({
-        comment: {
-            id: comment.id,
-            body: comment.body,
-            createdAt: comment.createdAt,
-            editedAt: null,
-            author: comment.author,
-            mine: true,
-            canDelete: true,
-        },
-    });
+    res.status(201).json({ comment: shape(comment, req.user.id, req.membership.role) });
 }));
 
 groupRouter.patch('/:slug/comments/:commentId', loadGroup, guard(async (req, res) => {
@@ -493,7 +628,11 @@ groupRouter.patch('/:slug/comments/:commentId', loadGroup, guard(async (req, res
         return res.status(403).json({ error: 'Seul son auteur peut modifier un commentaire.' });
     }
 
-    const { body } = commentInput.parse(req.body ?? {});
+    // Le texte seul se modifie. Déplacer une bulle après coup changerait le sens
+    // de la conversation : les réponses en dessous répondent à ce qui était visé.
+    const { body } = z
+        .object({ body: z.string().trim().min(1).max(MAX_COMMENT_LENGTH) })
+        .parse(req.body ?? {});
 
     const updated = await prisma.groupComment.update({
         where: { id: comment.id },
