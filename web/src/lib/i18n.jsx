@@ -128,7 +128,7 @@ const DICT = {
     'groups.eyebrow': 'Your private circles',
     'groups.title': 'Groups',
     'groups.lede':
-      'A leaderboard between friends, and comments on each other’s picks. Nothing here is public — a group is entered through a link, never found by searching.',
+      'A leaderboard between friends, on the competitions you choose, and comments pinned anywhere on each other’s picks. Nothing here is public — a group is entered through a link, never found by searching.',
     'groups.empty':
       'You are not in a group yet. Create one, or open an invite link somebody sent you.',
     'groups.create': 'Create a group',
@@ -137,18 +137,34 @@ const DICT = {
     'groups.create.description': 'Description',
     'groups.create.description.hint': 'Optional. Shown on the invite page.',
     'groups.create.submit': 'Create',
-    'groups.full': 'You already own {max} groups. Hand one over or dissolve one to create another.',
+    'groups.full':
+      'You are in {max} groups already — the cap counts the ones you own and the ones you joined. Leave one to create another.',
+    'groups.count': '{n} of {max} groups',
     'groups.members': '{n} members',
+    'groups.events': '{n} competitions',
+    'groups.events.none': 'No competition yet',
     'groups.role.OWNER': 'Owner',
     'groups.role.MEMBER': 'Member',
 
-    'group.standings': 'Standings',
-    'group.standings.empty': 'Nobody has filed a prediction in this scope yet.',
+    'group.ladder': 'Standings',
+    'group.ladder.empty': 'Nothing scored yet.',
     'group.picks': 'Filed picks',
-    'group.picks.empty': 'No filed prediction in this scope yet. Comments open once somebody files one.',
-    'group.picks.comments': '{n} comments',
+    'group.picks.empty': 'No filed prediction here yet.',
+    'group.picks.of': 'Picks by {name}',
+    'group.picks.all': 'Everyone',
+    'group.picks.comments': '{n}',
     'group.members.title': 'Members',
     'group.joined': 'Joined {date}',
+    'group.scope': 'Competitions',
+    'group.scope.lede':
+      'The group only counts these competitions: the standings, the picks shown and what can be commented all follow this list.',
+    'group.scope.empty': 'This group follows no competition yet, so there is nothing to rank.',
+    'group.scope.empty.owner': 'Pick the competitions this group plays on — nothing is counted until you do.',
+    'group.scope.edit': 'Choose competitions',
+    'group.scope.save': 'Save',
+    'group.scope.saved': 'Scope updated.',
+    'group.scope.keep':
+      'Removing a competition hides its picks and their comments. Nothing is deleted — put it back and everything returns.',
     'group.invite': 'Invite link',
     'group.invite.lede': 'Anyone with a beatboxpredictions account can join through this link.',
     'group.invite.copy': 'Copy',
@@ -163,7 +179,7 @@ const DICT = {
     'group.rename.label': 'Name',
     'group.transfer': 'Hand over ownership',
     'group.transfer.lede':
-      'The member you choose takes over: they invite, remove and dissolve. You stay in the group as a member. The change is immediate and you cannot undo it yourself.',
+      'The member you choose takes over: they set the scope, invite, remove and dissolve. You stay in the group as a member. The change is immediate and you cannot undo it yourself.',
     'group.transfer.confirm': 'Hand the group over to {name}?',
     'group.kick': 'Remove from group',
     'group.kick.confirm': 'Remove {name}? Their comments stay — others replied to them.',
@@ -178,6 +194,7 @@ const DICT = {
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
     'join.members': '{n} people are already in.',
+    'join.scope': 'Plays on: {events}',
     'join.signin':
       'Sign in with Discord to join. Nothing is ever posted on your behalf — only your name and avatar are read.',
     'join.accept': 'Join the group',
@@ -185,8 +202,14 @@ const DICT = {
     'join.open': 'Open the group',
     'join.closed': 'Joining this group is closed. Ask a member for a fresh link.',
     'join.full': 'This group is full.',
+    'join.limit': 'You are in {max} groups already. Leave one to join this one.',
     'join.invalid': 'This invite link is not valid. It may have been renewed since it was shared.',
 
+    'pin.mode': 'Pin a comment',
+    'pin.mode.on': 'Click the spot to pin',
+    'pin.mode.hint': 'Click a rank, a battle or a phase to hang your comment on it.',
+    'pin.cancel': 'Cancel',
+    'pin.orphan': 'Pinned to a part of the prediction that is no longer shown.',
     'thread.title': 'Comments',
     'thread.lede': 'Visible only to members of {group}.',
     'thread.empty': 'No comment yet. Say what you make of these picks.',
@@ -198,6 +221,7 @@ const DICT = {
     'thread.delete.confirm': 'Delete this comment?',
     'thread.save': 'Save',
     'thread.cancel': 'Cancel',
+    'thread.close': 'Close',
 
     'privacy.collect.groups': 'The groups you join and the comments you write in them',
     'privacy.collect.groups.why':
@@ -541,7 +565,7 @@ const DICT = {
     'groups.eyebrow': 'Vos cercles privés',
     'groups.title': 'Groupes',
     'groups.lede':
-      'Le classement entre amis, et des commentaires sur les pronostics des autres. Rien n’est public ici — on entre dans un groupe par un lien, jamais en cherchant.',
+      'Le classement entre amis, sur les compétitions que vous choisissez, et des commentaires épinglés où vous voulez sur les pronostics des autres. Rien n’est public ici — on entre dans un groupe par un lien, jamais en cherchant.',
     'groups.empty':
       'Vous n’êtes dans aucun groupe. Créez-en un, ou ouvrez le lien d’invitation qu’on vous a envoyé.',
     'groups.create': 'Créer un groupe',
@@ -550,19 +574,35 @@ const DICT = {
     'groups.create.description': 'Description',
     'groups.create.description.hint': 'Facultative. Affichée sur la page d’invitation.',
     'groups.create.submit': 'Créer',
-    'groups.full': 'Vous possédez déjà {max} groupes. Transmettez-en un ou dissolvez-en un pour en créer un autre.',
+    'groups.full':
+      'Vous êtes déjà dans {max} groupes — la limite compte ceux que vous possédez et ceux que vous avez rejoints. Quittez-en un pour en créer un autre.',
+    'groups.count': '{n} groupes sur {max}',
     'groups.members': '{n} membres',
+    'groups.events': '{n} compétitions',
+    'groups.events.none': 'Aucune compétition',
     'groups.role.OWNER': 'Propriétaire',
     'groups.role.MEMBER': 'Membre',
 
-    'group.standings': 'Classement',
-    'group.standings.empty': 'Personne n’a encore déposé de pronostic dans ce périmètre.',
+    'group.ladder': 'Classement',
+    'group.ladder.empty': 'Rien de scoré pour l’instant.',
     'group.picks': 'Pronostics déposés',
-    'group.picks.empty':
-      'Aucun pronostic déposé dans ce périmètre. Les commentaires s’ouvrent dès que quelqu’un en dépose un.',
-    'group.picks.comments': '{n} commentaires',
+    'group.picks.empty': 'Aucun pronostic déposé ici.',
+    'group.picks.of': 'Pronostics de {name}',
+    'group.picks.all': 'Tout le monde',
+    'group.picks.comments': '{n}',
     'group.members.title': 'Membres',
     'group.joined': 'Arrivé le {date}',
+    'group.scope': 'Compétitions',
+    'group.scope.lede':
+      'Le groupe ne compte que ces compétitions : le classement, les pronostics affichés et ce qui peut être commenté suivent tous cette liste.',
+    'group.scope.empty': 'Ce groupe ne suit aucune compétition : il n’y a rien à classer.',
+    'group.scope.empty.owner':
+      'Choisissez les compétitions sur lesquelles ce groupe joue — rien n’est compté tant que ce n’est pas fait.',
+    'group.scope.edit': 'Choisir les compétitions',
+    'group.scope.save': 'Enregistrer',
+    'group.scope.saved': 'Périmètre mis à jour.',
+    'group.scope.keep':
+      'Retirer une compétition masque ses pronostics et leurs commentaires. Rien n’est supprimé — remettez-la et tout revient.',
     'group.invite': 'Lien d’invitation',
     'group.invite.lede': 'Toute personne ayant un compte beatboxpredictions peut rejoindre par ce lien.',
     'group.invite.copy': 'Copier',
@@ -577,7 +617,7 @@ const DICT = {
     'group.rename.label': 'Nom',
     'group.transfer': 'Transmettre la propriété',
     'group.transfer.lede':
-      'La personne choisie prend la main : elle invite, exclut et dissout. Vous restez dans le groupe comme membre. Le changement est immédiat et vous ne pourrez pas revenir dessus seul.',
+      'La personne choisie prend la main : elle fixe le périmètre, invite, exclut et dissout. Vous restez dans le groupe comme membre. Le changement est immédiat et vous ne pourrez pas revenir dessus seul.',
     'group.transfer.confirm': 'Transmettre le groupe à {name} ?',
     'group.kick': 'Exclure du groupe',
     'group.kick.confirm': 'Exclure {name} ? Ses commentaires restent — d’autres y ont répondu.',
@@ -592,6 +632,7 @@ const DICT = {
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',
     'join.members': '{n} personnes sont déjà dedans.',
+    'join.scope': 'Joue sur : {events}',
     'join.signin':
       'Connectez-vous avec Discord pour rejoindre. Rien n’est jamais publié en votre nom — seuls votre pseudo et votre avatar sont lus.',
     'join.accept': 'Rejoindre le groupe',
@@ -599,8 +640,14 @@ const DICT = {
     'join.open': 'Ouvrir le groupe',
     'join.closed': 'Les inscriptions à ce groupe sont fermées. Demandez un lien récent à un membre.',
     'join.full': 'Ce groupe est complet.',
+    'join.limit': 'Vous êtes déjà dans {max} groupes. Quittez-en un pour rejoindre celui-ci.',
     'join.invalid': 'Cette invitation n’est pas valide. Elle a peut-être été renouvelée depuis son partage.',
 
+    'pin.mode': 'Épingler un commentaire',
+    'pin.mode.on': 'Cliquez l’endroit à épingler',
+    'pin.mode.hint': 'Cliquez un rang, une battle ou une phase pour y accrocher votre commentaire.',
+    'pin.cancel': 'Annuler',
+    'pin.orphan': 'Épinglé à une partie du pronostic qui n’est plus affichée.',
     'thread.title': 'Commentaires',
     'thread.lede': 'Visibles uniquement des membres de {group}.',
     'thread.empty': 'Aucun commentaire. Dites ce que vous pensez de ces pronostics.',
@@ -612,6 +659,7 @@ const DICT = {
     'thread.delete.confirm': 'Supprimer ce commentaire ?',
     'thread.save': 'Enregistrer',
     'thread.cancel': 'Annuler',
+    'thread.close': 'Fermer',
 
     'privacy.collect.groups': 'Les groupes rejoints et les commentaires qui y sont écrits',
     'privacy.collect.groups.why':

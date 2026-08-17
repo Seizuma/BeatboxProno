@@ -10,11 +10,16 @@ import PredictionView from '../components/PredictionView.jsx';
 import Toast from '../components/Toast.jsx';
 
 /**
- * Un groupe : son classement interne, les pronostics déposés par ses membres,
- * et la porte d'entrée qu'est le lien d'invitation.
+ * Un groupe.
+ *
+ * L'organisation ne reprend pas celle du reste du site, et c'est délibéré : un
+ * cercle privé qui ressemblerait au classement général ne serait qu'un filtre
+ * de plus. Ici le classement n'est pas un tableau posé sous un titre — c'est
+ * l'échelle qui tient la colonne de gauche, et elle sert de navigation : on
+ * clique un membre, la mosaïque de droite se réduit à ses pronostics.
  *
  * Un groupe dont on n'est pas membre répond 404, comme un groupe qui n'existe
- * pas — on affiche donc la même chose dans les deux cas, sans chercher à
+ * pas. On affiche donc la même chose dans les deux cas, sans chercher à
  * distinguer.
  */
 export default function GroupPage() {
@@ -27,15 +32,14 @@ export default function GroupPage() {
     const [error, setError] = useState(null);
     const [toast, setToast] = useState(null);
 
-    const [filters, setFilters] = useState({ events: [], kinds: [] });
-    const [scope, setScope] = useState('');
-    const [kind, setKind] = useState('');
     const [board, setBoard] = useState(null);
     const [picks, setPicks] = useState(null);
+    const [focus, setFocus] = useState(null); // membre sélectionné dans l'échelle
 
     const [reading, setReading] = useState(null);
     const [renaming, setRenaming] = useState(false);
     const [transferring, setTransferring] = useState(false);
+    const [scoping, setScoping] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const reload = useCallback(
@@ -43,25 +47,28 @@ export default function GroupPage() {
         [slug]
     );
 
+    const reloadPicks = useCallback(
+        () =>
+            api
+                .get(`/groups/${slug}/predictions`)
+                .then(({ predictions }) => setPicks(predictions))
+                .catch(() => { }),
+        [slug]
+    );
+
     useEffect(() => {
         if (!user) return;
         setError(null);
         reload().catch((e) => setError(e.message));
-        api.get('/scoreboard/filters').then(setFilters).catch(() => { });
     }, [user, reload]);
 
     useEffect(() => {
         if (!user || !group) return;
-        const params = new URLSearchParams();
-        if (scope) params.set('event', scope);
-        if (kind) params.set('kind', kind);
-        const qs = params.toString() ? `?${params}` : '';
-
         setBoard(null);
         setPicks(null);
-        api.get(`/groups/${slug}/scoreboard${qs}`).then(setBoard).catch((e) => setError(e.message));
-        api.get(`/groups/${slug}/predictions${qs}`).then(({ predictions }) => setPicks(predictions)).catch(() => { });
-    }, [user, group, slug, scope, kind]);
+        api.get(`/groups/${slug}/scoreboard`).then(setBoard).catch((e) => setError(e.message));
+        reloadPicks();
+    }, [user, group, slug, reloadPicks]);
 
     if (loading) return <p className="faint" style={{ paddingTop: '2.5rem' }}>{t('common.loading')}</p>;
 
@@ -74,7 +81,7 @@ export default function GroupPage() {
         );
     }
 
-    if (error) {
+    if (error && !group) {
         return (
             <div className="stack" style={{ paddingTop: '2.5rem' }}>
                 <p className="notice">{error}</p>
@@ -86,7 +93,10 @@ export default function GroupPage() {
     if (!group) return <p className="faint" style={{ paddingTop: '2.5rem' }}>{t('common.loading')}</p>;
 
     const isOwner = group.myRole === 'OWNER';
+    const configured = group.events.length > 0;
     const inviteUrl = `${window.location.origin}/groups/join/${group.inviteCode}`;
+    const shown = focus ? (picks ?? []).filter((p) => p.user.id === focus) : picks ?? [];
+    const focused = group.members.find((m) => m.id === focus);
 
     const act = async (fn, done) => {
         if (busy) return;
@@ -106,31 +116,36 @@ export default function GroupPage() {
             await navigator.clipboard.writeText(inviteUrl);
             setToast({ ok: true, message: t('group.invite.copied') });
         } catch {
-            // Presse-papiers refusé (permission, navigateur ancien) : le champ est
-            // en lecture seule et sélectionnable, la copie manuelle reste possible.
+            // Presse-papiers refusé : le champ reste sélectionnable, la copie
+            // manuelle fonctionne toujours.
             setToast({ ok: false, message: inviteUrl });
         }
     };
 
     return (
-        <div className="stack" style={{ paddingTop: '2.5rem' }}>
-            <header className="spread">
-                <div>
-                    <p className="eyebrow">
-                        <Link to="/groups">{t('groups.title')}</Link> · {t('groups.members', { n: group.memberCount })}
-                    </p>
-                    <h1 style={{ marginBottom: 0 }}>{group.name}</h1>
-                    {group.description && <p className="muted" style={{ margin: '0.3rem 0 0' }}>{group.description}</p>}
-                </div>
-
+        <div className="shell grp" data-accent={group.accent}>
+            {/* --- La ligne de service ------------------------------------------- */}
+            <header className="grp__bar">
+                <span className="grp__sigil">GRP</span>
+                <h1 className="grp__name">{group.name}</h1>
+                <span className="grp__meta">
+                    {t('groups.members', { n: group.memberCount })}
+                    {' · '}
+                    {configured
+                        ? group.events.map((e) => `${e.name} ${e.year}`).join(' · ')
+                        : t('groups.events.none')}
+                </span>
+                <span className="grp__spacer" />
                 <MenuButton
                     label={t('nav.menu')}
                     items={[
+                        isOwner && { label: t('group.scope.edit'), onClick: () => setScoping(true) },
                         isOwner && { label: t('group.rename'), onClick: () => setRenaming(true) },
                         isOwner && group.memberCount > 1 && {
                             label: t('group.transfer'),
                             onClick: () => setTransferring(true),
                         },
+                        { separator: true },
                         !isOwner && {
                             label: t('group.leave'),
                             danger: true,
@@ -157,225 +172,216 @@ export default function GroupPage() {
                 />
             </header>
 
-            {/* --- Invitation ---------------------------------------------------- */}
-            <section className="panel stack" style={{ gap: '0.6rem' }}>
-                <h2>{t('group.invite')}</h2>
-                <p className="muted" style={{ margin: 0, fontSize: '0.9rem' }}>
-                    {group.inviteOpen ? t('group.invite.lede') : t('group.invite.closed')}
-                </p>
-                <div className="row">
-                    <input
-                        readOnly
-                        value={inviteUrl}
-                        onFocus={(e) => e.target.select()}
-                        style={{ flex: '1 1 20rem', minWidth: 0 }}
-                        aria-label={t('group.invite')}
-                    />
-                    <button className="btn btn--small" onClick={copyInvite}>{t('group.invite.copy')}</button>
+            {group.description && (
+                <p className="muted" style={{ margin: '0.6rem 0 0' }}>{group.description}</p>
+            )}
+
+            {!configured && (
+                <p className="empty" style={{ marginTop: '1rem' }}>
+                    {isOwner ? t('group.scope.empty.owner') : t('group.scope.empty')}
                     {isOwner && (
                         <>
-                            <button
-                                className="btn btn--small btn--ghost"
-                                disabled={busy}
-                                onClick={() => {
-                                    if (!window.confirm(t('group.invite.rotate.confirm'))) return;
-                                    act(async () => {
-                                        await api.post(`/groups/${slug}/invite`);
-                                        await reload();
-                                    });
-                                }}
-                            >
-                                {t('group.invite.rotate')}
-                            </button>
-                            <button
-                                className="btn btn--small btn--ghost"
-                                disabled={busy}
-                                onClick={() =>
-                                    act(async () => {
-                                        await api.patch(`/groups/${slug}/invite`, { open: !group.inviteOpen });
-                                        await reload();
-                                    })
-                                }
-                            >
-                                {group.inviteOpen ? t('group.invite.close') : t('group.invite.reopen')}
+                            {' '}
+                            <button className="btn btn--small btn--primary" onClick={() => setScoping(true)}>
+                                {t('group.scope.edit')}
                             </button>
                         </>
                     )}
-                </div>
-            </section>
+                </p>
+            )}
 
-            {/* --- Périmètre ----------------------------------------------------- */}
-            <div className="row" style={{ gap: '0.6rem', alignItems: 'flex-end' }}>
-                <div className="field">
-                    <label htmlFor="g-scope">{t('leaderboard.scope')}</label>
-                    <select id="g-scope" value={scope} onChange={(e) => setScope(e.target.value)}>
-                        <option value="">{t('leaderboard.scope.all')}</option>
-                        {filters.events.map((ev) => (
-                            <option key={ev.slug} value={ev.slug}>{ev.name} {ev.year}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="field">
-                    <label htmlFor="g-kind">{t('leaderboard.kind')}</label>
-                    <select id="g-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-                        <option value="">{t('leaderboard.kind.all')}</option>
-                        {filters.kinds.map((k) => (
-                            <option key={k.kind} value={k.kind}>{t(`kind.${k.kind}`)}</option>
-                        ))}
-                    </select>
-                </div>
-                {(scope || kind) && (
-                    <button className="btn btn--small btn--ghost" onClick={() => { setScope(''); setKind(''); }}>
-                        {t('common.clear')}
-                    </button>
-                )}
-            </div>
+            <div className="grp__layout">
+                {/* --- L'échelle : le classement, et la navigation ----------------- */}
+                <aside className="grp__rail">
+                    <p className="grp__railhead">{t('group.ladder')}</p>
 
-            {/* --- Classement ---------------------------------------------------- */}
-            <section className="stack">
-                <h2>{t('group.standings')}</h2>
-                {!board ? (
-                    <p className="faint">{t('common.loading')}</p>
-                ) : board.players.length === 0 ? (
-                    <p className="empty">{t('group.standings.empty')}</p>
-                ) : (
-                    <div className="panel panel--flush">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th></th>
-                                    <th>{t('leaderboard.col.player')}</th>
-                                    <th className="num">{t('stats.col.predictions')}</th>
-                                    <th className="num">{t('leaderboard.col.points')}</th>
-                                    <th className="num">{t('stats.col.average')}</th>
-                                    <th>{t('stats.col.accuracy')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {board.players.map((p, i) => (
-                                    <tr key={p.user?.id ?? i}>
-                                        <td className="rank-cell">{i + 1}</td>
-                                        <td>
-                                            <span className="stat-row">
-                                                {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
-                                                <Link to={`/players/${p.user?.id}`}>
-                                                    {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
-                                                </Link>
-                                            </span>
-                                        </td>
-                                        <td className="num muted">{p.predictions}</td>
-                                        <td className="num" style={{ fontWeight: 600 }}>{number(p.points)}</td>
-                                        <td className="num muted">{p.average ?? '—'}</td>
-                                        <td style={{ minWidth: '9rem' }}>
-                                            {p.accuracy == null ? (
-                                                <span className="faint">—</span>
+                    {!board ? (
+                        <p className="faint" style={{ padding: '0.6rem' }}>{t('common.loading')}</p>
+                    ) : board.players.length === 0 ? (
+                        <p className="faint" style={{ padding: '0.6rem' }}>{t('group.ladder.empty')}</p>
+                    ) : (
+                        <ol className="ladder">
+                            {board.players.map((p, i) => {
+                                const id = p.user?.id;
+                                const on = focus === id;
+                                return (
+                                    <li key={id ?? i}>
+                                        <button
+                                            type="button"
+                                            className={
+                                                'ladder__row' +
+                                                (on ? ' ladder__row--on' : '') +
+                                                (p.predictions === 0 ? ' ladder__row--idle' : '')
+                                            }
+                                            // Recliquer le même membre lève le filtre : sans ça il
+                                            // faudrait chercher un bouton « tout » ailleurs à l'écran.
+                                            onClick={() => setFocus(on ? null : id)}
+                                            aria-pressed={on}
+                                        >
+                                            <span className="ladder__rank">{String(i + 1).padStart(2, '0')}</span>
+                                            {p.user?.avatarUrl ? (
+                                                <img className="avatar" src={p.user.avatarUrl} alt="" />
                                             ) : (
-                                                <>
-                                                    <span className="data" style={{ fontSize: '0.78rem' }}>
-                                                        {p.accuracy} % · {p.battleHits}/{p.battlePicks}
-                                                    </span>
-                                                    <span className="meter"><span style={{ width: `${p.accuracy}%` }} /></span>
-                                                </>
+                                                <span />
                                             )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </section>
+                                            <span className="ladder__name">
+                                                {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                                                {group.members.find((m) => m.id === id)?.role === 'OWNER' && (
+                                                    <span className="ladder__crown"> ★</span>
+                                                )}
+                                            </span>
+                                            <span className="ladder__pts">{number(p.points)}</span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                    )}
+                </aside>
 
-            {/* --- Pronostics déposés -------------------------------------------- */}
-            <section className="stack">
-                <h2>{t('group.picks')}</h2>
-                {!picks ? (
-                    <p className="faint">{t('common.loading')}</p>
-                ) : picks.length === 0 ? (
-                    <p className="empty">{t('group.picks.empty')}</p>
-                ) : (
-                    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-                        {picks.map((p) => (
-                            <button
-                                key={p.id}
-                                type="button"
-                                className="panel"
-                                style={{ textAlign: 'left', cursor: 'pointer' }}
-                                onClick={() => setReading(p.id)}
-                            >
-                                <span className="stat-row">
-                                    {p.user.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
-                                    <strong>{p.user.globalName ?? p.user.username}</strong>
-                                </span>
-                                <p className="data" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>
-                                    {p.event.name} {p.event.year} · {p.category.name}
-                                </p>
-                                <p className="faint data" style={{ margin: '0.3rem 0 0', fontSize: '0.78rem' }}>
-                                    {p.scoredAt ? `${number(p.points)} ${t('common.points')} · ` : ''}
-                                    {t('group.picks.comments', { n: p.comments })}
-                                </p>
+                {/* --- La mosaïque des pronostics ---------------------------------- */}
+                <main className="grp__main stack">
+                    <div className="row" style={{ justifyContent: 'space-between' }}>
+                        <h2 style={{ margin: 0 }}>
+                            {focused ? t('group.picks.of', { name: focused.globalName ?? focused.username }) : t('group.picks')}
+                        </h2>
+                        {focus && (
+                            <button className="btn btn--small btn--ghost" onClick={() => setFocus(null)}>
+                                {t('group.picks.all')}
                             </button>
-                        ))}
+                        )}
                     </div>
-                )}
-            </section>
 
-            {/* --- Membres -------------------------------------------------------- */}
-            <section className="stack">
-                <h2>{t('group.members.title')}</h2>
-                <div className="panel panel--flush">
-                    <table>
-                        <tbody>
-                            {group.members.map((m) => (
-                                <tr key={m.id}>
-                                    <td>
-                                        <span className="stat-row">
-                                            {m.avatarUrl && <img className="avatar" src={m.avatarUrl} alt="" />}
-                                            <Link to={`/players/${m.id}`}>{m.globalName ?? m.username}</Link>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {m.role === 'OWNER' && <span className="tag tag--now">{t('groups.role.OWNER')}</span>}
-                                    </td>
-                                    <td className="muted data" style={{ fontSize: '0.8rem' }}>
-                                        {t('group.joined', { date: date(m.joinedAt) })}
-                                    </td>
-                                    <td style={{ width: '2.5rem' }}>
-                                        {isOwner && m.id !== user.id && (
-                                            <MenuButton
-                                                label={t('nav.menu')}
-                                                items={[
-                                                    {
-                                                        label: t('group.transfer'),
-                                                        onClick: () => {
-                                                            if (!window.confirm(t('group.transfer.confirm', { name: m.globalName ?? m.username }))) return;
-                                                            act(async () => {
-                                                                await api.post(`/groups/${slug}/transfer`, { userId: m.id });
-                                                                await reload();
-                                                            });
-                                                        },
-                                                    },
-                                                    {
-                                                        label: t('group.kick'),
-                                                        danger: true,
-                                                        onClick: () => {
-                                                            if (!window.confirm(t('group.kick.confirm', { name: m.globalName ?? m.username }))) return;
-                                                            act(async () => {
-                                                                await api.del(`/groups/${slug}/members/${m.id}`);
-                                                                await reload();
-                                                            });
-                                                        },
-                                                    },
-                                                ]}
-                                            />
+                    {!picks ? (
+                        <p className="faint">{t('common.loading')}</p>
+                    ) : shown.length === 0 ? (
+                        <p className="empty">{t('group.picks.empty')}</p>
+                    ) : (
+                        <div className="mosaic">
+                            {shown.map((p) => (
+                                <button key={p.id} type="button" className="mosaic__card" onClick={() => setReading(p.id)}>
+                                    <span className="mosaic__who">
+                                        {p.user.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
+                                        <strong>{p.user.globalName ?? p.user.username}</strong>
+                                        {p.comments > 0 && (
+                                            <span className="mosaic__bubbles">{t('group.picks.comments', { n: p.comments })}</span>
                                         )}
-                                    </td>
-                                </tr>
+                                    </span>
+                                    <p className="mosaic__line">
+                                        {p.event.name} {p.event.year} · {p.category.name}
+                                        {p.scoredAt && (
+                                            <>
+                                                {' · '}
+                                                <span className="mosaic__pts">{number(p.points)} {t('common.points')}</span>
+                                            </>
+                                        )}
+                                    </p>
+                                </button>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                        </div>
+                    )}
+
+                    {/* --- L'invitation, en pied de colonne ------------------------- */}
+                    <section className="panel stack" style={{ gap: '0.5rem' }}>
+                        <h2>{t('group.invite')}</h2>
+                        <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+                            {group.inviteOpen ? t('group.invite.lede') : t('group.invite.closed')}
+                        </p>
+                        <div className="row">
+                            <input
+                                readOnly
+                                value={inviteUrl}
+                                onFocus={(e) => e.target.select()}
+                                style={{ flex: '1 1 18rem', minWidth: 0 }}
+                                aria-label={t('group.invite')}
+                            />
+                            <button className="btn btn--small" onClick={copyInvite}>{t('group.invite.copy')}</button>
+                            {isOwner && (
+                                <>
+                                    <button
+                                        className="btn btn--small btn--ghost"
+                                        disabled={busy}
+                                        onClick={() => {
+                                            if (!window.confirm(t('group.invite.rotate.confirm'))) return;
+                                            act(async () => {
+                                                await api.post(`/groups/${slug}/invite`);
+                                                await reload();
+                                            });
+                                        }}
+                                    >
+                                        {t('group.invite.rotate')}
+                                    </button>
+                                    <button
+                                        className="btn btn--small btn--ghost"
+                                        disabled={busy}
+                                        onClick={() =>
+                                            act(async () => {
+                                                await api.patch(`/groups/${slug}/invite`, { open: !group.inviteOpen });
+                                                await reload();
+                                            })
+                                        }
+                                    >
+                                        {group.inviteOpen ? t('group.invite.close') : t('group.invite.reopen')}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* --- Les membres, pour l'administration ----------------------- */}
+                    {isOwner && (
+                        <section className="panel panel--flush">
+                            <table>
+                                <tbody>
+                                    {group.members.map((m) => (
+                                        <tr key={m.id}>
+                                            <td>
+                                                <span className="stat-row">
+                                                    {m.avatarUrl && <img className="avatar" src={m.avatarUrl} alt="" />}
+                                                    <Link to={`/players/${m.id}`}>{m.globalName ?? m.username}</Link>
+                                                </span>
+                                            </td>
+                                            <td className="muted data" style={{ fontSize: '0.78rem' }}>
+                                                {t('group.joined', { date: date(m.joinedAt) })}
+                                            </td>
+                                            <td style={{ width: '2.5rem' }}>
+                                                {m.id !== user.id && (
+                                                    <MenuButton
+                                                        label={t('nav.menu')}
+                                                        items={[
+                                                            {
+                                                                label: t('group.transfer'),
+                                                                onClick: () => {
+                                                                    if (!window.confirm(t('group.transfer.confirm', { name: m.globalName ?? m.username }))) return;
+                                                                    act(async () => {
+                                                                        await api.post(`/groups/${slug}/transfer`, { userId: m.id });
+                                                                        await reload();
+                                                                    });
+                                                                },
+                                                            },
+                                                            {
+                                                                label: t('group.kick'),
+                                                                danger: true,
+                                                                onClick: () => {
+                                                                    if (!window.confirm(t('group.kick.confirm', { name: m.globalName ?? m.username }))) return;
+                                                                    act(async () => {
+                                                                        await api.del(`/groups/${slug}/members/${m.id}`);
+                                                                        await reload();
+                                                                    });
+                                                                },
+                                                            },
+                                                        ]}
+                                                    />
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </section>
+                    )}
+                </main>
+            </div>
 
             {reading && (
                 <PredictionView
@@ -384,17 +390,25 @@ export default function GroupPage() {
                     groupName={group.name}
                     onClose={() => {
                         setReading(null);
-                        // Le compteur de commentaires de la vignette est daté dès qu'on a
-                        // écrit quelque chose dans la fiche : on le rafraîchit à la
-                        // fermeture plutôt que de le remonter depuis le fil.
-                        const params = new URLSearchParams();
-                        if (scope) params.set('event', scope);
-                        if (kind) params.set('kind', kind);
-                        const qs = params.toString() ? `?${params}` : '';
-                        api.get(`/groups/${slug}/predictions${qs}`)
-                            .then(({ predictions }) => setPicks(predictions))
-                            .catch(() => { });
+                        // Le compteur de bulles des vignettes est daté dès qu'on a écrit
+                        // quelque chose dans la fiche : on le rafraîchit à la fermeture.
+                        reloadPicks();
                     }}
+                />
+            )}
+
+            {scoping && (
+                <ScopeDialog
+                    group={group}
+                    busy={busy}
+                    onCancel={() => setScoping(false)}
+                    onSave={(slugs) =>
+                        act(async () => {
+                            const { group } = await api.put(`/groups/${slug}/events`, { slugs });
+                            setGroup(group);
+                            setScoping(false);
+                        }, t('group.scope.saved'))
+                    }
                 />
             )}
 
@@ -448,5 +462,64 @@ export default function GroupPage() {
 
             {toast && <Toast message={toast.message} ok={toast.ok} onDismiss={() => setToast(null)} />}
         </div>
+    );
+}
+
+/**
+ * Le choix des compétitions suivies.
+ *
+ * Une liste de pastilles à cocher plutôt qu'une sélection multiple : le nombre
+ * d'événements se compte sur les doigts, et une liste déroulante à sélection
+ * multiple est un des rares contrôles que personne ne sait manipuler du
+ * premier coup.
+ */
+function ScopeDialog({ group, busy, onCancel, onSave }) {
+    const { t } = useI18n();
+    const [events, setEvents] = useState([]);
+    const [picked, setPicked] = useState(() => group.events.map((e) => e.slug));
+
+    useEffect(() => {
+        api.get('/scoreboard/filters').then(({ events }) => setEvents(events)).catch(() => { });
+    }, []);
+
+    const toggle = (slug) =>
+        setPicked((list) =>
+            list.includes(slug) ? list.filter((s) => s !== slug) : [...list, slug].slice(0, group.limits.events)
+        );
+
+    return (
+        <Modal
+            title={t('group.scope')}
+            onClose={onCancel}
+            footer={
+                <>
+                    <button className="btn btn--primary" disabled={busy} onClick={() => onSave(picked)}>
+                        {t('group.scope.save')}
+                    </button>
+                    <button className="btn btn--ghost" onClick={onCancel}>{t('thread.cancel')}</button>
+                </>
+            }
+        >
+            <p className="muted">{t('group.scope.lede')}</p>
+
+            <div className="scope" style={{ margin: '0.9rem 0' }}>
+                {events.map((ev) => {
+                    const on = picked.includes(ev.slug);
+                    return (
+                        <button
+                            key={ev.slug}
+                            type="button"
+                            className={`scope__chip${on ? ' scope__chip--on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => toggle(ev.slug)}
+                        >
+                            {ev.name} {ev.year}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <p className="faint" style={{ fontSize: '0.85rem' }}>{t('group.scope.keep')}</p>
+        </Modal>
     );
 }

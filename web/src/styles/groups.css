@@ -1,0 +1,380 @@
+/* ===========================================================================
+   P411 — LES GROUPES
+   Chargée après app.css et board.css. Mêmes règles : huit couleurs, zéro
+   arrondi, zéro ombre.
+
+   Pourquoi une organisation à part. Un groupe qui ressemblerait au reste du
+   site ne serait qu'un filtre de plus sur le classement général. Ici le
+   classement cesse d'être un tableau posé sous un titre : il devient l'échelle
+   qui tient la colonne de gauche, et c'est elle qui sert de navigation — on
+   clique un membre, la mosaïque de droite se réduit à ses pronostics.
+
+   La couleur d'accent vient du serveur (`accent` : y, c, g ou m) et se pose en
+   `--grp` sur la racine de la coquille. Ni le bleu, réservé aux bandeaux, ni le
+   rouge, réservé aux alertes : un groupe entièrement rouge annoncerait une
+   panne. Ce n'est pas décoratif — c'est ce qui dit dans quel cercle on est
+   quand on en fréquente trois.
+   =========================================================================== */
+
+.grp {
+    --grp: var(--y);
+    padding-top: 1.6rem;
+}
+
+.grp[data-accent='c'] {
+    --grp: var(--c);
+}
+
+.grp[data-accent='g'] {
+    --grp: var(--g);
+}
+
+.grp[data-accent='m'] {
+    --grp: var(--m);
+}
+
+/* --- La ligne de service du groupe --------------------------------------- */
+
+.grp__bar {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    border-top: var(--border-w) solid var(--grp);
+    border-bottom: var(--border-w) solid var(--grp);
+    padding: 0.5rem 0;
+}
+
+.grp__sigil {
+    font-family: var(--font-data);
+    background: var(--grp);
+    color: #000;
+    padding: 0 0.4em;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+}
+
+.grp__name {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grp);
+    margin: 0;
+}
+
+.grp__meta {
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+}
+
+.grp__spacer {
+    margin-left: auto;
+}
+
+/* --- Deux colonnes : l'échelle, puis les pronostics ------------------------ */
+
+.grp__layout {
+    display: grid;
+    grid-template-columns: minmax(15rem, 19rem) 1fr;
+    gap: 1.4rem;
+    align-items: start;
+    margin-top: 1.2rem;
+}
+
+@media (max-width: 900px) {
+    .grp__layout {
+        grid-template-columns: 1fr;
+    }
+
+    .grp__rail {
+        position: static !important;
+    }
+}
+
+.grp__rail {
+    position: sticky;
+    top: 1rem;
+    border: var(--border-w) solid var(--grp);
+}
+
+.grp__railhead {
+    font-family: var(--font-data);
+    background: var(--grp);
+    color: #000;
+    margin: 0;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* --- L'échelle : le classement EST la navigation --------------------------- */
+
+.ladder {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ladder__row {
+    display: grid;
+    grid-template-columns: 2.4rem auto 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.ladder__row:hover {
+    background: var(--surface-2);
+}
+
+/* La sélection est un liseré, pas un fond : le fond plein volerait la couleur
+   du bandeau et l'écran finirait bariolé. */
+.ladder__row--on {
+    border-left: 3px solid var(--grp);
+    padding-left: calc(0.5rem - 3px);
+    background: var(--surface-2);
+}
+
+.ladder__rank {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--grp);
+    text-align: right;
+}
+
+.ladder__row--idle .ladder__rank {
+    color: var(--ink-faint);
+}
+
+.ladder__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ladder__pts {
+    font-family: var(--font-data);
+    font-size: 0.95rem;
+    color: var(--ok);
+}
+
+.ladder__row--idle .ladder__pts {
+    color: var(--ink-faint);
+}
+
+.ladder__crown {
+    font-family: var(--font-data);
+    font-size: 0.7rem;
+    color: var(--grp);
+}
+
+/* --- La mosaïque des pronostics -------------------------------------------- */
+
+.grp__main {
+    min-width: 0;
+}
+
+.mosaic {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.6rem;
+}
+
+.mosaic__card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--grp);
+    background: var(--surface);
+    color: var(--ink);
+    padding: 0.6rem 0.7rem;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.mosaic__card:hover {
+    background: var(--surface-2);
+}
+
+.mosaic__who {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.mosaic__line {
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+    margin: 0.4rem 0 0;
+    color: var(--ink-faint);
+}
+
+.mosaic__pts {
+    color: var(--ok);
+}
+
+.mosaic__bubbles {
+    font-family: var(--font-data);
+    font-size: 0.75rem;
+    border: 1px solid var(--grp);
+    color: var(--grp);
+    padding: 0 0.35em;
+    margin-left: 0.3rem;
+}
+
+/* --- Le périmètre : les compétitions suivies -------------------------------- */
+
+.scope {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.scope__chip {
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+    background: none;
+    padding: 0.1rem 0.5rem;
+    cursor: pointer;
+}
+
+.scope__chip--on {
+    border-color: var(--grp);
+    color: var(--grp);
+}
+
+.scope__chip:disabled {
+    cursor: default;
+}
+
+/* ===========================================================================
+   LES BULLES ANCRÉES
+
+   Une pastille posée sur un élément du pronostic, qui ouvre le fil attaché à
+   cet endroit. La position est recalculée à partir de la boîte de l'élément
+   visé — jamais mémorisée en pixels, qui seraient faux à la première largeur
+   d'écran différente.
+   =========================================================================== */
+
+.canvas {
+    position: relative;
+}
+
+/* Mode pose : le curseur change, et chaque élément accrochable se signale au
+   survol. Sans ce retour, on clique à l'aveugle en espérant que ça prenne. */
+.canvas--placing {
+    cursor: crosshair;
+}
+
+.canvas--placing [data-anchor]:hover {
+    outline: 1px dashed var(--grp);
+    outline-offset: 2px;
+}
+
+.pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.3rem;
+    background: var(--grp);
+    color: #000;
+    border: 0;
+    cursor: pointer;
+}
+
+.pin--draft {
+    background: var(--screen);
+    color: var(--grp);
+    border: var(--border-w) solid var(--grp);
+}
+
+.bubble {
+    position: absolute;
+    z-index: 6;
+    width: min(22rem, 80vw);
+    max-height: 22rem;
+    overflow-y: auto;
+    border: var(--border-w) solid var(--grp);
+    background: var(--screen);
+    padding: 0.6rem 0.7rem;
+    transform: translate(-50%, 0);
+    margin-top: 1rem;
+}
+
+.bubble__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.5rem;
+}
+
+.bubble__title {
+    font-family: var(--font-data);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--grp);
+}
+
+.note {
+    border-left: 2px solid var(--line);
+    padding-left: 0.6rem;
+}
+
+.note+.note {
+    margin-top: 0.7rem;
+}
+
+.note__head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.note__when {
+    font-family: var(--font-data);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+}
+
+.note__body {
+    margin: 0.2rem 0 0;
+    /* Les retours à la ligne saisis sont conservés, aucun balisage interprété. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.note__acts {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.2rem;
+}

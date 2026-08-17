@@ -48,8 +48,9 @@ export default function Groups() {
         );
     }
 
-    const owned = data?.groups.filter((g) => g.myRole === 'OWNER').length ?? 0;
-    const atLimit = data ? owned >= data.limits.ownedMax : false;
+    // La limite compte les groupes possédés ET rejoints : chacun coûte les mêmes
+    // classements à recalculer, quel que soit le titre qu'on y porte.
+    const atLimit = data ? data.groups.length >= data.limits.groups : false;
 
     const create = async (e) => {
         e.preventDefault();
@@ -76,9 +77,16 @@ export default function Groups() {
 
     return (
         <div className="stack" style={{ paddingTop: '2.5rem' }}>
-            <header>
-                <p className="eyebrow">{t('groups.eyebrow')}</p>
-                <h1>{t('groups.title')}</h1>
+            <header className="spread">
+                <div>
+                    <p className="eyebrow">{t('groups.eyebrow')}</p>
+                    <h1>{t('groups.title')}</h1>
+                </div>
+                {data && (
+                    <span className="tag">
+                        {t('groups.count', { n: data.groups.length, max: data.limits.groups })}
+                    </span>
+                )}
             </header>
 
             <p className="muted" style={{ maxWidth: '46rem' }}>{t('groups.lede')}</p>
@@ -93,20 +101,35 @@ export default function Groups() {
                     ) : (
                         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
                             {data.groups.map((g) => (
-                                <Link key={g.slug} to={`/groups/${g.slug}`} className="panel" style={{ display: 'block' }}>
-                                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                        <strong style={{ fontSize: '1.1rem' }}>{g.name}</strong>
-                                        {g.myRole === 'OWNER' && <span className="tag tag--now">{t('groups.role.OWNER')}</span>}
-                                    </div>
-                                    {g.description && (
-                                        <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.9rem' }}>
-                                            {g.description}
+                                // La coquille porte l'accent du groupe : la vignette annonce
+                                // déjà la couleur qu'on retrouvera en entrant.
+                                <div key={g.slug} className="grp" data-accent={g.accent} style={{ padding: 0 }}>
+                                    <Link
+                                        to={`/groups/${g.slug}`}
+                                        className="mosaic__card"
+                                        style={{ height: '100%' }}
+                                    >
+                                        <span className="mosaic__who" style={{ justifyContent: 'space-between' }}>
+                                            <strong style={{ fontSize: '1.05rem' }}>{g.name}</strong>
+                                            {g.myRole === 'OWNER' && <span className="ladder__crown">★</span>}
+                                        </span>
+
+                                        {g.description && (
+                                            <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.88rem' }}>
+                                                {g.description}
+                                            </p>
+                                        )}
+
+                                        <p className="mosaic__line">
+                                            {t('groups.members', { n: g.memberCount })}
+                                            {' · '}
+                                            {g.eventCount > 0
+                                                ? t('groups.events', { n: g.eventCount })
+                                                : t('groups.events.none')}
                                         </p>
-                                    )}
-                                    <p className="faint data" style={{ margin: '0.6rem 0 0', fontSize: '0.8rem' }}>
-                                        {t('groups.members', { n: g.memberCount })} · {t('group.joined', { date: date(g.joinedAt) })}
-                                    </p>
-                                </Link>
+                                        <p className="mosaic__line">{t('group.joined', { date: date(g.joinedAt) })}</p>
+                                    </Link>
+                                </div>
                             ))}
                         </div>
                     )}
@@ -115,7 +138,7 @@ export default function Groups() {
                         <h2>{t('groups.create')}</h2>
 
                         {atLimit ? (
-                            <p className="faint">{t('groups.full', { max: data.limits.ownedMax })}</p>
+                            <p className="faint">{t('groups.full', { max: data.limits.groups })}</p>
                         ) : (
                             <form className="stack" style={{ gap: '0.7rem' }} onSubmit={create}>
                                 <div className="field">
@@ -149,9 +172,7 @@ export default function Groups() {
                 </>
             )}
 
-            {toast && (
-                <Toast message={toast.message} ok={toast.ok} onDismiss={() => setToast(null)} />
-            )}
+            {toast && <Toast message={toast.message} ok={toast.ok} onDismiss={() => setToast(null)} />}
         </div>
     );
 }

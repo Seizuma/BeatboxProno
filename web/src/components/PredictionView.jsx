@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
 import Modal from './Modal.jsx';
 import ArtistFigure from './ArtistFigure.jsx';
-import CommentThread from './CommentThread.jsx';
+import PredictionComments from './PredictionComments.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -13,15 +13,26 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
  * Ne s'ouvre que sur un pronostic déposé — le serveur refuse les brouillons
  * d'autrui. On y voit ce que la personne avait annoncé : ses classements et
  * ses vainqueurs, dans l'ordre des phases.
+ *
+ * Ouverte depuis un groupe (`groupSlug`), la fiche devient annotable : chaque
+ * rang, chaque affiche et chaque phase porte un `data-anchor`, et les
+ * commentaires viennent s'y accrocher. Ouverte depuis un profil public, elle
+ * reste ce qu'elle était — aucune conversation ne s'y attache.
  */
 export default function PredictionView({ predictionId, onClose, groupSlug, groupName }) {
     const { t, date } = useI18n();
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [placing, setPlacing] = useState(false);
+
+    // La boîte annotée : c'est elle qui porte `position: relative`, donc
+    // l'origine du repère dans lequel les pastilles se placent.
+    const canvas = useRef(null);
 
     useEffect(() => {
         setData(null);
         setError(null);
+        setPlacing(false);
         api
             .get(`/predictions/${predictionId}`)
             .then(({ prediction }) => setData(prediction))
@@ -48,6 +59,20 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                         {data?.label}
                         {data?.updatedAt && ` · ${date(data.updatedAt)}`}
                     </span>
+
+                    {/* Le mode pose. Un interrupteur plutôt qu'un clic droit ou
+                        un appui long : sur mobile ces deux gestes appartiennent
+                        déjà au navigateur, et rien à l'écran ne dirait qu'ils
+                        font quelque chose ici. */}
+                    {data && groupSlug && (
+                        <button
+                            className={`btn btn--small${placing ? ' btn--primary' : ''}`}
+                            onClick={() => setPlacing((v) => !v)}
+                        >
+                            {placing ? t('pin.mode.on') : t('pin.mode')}
+                        </button>
+                    )}
+
                     <button className="btn btn--small" onClick={onClose} style={{ marginLeft: 'auto' }}>
                         {t('draft.close')}
                     </button>
@@ -57,13 +82,26 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
             {error && <p className="notice">{error}</p>}
             {!data && !error && <p className="faint">{t('common.loading')}</p>}
 
-            {data && <Body prediction={data} />}
+            {placing && <p className="notice notice--ok">{t('pin.mode.hint')}</p>}
 
-            {/* Le fil de commentaires n'apparaît que si la fiche a été ouverte
-                depuis un groupe : le même pronostic lu depuis un profil public
-                n'a pas de conversation attachée, et n'en montre donc aucune. */}
-            {data && groupSlug && (
-                <CommentThread predictionId={predictionId} groupSlug={groupSlug} groupName={groupName} />
+            {data && (
+                <div
+                    ref={canvas}
+                    className={`canvas${placing ? ' canvas--placing' : ''}`}
+                >
+                    <Body prediction={data} />
+
+                    {groupSlug && (
+                        <PredictionComments
+                            predictionId={predictionId}
+                            groupSlug={groupSlug}
+                            groupName={groupName}
+                            canvasRef={canvas}
+                            placing={placing}
+                            onPlacingEnd={() => setPlacing(false)}
+                        />
+                    )}
+                </div>
             )}
         </Modal>
     );
@@ -103,7 +141,14 @@ function ReadOnlyBracket({ battles, byId, photo }) {
     const card = (b) => {
         const sides = [b.contenderAId, b.contenderBId];
         return (
-            <div className="bracket__node" key={`${b.round}:${b.slot}`}>
+            // L'ancre porte la PHASE, le TOUR et le SLOT — jamais la position à
+            // l'écran. Une bulle posée sur ce quart de finale y reste quand la
+            // fenêtre rétrécit et que les colonnes se replient.
+            <div
+                className="bracket__node"
+                key={`${b.round}:${b.slot}`}
+                data-anchor={`battle:${b.phaseId}:${b.round}:${b.slot}`}
+            >
                 <div className="battle battle--called">
                     {sides.map((id, i) => {
                         const c = byId.get(id);
@@ -198,7 +243,10 @@ function Body({ prediction }) {
 
                 return (
                     <section className="stack" key={phase.id} style={{ gap: '0.5rem' }}>
-                        <h3>
+                        {/* Le titre de phase est accrochable lui aussi : c'est là
+                            qu'on pose « il a complètement raté ses wildcards »,
+                            une remarque qui ne vise aucune ligne en particulier. */}
+                        <h3 data-anchor={`phase:${phase.id}`}>
                             {phase.name}
                             {phase.qualifierCount ? ` — ${t('ranking.cut', { n: phase.qualifierCount })}` : ''}
                         </h3>
@@ -211,7 +259,14 @@ function Body({ prediction }) {
                                             const c = byId.get(r.contenderId);
                                             const qualified = phase.qualifierCount && r.rank <= phase.qualifierCount;
                                             return (
-                                                <tr key={r.contenderId}>
+                                                // L'ancre désigne le contender dans la phase,
+                                                // pas la ligne : le même beatboxer reste la
+                                                // même cible même si le classement affiché
+                                                // change d'ordre un jour.
+                                                <tr
+                                                    key={r.contenderId}
+                                                    data-anchor={`rank:${phase.id}:${r.contenderId}`}
+                                                >
                                                     <td className="rank-cell">{r.rank}</td>
                                                     <td>
                                                         <span className="stat-row">
