@@ -216,6 +216,17 @@ const DICT = {
     'notif.COMMENT_REPLY': '{name} wrote in a thread you took part in, in {group}',
     'notif.someone': 'A former member',
 
+    'export.open': 'Export',
+    'export.title': 'Export this prediction',
+    'export.format.square': 'Square post',
+    'export.format.story': 'Story',
+    'export.format.wide': 'Wide',
+    'export.download': 'Download',
+    'export.share': 'Share…',
+    'export.share.unsupported': 'Your browser cannot share files. Download the image instead.',
+    'export.hint':
+      'The card carries your announced winner, your qualifiers and your score — not the whole bracket, which nothing would make readable at thumbnail size.',
+
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
     'join.members': '{n} people are already in.',
@@ -685,6 +696,17 @@ const DICT = {
     'notif.COMMENT_ON_MINE': '{name} a commenté votre pronostic dans {group}',
     'notif.COMMENT_REPLY': '{name} a écrit dans un fil où vous êtes intervenu, dans {group}',
     'notif.someone': 'Un ancien membre',
+
+    'export.open': 'Exporter',
+    'export.title': 'Exporter ce pronostic',
+    'export.format.square': 'Post carré',
+    'export.format.story': 'Story',
+    'export.format.wide': 'Large',
+    'export.download': 'Télécharger',
+    'export.share': 'Partager…',
+    'export.share.unsupported': 'Votre navigateur ne sait pas partager de fichier. Téléchargez l’image à la place.',
+    'export.hint':
+      'La carte porte votre vainqueur annoncé, vos qualifiés et votre score — pas l’arbre complet, que rien ne rendrait lisible en vignette.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',

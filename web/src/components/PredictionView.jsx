@@ -4,6 +4,7 @@ import { useI18n } from '../lib/i18n.jsx';
 import Modal from './Modal.jsx';
 import ArtistFigure from './ArtistFigure.jsx';
 import PredictionComments from './PredictionComments.jsx';
+import ExportPrediction from './ExportPrediction.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -24,6 +25,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [placing, setPlacing] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     // La boîte annotée : c'est elle qui porte `position: relative`, donc
     // l'origine du repère dans lequel les pastilles se placent.
@@ -33,6 +35,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
         setData(null);
         setError(null);
         setPlacing(false);
+        setExporting(false);
         api
             .get(`/predictions/${predictionId}`)
             .then(({ prediction }) => setData(prediction))
@@ -59,6 +62,17 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                         {data?.label}
                         {data?.updatedAt && ` · ${date(data.updatedAt)}`}
                     </span>
+
+                    {/* L'export est proposé sur TOUT pronostic déposé, pas
+                        seulement les siens : partager la prédiction de
+                        quelqu'un d'autre pour la commenter est un usage aussi
+                        naturel que partager la sienne, et la carte porte de
+                        toute façon le nom de son auteur. */}
+                    {data && (
+                        <button className="btn btn--small" onClick={() => setExporting(true)}>
+                            {t('export.open')}
+                        </button>
+                    )}
 
                     {/* Le mode pose. Un interrupteur plutôt qu'un clic droit ou
                         un appui long : sur mobile ces deux gestes appartiennent
@@ -102,6 +116,10 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                         />
                     )}
                 </div>
+            )}
+
+            {exporting && data && (
+                <ExportPrediction prediction={data} onClose={() => setExporting(false)} />
             )}
         </Modal>
     );
