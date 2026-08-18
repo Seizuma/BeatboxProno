@@ -18,19 +18,14 @@ import NotificationBell from './NotificationBell.jsx';
  * Vrai sur la préproduction. La valeur est figée au build par Vite, depuis
  * l'argument VITE_APP_ENV du Dockerfile — elle ne peut donc pas être vraie par
  * accident en production, où l'argument vaut « prod ».
- *
- * Sans ce repère, deux onglets ouverts côte à côte sont indiscernables : on
- * finit par saisir un résultat de test dans la vraie base.
  */
 const IS_DEV_ENV = import.meta.env.VITE_APP_ENV === 'dev';
 
 export default function Layout() {
-  const { user, logout } = useSession();
+  const { user } = useSession();
   const { t } = useI18n();
   const { pathname } = useLocation();
 
-  // Le titre de l'onglet aussi : c'est ce qu'on lit quand la fenêtre est
-  // réduite, donc là où la confusion coûte le plus cher.
   useEffect(() => {
     if (IS_DEV_ENV) document.title = 'DEV — beatboxpredictions';
   }, []);
@@ -54,7 +49,13 @@ export default function Layout() {
                     cherche du côté droit par habitude. */}
                 <NotificationBell />
                 {/* La photo mène à ses pronostics : c'est le geste attendu, et
-                    ça évite de chercher l'entrée de menu. */}
+                    ça évite de chercher l'entrée de menu.
+
+                    La déconnexion n'est plus ici. Sur téléphone elle occupait
+                    une place que la ligne de service n'a pas, et elle voisinait
+                    l'avatar — deux cibles de quarante pixels côte à côte, dont
+                    l'une ferme la session. Elle vit désormais sur le profil,
+                    avec le reste de ce qui touche au compte. */}
                 <Link to="/me" title={t('nav.mine')} aria-label={t('nav.mine')}>
                   {user.avatarUrl ? (
                     <img className="avatar avatar--link" src={user.avatarUrl} alt="" />
@@ -62,9 +63,6 @@ export default function Layout() {
                     <span className="tag">{t('nav.mine')}</span>
                   )}
                 </Link>
-                <button className="btn btn--small btn--ghost" onClick={logout}>
-                  {t('nav.logout')}
-                </button>
               </>
             ) : (
               <DiscordButton small>Discord</DiscordButton>
@@ -83,8 +81,7 @@ export default function Layout() {
               <NavLink to="/leaderboard">{t('nav.leaderboard')}</NavLink>
               <NavLink to="/artists">{t('nav.artists')}</NavLink>
               {/* Les groupes ne s'affichent que connecté : déconnecté, la page
-                  n'aurait rien à montrer, et un cercle privé n'a pas à figurer
-                  dans la navigation de quelqu'un qui n'en a aucun. */}
+                  n'aurait rien à montrer. */}
               {user && <NavLink to="/groups">{t('nav.groups')}</NavLink>}
               {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
               {isStaff(user) && <NavLink to="/admin">{t('nav.admin')}</NavLink>}

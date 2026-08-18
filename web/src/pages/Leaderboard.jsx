@@ -14,6 +14,7 @@ export default function Leaderboard() {
   const [filters, setFilters] = useState({ events: [], kinds: [] });
   const [scope, setScope] = useState('');
   const [kind, setKind] = useState('');
+  const [query, setQuery] = useState('');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const { t, number } = useI18n();
@@ -39,6 +40,17 @@ export default function Leaderboard() {
       .then(setData)
       .catch((e) => setError(e.message));
   }, [scope, kind]);
+
+  // Le rang est calculé AVANT le filtrage, et transporté avec la ligne : sinon
+  // le premier résultat d'une recherche s'afficherait numéro 1.
+  const needle = query.trim().toLowerCase();
+  const shown = (data?.players ?? [])
+    .map((p, i) => ({ p, rank: i + 1 }))
+    .filter(({ p }) => {
+      if (!needle) return true;
+      const name = `${p.user?.globalName ?? ''} ${p.user?.username ?? ''}`.toLowerCase();
+      return name.includes(needle);
+    });
 
   return (
     <div className="stack" style={{ paddingTop: '2.5rem' }}>
@@ -66,13 +78,36 @@ export default function Leaderboard() {
               ))}
             </select>
           </div>
-          {(scope || kind) && (
-            <button className="btn btn--small btn--ghost" onClick={() => { setScope(''); setKind(''); }}>
+          {/* La recherche filtre la page déjà chargée plutôt que d'interroger
+              le serveur : le classement tient en deux cents lignes, et une
+              requête par lettre tapée coûterait plus cher que de tout garder
+              en mémoire. Le rang affiché reste celui du classement complet —
+              chercher quelqu'un doit dire à quelle place il est, pas le
+              renuméroter premier parce qu'il est seul à l'écran. */}
+          <div className="field">
+            <label htmlFor="lb-search">{t('leaderboard.search')}</label>
+            <input
+              id="lb-search"
+              type="search"
+              value={query}
+              placeholder={t('leaderboard.search.hint')}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          {(scope || kind || query) && (
+            <button
+              className="btn btn--small btn--ghost"
+              onClick={() => { setScope(''); setKind(''); setQuery(''); }}
+            >
               {t('common.clear')}
             </button>
           )}
         </div>
       </header>
+
+      {/* Que les lignes mènent quelque part n'allait pas de soi : en test,
+          personne n'a pensé à cliquer un pseudo. On le dit. */}
+      <p className="faint" style={{ margin: 0 }}>{t('leaderboard.clickable')}</p>
 
       {error && <p className="notice">{error}</p>}
       {!data && !error && <p className="faint">{t('common.loading')}</p>}
@@ -91,6 +126,8 @@ export default function Leaderboard() {
 
           {data.players.length === 0 ? (
             <p className="empty">{t('leaderboard.empty')}</p>
+          ) : shown.length === 0 ? (
+            <p className="empty">{t('leaderboard.search.none', { q: query.trim() })}</p>
           ) : (
             <div className="panel panel--flush">
               <table>
@@ -105,9 +142,9 @@ export default function Leaderboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.players.map((p, i) => (
-                    <tr key={p.user?.id ?? i}>
-                      <td className="rank-cell">{i + 1}</td>
+                  {shown.map(({ p, rank }) => (
+                    <tr key={p.user?.id ?? rank}>
+                      <td className="rank-cell">{rank}</td>
                       <td>
                         <span className="stat-row">
                           {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}

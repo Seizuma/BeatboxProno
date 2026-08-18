@@ -9,7 +9,7 @@ import DeleteAccount from '../components/DeleteAccount.jsx';
 
 export default function Profile() {
   const { id } = useParams();
-  const { user, loading, refresh } = useSession();
+  const { user, loading, refresh, logout } = useSession();
   const { t, date } = useI18n();
   const targetId = id ?? user?.id;
 
@@ -74,7 +74,30 @@ export default function Profile() {
           </p>
           <h1>{data.user.globalName ?? data.user.username}</h1>
         </div>
+
+        {/* La déconnexion vit ici, avec le reste de ce qui touche au compte.
+            Dans la ligne de service, elle voisinait l'avatar : deux cibles de
+            quarante pixels côte à côte, dont l'une ferme la session. */}
+        {own && user && (
+          <button
+            className="btn btn--small btn--ghost"
+            style={{ marginLeft: 'auto' }}
+            onClick={logout}
+          >
+            {t('nav.logout')}
+          </button>
+        )}
       </header>
+
+      {/* Sur le profil de quelqu'un d'autre, on le dit. Sans ce repère, les
+          chiffres se lisent comme les siens — c'est arrivé en test. */}
+      {!own && (
+        <p className="notice notice--ok" style={{ margin: 0 }}>
+          {t('profile.someoneElse', { name: data.user.globalName ?? data.user.username })}
+          {' '}
+          <Link to="/me">{t('profile.backToMine')}</Link>
+        </p>
+      )}
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <Stat value={data.totals.points} label={t('profile.points')} accent />

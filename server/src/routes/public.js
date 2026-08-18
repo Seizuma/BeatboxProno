@@ -302,37 +302,83 @@ publicRouter.get('/artists/:slug', async (req, res) => {
 
   const contenderIds = artist.entries.map((e) => e.contenderId);
 
-  const [battles, predictedWins, podiumSlots] = await Promise.all([
+  // Les battles OFFICIELLES où l'artiste apparaît. Jouées ou non : une affiche
+  // annoncée mais pas encore disputée reste une affiche réelle, et c'est elle
+  // qui sert de référence pour dire si un pronostic portait sur une battle ou
+  // sur une hypothèse d'arbre.
+  const [officialBattles, podiumSlots] = await Promise.all([
     prisma.battle.findMany({
       where: {
-        played: true,
         OR: [{ contenderAId: { in: contenderIds } }, { contenderBId: { in: contenderIds } }],
       },
+      select: {
+        id: true, phaseId: true, round: true, played: true,
+        contenderAId: true, contenderBId: true, winnerId: true,
+      },
     }),
-    prisma.predictedBattle.count({ where: { winnerId: { in: contenderIds } } }),
     // Le palmarès réel de l'artiste — ses vrais podiums, pas un pari.
     prisma.podiumSlot.findMany({ where: { contenderId: { in: contenderIds } } }),
   ]);
 
+  const battles = officialBattles.filter((b) => b.played);
   const wins = battles.filter((b) => contenderIds.includes(b.winnerId)).length;
 
-  // Fiabilité : parmi les battles jouées où quelqu'un l'a donné vainqueur,
-  // quelle proportion s'est réalisée ?
-  const playedIds = new Set(battles.map((b) => b.id));
+  /**
+   * « Donné vainqueur » comptait n'importe quel créneau d'arbre, y compris les
+   * brouillons et les affiches qui n'ont jamais existé.
+   *
+   * Deux erreurs cumulées. Les brouillons d'abord : chacun peut en garder dix
+   * par catégorie, et tous étaient comptés — le chiffre mesurait surtout le
+   * nombre de fois où quelqu'un avait hésité. Les affiches fantômes ensuite :
+   * un pronostic remplit tout l'arbre, donc il invente des quarts et des demies
+   * qui n'auront jamais lieu, et l'artiste y était « donné vainqueur » de
+   * rencontres imaginaires.
+   *
+   * Le chiffre se lit désormais comme son intitulé le promet : combien de fois
+   * quelqu'un a déposé un pronostic donnant cet artiste vainqueur d'une battle
+   * qui existe pour de bon.
+   */
+  const officialKey = new Set(
+    officialBattles.map(
+      (b) => `${b.phaseId}:${b.round}:${[b.contenderAId, b.contenderBId].sort().join('|')}`
+    )
+  );
+
   const picks = await prisma.predictedBattle.findMany({
-    where: { winnerId: { in: contenderIds } },
+    where: {
+      winnerId: { in: contenderIds },
+      // Un brouillon n'est pas un avis : il n'a jamais été déposé.
+      prediction: { submitted: true },
+    },
     select: { round: true, phaseId: true, contenderAId: true, contenderBId: true, winnerId: true },
   });
+
+  const realPicks = picks.filter((pick) =>
+    officialKey.has(
+      `${pick.phaseId}:${pick.round}:${[pick.contenderAId, pick.contenderBId].sort().join('|')}`
+    )
+  );
+
+  // Fiabilité : parmi les battles JOUÉES où quelqu'un l'a donné vainqueur,
+  // quelle proportion s'est réalisée ? Le dénominateur exclut les affiches
+  // réelles mais pas encore disputées — les compter ferait chuter le taux à
+  // chaque nouvelle compète annoncée.
+  const playedByKey = new Map(
+    battles.map((b) => [
+      `${b.phaseId}:${b.round}:${[b.contenderAId, b.contenderBId].sort().join('|')}`,
+      b,
+    ])
+  );
+
+  let judged = 0;
   let correct = 0;
-  for (const pick of picks) {
-    const hit = battles.find(
-      (b) =>
-        b.phaseId === pick.phaseId &&
-        b.round === pick.round &&
-        [b.contenderAId, b.contenderBId].sort().join() ===
-        [pick.contenderAId, pick.contenderBId].sort().join()
+  for (const pick of realPicks) {
+    const hit = playedByKey.get(
+      `${pick.phaseId}:${pick.round}:${[pick.contenderAId, pick.contenderBId].sort().join('|')}`
     );
-    if (hit && hit.winnerId === pick.winnerId) correct += 1;
+    if (!hit) continue;
+    judged += 1;
+    if (hit.winnerId === pick.winnerId) correct += 1;
   }
 
   res.json({
@@ -346,10 +392,10 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     })),
     record: { battlesPlayed: battles.length, wins, losses: battles.length - wins, podiums: podiumSlots.length },
     crowd: {
-      timesPickedToWinBattle: predictedWins,
+      timesPickedToWinBattle: realPicks.length,
       pickedAndRight: correct,
-      accuracy: picks.length ? Math.round((correct / picks.length) * 100) : null,
-      _playedBattles: playedIds.size,
+      accuracy: judged ? Math.round((correct / judged) * 100) : null,
+      _playedBattles: battles.length,
     },
   });
 });

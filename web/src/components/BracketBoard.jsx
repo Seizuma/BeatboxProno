@@ -217,7 +217,11 @@ export default function BracketBoard({
                 <span className="battle__name">
                   {c?.name ?? <em className="faint">{t('bracket.tbd')}</em>}
                 </span>
-                <span className="battle__seed">{c?.seed ?? '—'}</span>
+                {/* Plus de seed ici. Celui de l'inscription n'a plus cours une
+                    fois le tableau tiré : à ce stade seul compte le rang de
+                    qualification, qui n'est pas le même chiffre. Affiché à côté
+                    du nom, il se lisait comme une place actuelle et induisait
+                    en erreur. */}
               </button>
             );
           })}
