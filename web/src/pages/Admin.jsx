@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
-import { useSession, isStaff, isOwner } from '../lib/context.jsx';
+import { useSession, isStaff } from '../lib/context.jsx';
 import ArtistPhotosPanel from '../components/ArtistPhotosPanel.jsx';
 import Modal from '../components/Modal.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
@@ -13,6 +13,7 @@ import SeedingEditor from '../components/SeedingEditor.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
+import AdminPeople from '../components/AdminPeople.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -52,7 +53,11 @@ export default function Admin() {
       {tab === 'structure' && <StructureAdmin />}
       {tab === 'artists' && <ArtistsAdmin />}
       {tab === 'results' && <ResultsAdmin />}
-      {tab === 'people' && <PeopleAdmin currentUser={user} />}
+      {/* L'onglet « Comptes » vit dans son propre fichier : il porte une
+          courbe, un décompte et une liste repliable, et n'a rien à voir avec la
+          structure des événements. `useFlash` lui est passé plutôt que dupliqué
+          — c'est le même bandeau de retour partout dans l'administration. */}
+      {tab === 'people' && <AdminPeople currentUser={user} useFlash={useFlash} />}
     </div>
   );
 }
@@ -1628,73 +1633,5 @@ function PublishState({ phase }) {
       Brouillon de résultats : rien n'est visible des joueurs, aucun score n'est calculé.
       Publiez quand la phase est complète.
     </p>
-  );
-}
-
-// =============================================================================
-//  COMPTES
-// =============================================================================
-
-function PeopleAdmin({ currentUser }) {
-  const [users, setUsers] = useState([]);
-  const [q, setQ] = useState('');
-  const [flash, run] = useFlash();
-
-  const reload = () => api.get(`/admin/users?q=${encodeURIComponent(q)}`).then(({ users }) => setUsers(users));
-  useEffect(() => { reload(); }, [q]);
-
-  return (
-    <div className="stack">
-      {flash}
-      <div className="field">
-        <label htmlFor="q">Chercher un compte Discord</label>
-        <input id="q" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="pseudo ou identifiant Discord" />
-      </div>
-
-      <div className="panel panel--flush">
-        <table>
-          <thead><tr><th>Compte</th><th>Identifiant Discord</th><th>Rôle</th></tr></thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <span className="row" style={{ gap: '0.5rem' }}>
-                    {u.avatarUrl && <img className="avatar" src={u.avatarUrl} alt="" />}
-                    {u.globalName ?? u.username}
-                  </span>
-                </td>
-                <td className="data faint">{u.discordId}</td>
-                <td>
-                  <select
-                    value={u.role}
-                    // Un administrateur ne peut pas toucher au propriétaire, et
-                    // personne ne se retire ses propres droits.
-                    disabled={u.id === currentUser.id || (u.role === 'OWNER' && !isOwner(currentUser))}
-                    aria-label={`Rôle de ${u.username}`}
-                    onChange={(e) =>
-                      run(async () => {
-                        await api.patch(`/admin/users/${u.id}/role`, { role: e.target.value });
-                        await reload();
-                      }, 'Rôle mis à jour.')
-                    }
-                  >
-                    <option value="USER">Membre</option>
-                    <option value="ADMIN">Administrateur</option>
-                    {/* Seul le propriétaire peut transmettre son rang ; le
-                        serveur refuse de toute façon les autres cas. */}
-                    {isOwner(currentUser) && <option value="OWNER">Propriétaire</option>}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="faint" style={{ fontSize: '0.85rem' }}>
-        Un administrateur gère les événements, les artistes et les résultats, et distribue les
-        rôles. Le propriétaire est le seul qu'aucun administrateur ne peut destituer ; il n'y en a
-        qu'un, et il ne peut transmettre son rang qu'en le donnant à quelqu'un d'autre.
-      </p>
-    </div>
   );
 }
