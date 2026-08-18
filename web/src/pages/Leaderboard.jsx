@@ -41,7 +41,7 @@ export default function Leaderboard() {
       .catch((e) => setError(e.message));
   }, [scope, kind]);
 
-  // Le rang est calculé AVANT le filtrage, et transporté avec la ligne : sinon
+  // Le rang est calculé AVANT le filtrage et transporté avec la ligne : sinon
   // le premier résultat d'une recherche s'afficherait numéro 1.
   const needle = query.trim().toLowerCase();
   const shown = (data?.players ?? [])
@@ -81,9 +81,7 @@ export default function Leaderboard() {
           {/* La recherche filtre la page déjà chargée plutôt que d'interroger
               le serveur : le classement tient en deux cents lignes, et une
               requête par lettre tapée coûterait plus cher que de tout garder
-              en mémoire. Le rang affiché reste celui du classement complet —
-              chercher quelqu'un doit dire à quelle place il est, pas le
-              renuméroter premier parce qu'il est seul à l'écran. */}
+              en mémoire. */}
           <div className="field">
             <label htmlFor="lb-search">{t('leaderboard.search')}</label>
             <input
@@ -135,9 +133,14 @@ export default function Leaderboard() {
                   <tr>
                     <th></th>
                     <th>{t('leaderboard.col.player')}</th>
-                    <th className="num">{t('stats.col.predictions')}</th>
+                    {/* `col-opt` : masquée sous 620 px. Ces deux chiffres se
+                        retrouvent sur le profil du joueur, où l'on va de toute
+                        façon quand ils intriguent. Rang, pseudo, points et
+                        réussite suffisent à répondre à la question qu'on se
+                        pose en ouvrant un classement. */}
+                    <th className="num col-opt">{t('stats.col.predictions')}</th>
                     <th className="num">{t('leaderboard.col.points')}</th>
-                    <th className="num">{t('stats.col.average')}</th>
+                    <th className="num col-opt">{t('stats.col.average')}</th>
                     <th>{t('stats.col.accuracy')}</th>
                   </tr>
                 </thead>
@@ -153,10 +156,14 @@ export default function Leaderboard() {
                           </Link>
                         </span>
                       </td>
-                      <td className="num muted">{p.predictions}</td>
+                      <td className="num muted col-opt">{p.predictions}</td>
                       <td className="num" style={{ fontWeight: 600 }}>{p.points}</td>
-                      <td className="num muted">{p.average ?? '—'}</td>
-                      <td style={{ minWidth: '9rem' }}>
+                      <td className="num muted col-opt">{p.average ?? '—'}</td>
+                      {/* `minWidth` en rem : sur un écran de 360 px, cette
+                          seule cellule réclamait un quart de la largeur et
+                          poussait le tableau hors du document. La jauge se
+                          contente de ce qu'on lui laisse. */}
+                      <td style={{ minWidth: '6rem' }}>
                         {p.accuracy == null ? (
                           <span className="faint">—</span>
                         ) : (
