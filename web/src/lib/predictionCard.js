@@ -5,20 +5,7 @@
  * navigateur sans tête rendrait la page au pixel près, mais ajouterait trois
  * cents mégaoctets à l'image Docker et une seconde de latence par export.
  *
- * ─── Ce que la première version ratait ───────────────────────────────────────
- *
- * Elle ne montrait qu'un extrait : le vainqueur et les huit premiers qualifiés.
- * L'idée était de « rester lisible en vignette ». C'était une erreur de
- * jugement : on ne partage pas un pronostic pour en montrer le résumé, on le
- * partage pour montrer TOUT ce qu'on a annoncé — c'est là-dessus qu'on se fait
- * chambrer. Un export amputé ne sert à rien.
- *
- * Et sa mise en page était fausse : le pied était posé à une distance fixe du
- * bas pendant que le contenu coulait depuis le haut. Dès que le contenu
- * dépassait, les deux se chevauchaient. Le format large, le plus court en
- * hauteur, était illisible pour cette seule raison.
- *
- * ─── Comment celle-ci s'y prend ──────────────────────────────────────────────
+ * ─── La méthode ──────────────────────────────────────────────────────────────
  *
  * Le tracé se fait en deux temps. On construit d'abord une mise en page
  * complète en coordonnées LOGIQUES, sans rien dessiner : on connaît alors sa
@@ -33,8 +20,17 @@
  * La largeur logique elle-même est choisie par essais : on construit la mise en
  * page à plusieurs largeurs, et on garde celle dont le facteur d'échelle final
  * est le plus grand — c'est-à-dire la plus lisible. C'est ce qui fait qu'une
- * story prend une colonne et un format large en prend quatre, sans qu'aucune
- * règle ne le décide explicitement.
+ * story prend une colonne d'éliminations et un format large en prend cinq, sans
+ * qu'aucune règle ne le décide explicitement.
+ *
+ * ─── La grammaire visuelle ───────────────────────────────────────────────────
+ *
+ * Elle n'est pas inventée ici : elle est recopiée de `board.css`, règle par
+ * règle. Vainqueur surligné en bleu avec son nom en jaune et un chevron,
+ * scores magenta côté perdant, étiquettes de tour en bleu sur jaune, petite
+ * finale en magenta, liaisons cyan, qualifiés en vert. Une image partagée doit
+ * ressembler à l'écran d'où elle sort, sans quoi personne ne fait le lien entre
+ * les deux.
  */
 
 export const FORMATS = {
@@ -44,7 +40,19 @@ export const FORMATS = {
 };
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
-const ROUND_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+
+/**
+ * Les colonnes du tableau, dans l'ordre.
+ *
+ * La petite finale n'y figure pas : elle n'est pas une étape de la pyramide.
+ * Elle se joue entre les deux perdants des demies, n'alimente rien et n'est
+ * alimentée par aucune paire. Lui donner une colonne — ce que faisait la
+ * version précédente — la plaçait à l'endroit qu'occupe la finale, et le
+ * tableau se lisait à l'envers. Elle est traitée en annexe, sous la finale,
+ * exactement comme sur le site.
+ */
+const MAIN_ROUNDS = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL', 'LEGACY'];
+const ANNEX_ROUND = 'SMALL_FINAL';
 
 /** Les largeurs logiques essayées. La meilleure gagne, aucune n'est privilégiée. */
 const CANDIDATE_WIDTHS = [820, 1100, 1400, 1750, 2100, 2600, 3200];
@@ -58,8 +66,7 @@ const MAX_SCALE = 1.35;
  * Un pronostic complet est dense : à 1080 px de large, le nom d'un beatboxer
  * fait une quinzaine de pixels. Doubler la définition ne change rien à la
  * proportion — donc rien à la lisibilité en vignette — mais rend le texte net
- * quand quelqu'un zoome, ce qu'on fait toujours devant un tableau. Les réseaux
- * rééchantillonnent de toute façon à leur guise.
+ * quand quelqu'un zoome, ce qu'on fait toujours devant un tableau.
  */
 const PIXEL_SCALE = 2;
 
@@ -71,8 +78,7 @@ const DATA = '"IBM Plex Mono", monospace';
  *
  * Sans cette attente, le premier export sort en police système : le canvas ne
  * déclenche pas le chargement d'une police web, il se contente de ce qui est
- * déjà là. Le défaut est invisible en développement — tout est en cache — et
- * systématique pour quelqu'un qui exporte en arrivant sur le site.
+ * déjà là.
  */
 export async function ensureFonts() {
     if (!document.fonts) return;
@@ -94,12 +100,15 @@ export function readPalette(root = document.documentElement) {
     const v = (name, fallback) => (css.getPropertyValue(name) || '').trim() || fallback;
     return {
         screen: v('--screen', '#0b0b0b'),
+        surface: v('--surface-2', '#131313'),
         ink: v('--w', '#e8e8e8'),
-        faint: v('--line', '#3a3a3a'),
         dim: v('--ink-faint', '#8a8a8a'),
+        faint: v('--line', '#3a3a3a'),
         accent: v('--y', '#ffe400'),
         ok: v('--g', '#00d648'),
         cyan: v('--c', '#00e8e8'),
+        blue: v('--b', '#1414d8'),
+        magenta: v('--m', '#ff3ce8'),
     };
 }
 
@@ -127,47 +136,53 @@ export function buildCardModel(prediction, { t } = {}) {
                 .map((r) => ({
                     rank: r.rank,
                     name: nameOf(r.contenderId),
-                    // Sans nombre de qualifiés déclaré, personne n'est « barré » : mieux
-                    // vaut ne rien affirmer que d'inventer une coupe.
+                    // Sans nombre de qualifiés déclaré, personne n'est barré : mieux vaut
+                    // ne rien affirmer que d'inventer une coupe.
                     through: phase.qualifierCount ? r.rank <= phase.qualifierCount : true,
                 }));
 
             if (rows.length) {
-                sections.push({
-                    kind: 'ranking',
-                    label: phase.name,
-                    cut: phase.qualifierCount ?? null,
-                    rows,
-                });
+                sections.push({ kind: 'ranking', label: phase.name, cut: phase.qualifierCount ?? null, rows });
             }
             continue;
         }
 
-        // Phase à battles : on garde les tours dans l'ordre du tableau.
         const all = prediction.battles.filter(
             (b) => b.phaseId === phase.id && (b.winnerId || b.contenderAId || b.contenderBId)
         );
         if (all.length === 0) continue;
 
+        const toBattle = (b) => ({
+            a: b.contenderAId ? nameOf(b.contenderAId) : null,
+            b: b.contenderBId ? nameOf(b.contenderBId) : null,
+            winnerIsA: Boolean(b.winnerId) && b.winnerId === b.contenderAId,
+            winnerIsB: Boolean(b.winnerId) && b.winnerId === b.contenderBId,
+            called: Boolean(b.winnerId),
+            scoreA: b.scoreA,
+            scoreB: b.scoreB,
+        });
+
         const rounds = [];
-        for (const round of ROUND_ORDER) {
+        for (const round of MAIN_ROUNDS) {
             const list = all.filter((b) => b.round === round).sort((x, y) => x.slot - y.slot);
             if (list.length === 0) continue;
-            rounds.push({
-                round,
-                label: label(`bracket.round.${round}`, round),
-                battles: list.map((b) => ({
-                    a: b.contenderAId ? nameOf(b.contenderAId) : null,
-                    b: b.contenderBId ? nameOf(b.contenderBId) : null,
-                    winnerIsA: b.winnerId && b.winnerId === b.contenderAId,
-                    winnerIsB: b.winnerId && b.winnerId === b.contenderBId,
-                    scoreA: b.scoreA,
-                    scoreB: b.scoreB,
-                })),
-            });
+            rounds.push({ round, label: label(`bracket.round.${round}`, round), battles: list.map(toBattle) });
         }
 
-        if (rounds.length) sections.push({ kind: 'bracket', label: phase.name, rounds });
+        const smalls = all.filter((b) => b.round === ANNEX_ROUND).sort((x, y) => x.slot - y.slot);
+        let annex = smalls.length
+            ? { label: label(`bracket.round.${ANNEX_ROUND}`, ANNEX_ROUND), battles: smalls.map(toBattle) }
+            : null;
+
+        // Petite finale sans finale : rien à quoi l'annexer, elle redevient une
+        // colonne ordinaire. Le cas est rare — un tableau interrompu — mais la
+        // laisser tomber en silence serait pire.
+        if (annex && rounds.length === 0) {
+            rounds.push({ round: ANNEX_ROUND, label: annex.label, battles: annex.battles });
+            annex = null;
+        }
+
+        if (rounds.length) sections.push({ kind: 'bracket', label: phase.name, rounds, annex });
     }
 
     return {
@@ -192,17 +207,25 @@ const TITLE = 62;
 const SUB = 30;
 const EYEBROW = 22;
 const SECTION = 26;
+const TAG = 23;
+const TAG_H = 34;
 const ROW_H = 42;
 const RANK_F = 34;
 const NAME_F = 26;
 const COL_MIN = 360;
 const CARD_W_MIN = 300;
-const SIDE_H = 40;
-const CARD_GAP = 26;
+const SIDE_H = 42;
+const CARD_GAP = 28;
+const CHEVRON = '\u25BA ';
 
 const font = (ctx, size, family) => {
     ctx.font = `400 ${size}px ${family}`;
 };
+
+function measure(ctx, text, size, family) {
+    font(ctx, size, family);
+    return ctx.measureText(text).width;
+}
 
 function fit(ctx, text, size, family, maxWidth) {
     font(ctx, size, family);
@@ -210,6 +233,15 @@ function fit(ctx, text, size, family, maxWidth) {
     let cut = text;
     while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
     return `${cut}…`;
+}
+
+/** Une étiquette pleine, comme les intitulés de tour du site. */
+function tagOp(ctx, x, y, text, bg, fg) {
+    const w = measure(ctx, text, TAG, DATA) + 20;
+    return [
+        { t: 'fill', x, y, w, h: TAG_H, c: bg },
+        { t: 'text', x: x + 10, y: y + 5, s: TAG, f: DATA, c: fg, v: text },
+    ];
 }
 
 function layoutRanking(ctx, section, LW, top) {
@@ -227,7 +259,7 @@ function layoutRanking(ctx, section, LW, top) {
 
     // Le nombre de colonnes découle de la largeur disponible, pas d'un réglage :
     // c'est ce qui permet à la même liste de tenir sur une colonne en story et
-    // sur quatre en format large.
+    // sur cinq en format large.
     const cols = Math.max(1, Math.floor(LW / COL_MIN));
     const colW = LW / cols;
     const perCol = Math.ceil(section.rows.length / cols);
@@ -238,6 +270,8 @@ function layoutRanking(ctx, section, LW, top) {
         const x = col * colW;
         const ry = y + line * ROW_H;
 
+        // Le rang reste jaune quoi qu'il arrive, comme `.rank-cell` sur le site ;
+        // c'est le NOM qui passe au vert quand la personne est donnée qualifiée.
         ops.push({
             t: 'text', x, y: ry, s: RANK_F, f: DISPLAY,
             c: row.through ? 'accent' : 'faint',
@@ -245,7 +279,7 @@ function layoutRanking(ctx, section, LW, top) {
         });
         ops.push({
             t: 'text', x: x + 62, y: ry + 5, s: NAME_F, f: DATA,
-            c: row.through ? 'ink' : 'dim',
+            c: row.through ? 'ok' : 'dim',
             v: fit(ctx, row.name, NAME_F, DATA, colW - 80),
         });
     });
@@ -254,98 +288,132 @@ function layoutRanking(ctx, section, LW, top) {
     return { ops, height: y - top };
 }
 
+/** Une affiche : deux camps, le vainqueur surligné, les scores à droite. */
+function battleOps(ctx, battle, x, y, w) {
+    const ops = [];
+    const cardH = SIDE_H * 2 + 6;
+
+    // Le cadre passe au jaune dès qu'un vainqueur est désigné — c'est
+    // `.battle--called` sur le site.
+    ops.push({ t: 'rect', x, y, w, h: cardH, c: battle.called ? 'accent' : 'faint' });
+
+    const side = (name, isWinner, score, index) => {
+        const sy = y + 3 + index * SIDE_H;
+
+        if (isWinner) {
+            // Inversion vidéo bleue : le marquage télétexte d'une ligne de résultat.
+            ops.push({ t: 'fill', x: x + 3, y: sy, w: w - 6, h: SIDE_H - 4, c: 'blue' });
+        }
+
+        const text = (isWinner ? CHEVRON : '') + (name ?? '—').toUpperCase();
+        ops.push({
+            t: 'text', x: x + 14, y: sy + 8, s: NAME_F - 2, f: DATA,
+            c: isWinner ? 'accent' : name ? 'ink' : 'faint',
+            v: fit(ctx, text, NAME_F - 2, DATA, w - 80),
+        });
+
+        if (score != null) {
+            // Score magenta côté perdant, jaune côté vainqueur : les deux règles de
+            // `.battle__seed` réunies.
+            ops.push({
+                t: 'text', x: x + w - 14, y: sy + 8, s: NAME_F - 3, f: DATA, align: 'right',
+                c: isWinner ? 'accent' : 'magenta',
+                v: String(score),
+            });
+        }
+    };
+
+    side(battle.a, battle.winnerIsA, battle.scoreA, 0);
+    side(battle.b, battle.winnerIsB, battle.scoreB, 1);
+
+    return { ops, height: cardH };
+}
+
 /**
  * Un arbre de battles.
  *
  * Les tours occupent des colonnes de largeur égale, et chaque affiche se place
  * au milieu de la tranche verticale que ses deux affiches nourricières
- * occupent — c'est ce qui donne la pyramide, et c'est aussi ce qui permet de
- * tracer les liaisons sans les calculer séparément.
+ * occupent — c'est ce qui donne la pyramide, et ce qui permet de tracer les
+ * liaisons sans les calculer séparément.
+ *
+ * La petite finale, elle, ne participe pas à cette géométrie : elle se pose
+ * sous la finale, avec sa propre étiquette.
  */
 function layoutBracket(ctx, section, LW, top) {
     const ops = [];
     let y = top;
 
     ops.push({ t: 'text', x: 0, y, s: SECTION, f: DATA, c: 'dim', v: section.label.toUpperCase() });
-    y += SECTION + 18;
+    y += SECTION + 16;
 
     const rounds = section.rounds;
     // La largeur nécessaire à l'arbre peut dépasser celle demandée : dans ce cas
     // c'est elle qui commande, et la mise en page entière s'élargit. Comprimer
-    // les colonnes rendrait les noms illisibles, et c'est justement ce qu'on
-    // cherche à éviter.
-    const colW = Math.max(CARD_W_MIN + 40, LW / rounds.length);
+    // les colonnes rendrait les noms illisibles, ce qu'on cherche à éviter.
+    const colW = Math.max(CARD_W_MIN + 60, LW / rounds.length);
     const width = colW * rounds.length;
 
     const cardH = SIDE_H * 2 + 6;
     const first = rounds[0].battles.length;
     const colH = Math.max(1, first) * (cardH + CARD_GAP);
 
-    const titleY = y;
-    y += SECTION + 12;
-    const bodyTop = y;
+    const tagY = y;
+    const bodyTop = y + TAG_H + 14;
+    let bottom = bodyTop + colH;
 
     rounds.forEach((round, r) => {
-        ops.push({
-            t: 'text', x: r * colW, y: titleY, s: SECTION - 3, f: DATA, c: 'cyan',
-            v: round.label.toUpperCase(),
-        });
+        const cx = r * colW;
+        const cw = colW - 60;
+
+        ops.push(...tagOp(ctx, cx, tagY, round.label.toUpperCase(), 'blue', 'accent'));
 
         const count = round.battles.length;
         const slice = colH / count;
 
         round.battles.forEach((battle, i) => {
-            const cx = r * colW;
             const cy = bodyTop + i * slice + slice / 2 - cardH / 2;
-            const cw = colW - 40;
-
-            // Le cadre de l'affiche.
-            ops.push({ t: 'rect', x: cx, y: cy, w: cw, h: cardH, c: 'faint' });
-
-            const side = (name, isWinner, score, index) => {
-                const sy = cy + index * SIDE_H;
-                if (isWinner) {
-                    // Le vainqueur en vidéo inverse, comme sur l'écran : c'est la seule
-                    // marque qui survit à une forte réduction.
-                    ops.push({ t: 'fill', x: cx + 1, y: sy + 1, w: cw - 2, h: SIDE_H - 2, c: 'accentFill' });
-                }
-                ops.push({
-                    t: 'text', x: cx + 12, y: sy + 8, s: NAME_F - 2, f: DATA,
-                    c: isWinner ? 'black' : name ? 'ink' : 'faint',
-                    v: fit(ctx, name ?? '—', NAME_F - 2, DATA, cw - 70),
-                });
-                if (score != null) {
-                    ops.push({
-                        t: 'text', x: cx + cw - 12, y: sy + 8, s: NAME_F - 2, f: DATA, align: 'right',
-                        c: isWinner ? 'black' : 'dim',
-                        v: String(score),
-                    });
-                }
-            };
-
-            side(battle.a, battle.winnerIsA, battle.scoreA, 0);
-            side(battle.b, battle.winnerIsB, battle.scoreB, 1);
+            const laid = battleOps(ctx, battle, cx, cy, cw);
+            ops.push(...laid.ops);
 
             // La liaison vers le tour suivant. Tracée seulement quand le nombre
-            // d'affiches est exactement divisé par deux : sur un tableau irrégulier —
-            // une petite finale, une battle isolée — un trait inventerait un
-            // enchaînement qui n'existe pas.
+            // d'affiches est exactement divisé par deux : sur un tableau irrégulier,
+            // un trait inventerait un enchaînement qui n'existe pas.
             const next = rounds[r + 1];
             if (next && next.battles.length * 2 === count) {
                 const midY = cy + cardH / 2;
-                const joinX = cx + cw + 20;
-                ops.push({ t: 'line', x1: cx + cw, y1: midY, x2: joinX, y2: midY, c: 'faint' });
+                const joinX = cx + cw + 28;
+                ops.push({ t: 'line', x1: cx + cw, y1: midY, x2: joinX, y2: midY, c: 'cyan' });
 
                 if (i % 2 === 0) {
                     const partnerY = bodyTop + (i + 1) * slice + slice / 2;
-                    ops.push({ t: 'line', x1: joinX, y1: midY, x2: joinX, y2: partnerY, c: 'faint' });
+                    ops.push({ t: 'line', x1: joinX, y1: midY, x2: joinX, y2: partnerY, c: 'cyan' });
+                    // Le trait qui entre dans l'affiche suivante, à mi-chemin des deux.
+                    const targetY = (midY + partnerY) / 2;
+                    ops.push({ t: 'line', x1: joinX, y1: targetY, x2: cx + colW, y2: targetY, c: 'cyan' });
                 }
             }
         });
+
+        // --- L'annexe : la petite finale, sous la dernière colonne.
+        if (section.annex && r === rounds.length - 1) {
+            const anchor = bodyTop + colH / 2 + cardH / 2;
+            let ay = anchor + 46;
+
+            ops.push(...tagOp(ctx, cx, ay, section.annex.label.toUpperCase(), 'magenta', 'black'));
+            ay += TAG_H + 12;
+
+            for (const battle of section.annex.battles) {
+                const laid = battleOps(ctx, battle, cx, ay, cw);
+                ops.push(...laid.ops);
+                ay += laid.height + 12;
+            }
+
+            bottom = Math.max(bottom, ay);
+        }
     });
 
-    y = bodyTop + colH + 10;
-    return { ops, height: y - top, width };
+    return { ops, height: bottom - top + 10, width };
 }
 
 /**
@@ -363,11 +431,11 @@ function buildLayout(ctx, model, LW) {
     // --- En-tête
     ops.push({ t: 'text', x: 0, y, s: EYEBROW, f: DATA, c: 'dim', v: 'BEATBOXPREDICTIONS' });
     y += EYEBROW + 22;
+
     // Le titre n'est pas tronqué : c'est lui qu'on lit en premier. S'il dépasse,
     // c'est la mise en page entière qui s'élargit, et l'échelle finale s'ajuste.
     const titleText = model.title.toUpperCase();
-    font(ctx, TITLE, DISPLAY);
-    width = Math.max(width, Math.ceil(ctx.measureText(titleText).width));
+    width = Math.max(width, Math.ceil(measure(ctx, titleText, TITLE, DISPLAY)));
 
     ops.push({ t: 'text', x: 0, y, s: TITLE, f: DISPLAY, c: 'accent', v: titleText });
     y += TITLE + 4;
@@ -388,9 +456,8 @@ function buildLayout(ctx, model, LW) {
         if (laid.width) width = Math.max(width, laid.width);
     }
 
-    // --- Pied, DANS le flux et non collé au bas du cadre. C'est le défaut de la
-    // version précédente : un pied à distance fixe du bas chevauchait le contenu
-    // dès que celui-ci descendait trop.
+    // --- Pied, DANS le flux et non collé au bas du cadre. Un pied à distance
+    // fixe du bas chevauchait le contenu dès que celui-ci descendait trop.
     y += 6;
     ops.push({ t: 'rule', y });
     y += 24;
@@ -408,8 +475,8 @@ function buildLayout(ctx, model, LW) {
     }
     y += 44;
 
-    // Les opérations calées à droite l'ont été sur LW ; si une section a élargi la
-    // mise en page, elles doivent suivre le bord réel.
+    // Les opérations calées à droite l'ont été sur LW ; si une section a élargi
+    // la mise en page, elles doivent suivre le bord réel.
     if (width !== LW) {
         for (const op of ops) {
             if (op.align === 'right' && op.x === LW) op.x = width;
@@ -477,9 +544,10 @@ export function drawCard(canvas, model, format, palette) {
         dim: palette.dim,
         faint: palette.faint,
         accent: palette.accent,
-        accentFill: palette.accent,
         ok: palette.ok,
         cyan: palette.cyan,
+        blue: palette.blue,
+        magenta: palette.magenta,
         black: '#000',
     }[key] ?? palette.ink);
 
