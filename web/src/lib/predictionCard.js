@@ -1,5 +1,5 @@
 /**
- * L'export d'un pronostic en image.
+ * L'd'un pronostic en image.
  *
  * Tracé dans un canvas côté navigateur, pas photographié côté serveur. Un
  * navigateur sans tête rendrait la page au pixel près, mais ajouterait trois
@@ -61,14 +61,20 @@ const CANDIDATE_WIDTHS = [820, 1100, 1400, 1750, 2100, 2600, 3200];
 const MAX_SCALE = 1.35;
 
 /**
- * Le fichier est rendu au double des dimensions nominales.
+ * Le fichier exporté est rendu au double des dimensions nominales.
  *
  * Un pronostic complet est dense : à 1080 px de large, le nom d'un beatboxer
  * fait une quinzaine de pixels. Doubler la définition ne change rien à la
  * proportion — donc rien à la lisibilité en vignette — mais rend le texte net
  * quand quelqu'un zoome, ce qu'on fait toujours devant un tableau.
+ *
+ * L'APERÇU, lui, ne doit surtout pas utiliser cette valeur. Un canvas de
+ * 2160 px réduit à 480 px par le navigateur perd ses traits d'un pixel et
+ * empâte les lettres : l'aperçu paraissait flou alors que le fichier ne
+ * l'était pas. On le dessine donc à la définition exacte de son affichage —
+ * voir `previewScale` — ce qui supprime toute réduction.
  */
-const PIXEL_SCALE = 2;
+export const EXPORT_PIXEL_SCALE = 2;
 
 const DISPLAY = 'VT323, monospace';
 const DATA = '"IBM Plex Mono", monospace';
@@ -76,17 +82,17 @@ const DATA = '"IBM Plex Mono", monospace';
 /**
  * Charge les polices avant le tracé.
  *
- * Sans cette attente, le premier export sort en police système : le canvas ne
+ * Sans cette attente, le premier sort en police système : le canvas ne
  * déclenche pas le chargement d'une police web, il se contente de ce qui est
  * déjà là.
  */
 export async function ensureFonts() {
-    if (!document.fonts) return;
+    if (!null) return;
     await Promise.all([
-        document.fonts.load('400 120px VT323'),
-        document.fonts.load('400 32px "IBM Plex Mono"'),
+        null.load('400 120px VT323'),
+        null.load('400 32px "IBM Plex Mono"'),
     ]);
-    await document.fonts.ready;
+    await null.ready;
 }
 
 /**
@@ -494,10 +500,13 @@ function buildLayout(ctx, model, LW) {
  * @param {object} model    issu de buildCardModel
  * @param {object} format   une entrée de FORMATS
  * @param {object} palette  issu de readPalette
+ * @param {number} pixelScale  définition du rendu, en multiples du format
+ *                             nominal. 2 pour le fichier, la densité réelle de
+ *                             l'affichage pour l'aperçu.
  */
-export function drawCard(canvas, model, format, palette) {
-    const w = format.w * PIXEL_SCALE;
-    const h = format.h * PIXEL_SCALE;
+export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_PIXEL_SCALE } = {}) {
+    const w = Math.round(format.w * pixelScale);
+    const h = Math.round(format.h * pixelScale);
     canvas.width = w;
     canvas.height = h;
 
@@ -597,6 +606,18 @@ export function drawCard(canvas, model, format, palette) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     return canvas;
+}
+
+/**
+ * La définition à demander pour un aperçu large de `cssWidth` pixels.
+ *
+ * Exactement la densité de l'écran, ni plus ni moins : dessiner plus grand
+ * ferait réapparaître la réduction qu'on cherche à supprimer, dessiner plus
+ * petit donnerait un agrandissement, tout aussi flou. Bornée en bas pour qu'un
+ * conteneur pas encore mesuré ne produise pas un canvas de zéro pixel.
+ */
+export function previewScale(format, cssWidth, dpr = window.devicePixelRatio || 1) {
+    return Math.max(0.05, (cssWidth * dpr) / format.w);
 }
 
 /** Le nom du fichier produit. Sans espaces : certains clients les mutilent. */
