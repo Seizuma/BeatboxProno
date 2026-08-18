@@ -18,14 +18,17 @@ import Toast from '../components/Toast.jsx';
  * l'échelle qui tient la colonne de gauche, et elle sert de navigation : on
  * clique un membre, la mosaïque de droite se réduit à ses pronostics.
  *
- * La règle de répartition, tenue partout : la colonne principale ne contient
- * QUE des pronostics. L'invitation, l'administration des membres et le choix
- * des compétitions vivent dans le rail ou derrière une fenêtre — ce sont des
- * réglages qu'on touche trois fois dans la vie d'un groupe.
+ * La page sort de la coquille de 980 px (`grp--wide`) : elle porte deux
+ * colonnes quand le reste du site n'en porte qu'une, et enfermée dans la même
+ * largeur elle laissait la moitié d'un écran large inutilisée pendant que
+ * l'échelle étranglait les pseudos.
+ *
+ * Règle tenue partout : la colonne principale ne contient QUE des pronostics.
+ * L'invitation, l'administration des membres et le choix des compétitions
+ * vivent dans le rail ou derrière une fenêtre.
  *
  * Un groupe dont on n'est pas membre répond 404, comme un groupe qui n'existe
- * pas. On affiche donc la même chose dans les deux cas, sans chercher à
- * distinguer.
+ * pas. On affiche donc la même chose dans les deux cas.
  */
 export default function GroupPage() {
     const { slug } = useParams();
@@ -116,7 +119,7 @@ export default function GroupPage() {
     };
 
     return (
-        <div className="shell grp" data-accent={group.accent}>
+        <div className="grp grp--wide" data-accent={group.accent}>
             {/* --- La ligne de service, sur deux étages -------------------------- */}
             <header className="grp__head">
                 <div className="grp__bar">
@@ -191,9 +194,9 @@ export default function GroupPage() {
                     <p className="grp__railhead">{t('group.ladder')}</p>
 
                     {!board ? (
-                        <p className="faint" style={{ padding: '0.6rem' }}>{t('common.loading')}</p>
+                        <p className="faint" style={{ padding: '0.7rem' }}>{t('common.loading')}</p>
                     ) : board.players.length === 0 ? (
-                        <p className="faint" style={{ padding: '0.6rem' }}>{t('group.ladder.empty')}</p>
+                        <p className="faint" style={{ padding: '0.7rem' }}>{t('group.ladder.empty')}</p>
                     ) : (
                         <ol className="ladder">
                             {board.players.map((p, i) => {
@@ -320,9 +323,9 @@ export default function GroupPage() {
                                         )}
                                     </span>
 
-                                    {/* Deux lignes fixes, quelle que soit la situation. Les
-                      vignettes non scorées perdaient leur seconde ligne, et la
-                      mosaïque paraissait dépareillée. */}
+                                    {/* Deux lignes fixes, quelle que soit la situation : sans
+                      cela les vignettes non scorées perdaient leur seconde
+                      ligne et la mosaïque paraissait dépareillée. */}
                                     <p className="mosaic__line">{p.event.name} {p.event.year}</p>
                                     <p className="mosaic__line">
                                         {p.category.name}

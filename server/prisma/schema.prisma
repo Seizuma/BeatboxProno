@@ -34,6 +34,10 @@ model User {
   visits      Visit[]
   memberships GroupMember[]
   comments    GroupComment[]
+  // Les avis reçus, et ceux qu'on a déclenchés chez les autres. Deux relations
+  // vers le même modèle : Prisma exige alors qu'on les nomme.
+  notifications Notification[] @relation("Notified")
+  triggered     Notification[] @relation("Actor")
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -290,7 +294,8 @@ model Prediction {
   podium  PredictedPodium[]
 
   // Les fils de discussion ouverts sur ce pronostic, un par groupe privé.
-  comments GroupComment[]
+  comments      GroupComment[]
+  notifications Notification[]
 
   // Plus d'unicité stricte : c'est elle qui écrasait le pronostic précédent.
   @@index([userId, categoryId])
@@ -368,6 +373,10 @@ model Group {
   // porte à qui possède le lien. Une table apporterait une traçabilité dont
   // personne n'a besoin, et un cycle de vie à purger. Le renouvellement du
   // code est le seul geste qui referme un lien ayant fuité.
+  //
+  // C'est aussi ce code qui rend l'approbation inutile : le lien EST
+  // l'autorisation. Un sas de validation par-dessus demanderait deux fois la
+  // même permission.
   inviteCode  String   @unique
   // Fermer les inscriptions sans changer le code : le lien déjà partagé cesse
   // d'ouvrir, et rouvrir plus tard ne demande pas de le repartager.
@@ -375,9 +384,10 @@ model Group {
 
   createdAt   DateTime @default(now())
 
-  members     GroupMember[]
-  events      GroupEvent[]
-  comments    GroupComment[]
+  members       GroupMember[]
+  events        GroupEvent[]
+  comments      GroupComment[]
+  notifications Notification[]
 }
 
 // Les compétitions que le groupe suit, choisies par son propriétaire.
@@ -472,6 +482,54 @@ model GroupComment {
   // maximum, un index de plus ne gagnerait rien.
   @@index([groupId, predictionId, createdAt])
   @@index([authorId])
+}
+
+// --- Notifications ---------------------------------------------------------------
+
+enum NotificationKind {
+  GROUP_JOIN       // quelqu'un est entré dans un groupe que vous possédez
+  COMMENT_ON_MINE  // quelqu'un a commenté votre pronostic
+  COMMENT_REPLY    // quelqu'un a écrit dans un fil où vous étiez intervenu
+}
+
+// Un avis destiné à une personne.
+//
+// Des lignes plutôt qu'un compteur : un compteur dirait « trois choses »
+// sans dire lesquelles, et repartirait faux au premier incident. Ici chaque
+// avis porte de quoi se rendre à son origine, et `readAt` distingue le vu du
+// non-vu sans rien effacer.
+//
+// Aucun envoi par courriel ni par Discord. Le site relaie déjà la boîte à
+// idées vers Discord parce que personne ne surveille une base de données ; un
+// avis de commentaire, lui, s'adresse à quelqu'un qui reviendra sur le site de
+// toute façon. Le point rouge sur la cloche suffit.
+model Notification {
+  id           String           @id @default(cuid())
+  // Le destinataire.
+  userId       String
+  user         User             @relation("Notified", fields: [userId], references: [id], onDelete: Cascade)
+  kind         NotificationKind
+
+  // Qui l'a déclenché. Nullable et `SetNull` : un compte supprimé ne doit pas
+  // emporter les avis reçus par les autres, qui restent lisibles sans nom.
+  actorId      String?
+  actor        User?            @relation("Actor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  // Le contexte, pour composer le message et fabriquer le lien de retour.
+  // Tout part en cascade : un groupe dissous n'a pas à laisser derrière lui
+  // des avis qui mènent à une page inexistante.
+  groupId      String?
+  group        Group?           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  predictionId String?
+  prediction   Prediction?      @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+
+  readAt       DateTime?
+  createdAt    DateTime         @default(now())
+
+  // L'index de la seule requête qui compte : mes avis non lus, du plus récent
+  // au plus ancien. `readAt` en deuxième position parce que le décompte des
+  // non-lus tourne à chaque chargement de page.
+  @@index([userId, readAt, createdAt])
 }
 
 // --- Boîte à idées -------------------------------------------------------------

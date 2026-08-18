@@ -6,20 +6,14 @@
    Pourquoi une organisation à part. Un groupe qui ressemblerait au reste du
    site ne serait qu'un filtre de plus sur le classement général. Ici le
    classement n'est pas un tableau posé sous un titre : c'est l'échelle qui
-   tient la colonne de gauche, et elle sert de navigation — on clique un
-   membre, la mosaïque de droite se réduit à ses pronostics.
+   tient la colonne de gauche, et elle sert de navigation.
 
-   Le principe de répartition : la colonne principale ne contient QUE des
-   pronostics. Tout ce qui relève du réglage — l'invitation, l'administration
-   des membres, le périmètre — vit dans le rail ou derrière une fenêtre. Un
-   réglage qu'on touche trois fois dans la vie d'un groupe n'a pas à occuper le
-   tiers de l'écran en permanence.
+   Règle de répartition, tenue partout : la colonne principale ne contient QUE
+   des pronostics. L'invitation, l'administration des membres et le périmètre
+   vivent dans le rail ou derrière une fenêtre.
 
    La couleur d'accent vient du serveur (`accent` : y, c, g ou m) et se pose en
-   `--grp` sur la racine de la coquille. Ni le bleu, réservé aux bandeaux, ni le
-   rouge, réservé aux alertes : un groupe entièrement rouge annoncerait une
-   panne. Ce n'est pas décoratif — c'est ce qui dit dans quel cercle on est
-   quand on en fréquente trois.
+   `--grp`. Ni le bleu, réservé aux bandeaux, ni le rouge, réservé aux alertes.
    =========================================================================== */
 
 .grp {
@@ -39,15 +33,30 @@
     --grp: var(--m);
 }
 
+/* --- Sortir de la coquille de 980 px ---------------------------------------
+   La fiche de groupe porte deux colonnes ; le reste du site n'en porte qu'une.
+   Enfermée dans le même `.shell`, elle laissait la moitié d'un écran large
+   inutilisée pendant que l'échelle étranglait les pseudos.
+
+   La marge négative plutôt qu'un `transform: translateX(-50%)` : un `transform`
+   sur un ancêtre devient le bloc conteneur des descendants `position: fixed`,
+   ce qui décalerait les fenêtres modales — la fiche de pronostic, le choix des
+   compétitions — d'une demi-largeur. Ici, `100%` désigne la largeur de contenu
+   du parent, et l'élément déborde symétriquement de part et d'autre. */
+.grp--wide {
+    --grp-w: min(1440px, calc(100vw - 2.4rem));
+    width: var(--grp-w);
+    margin-left: calc((var(--grp-w) - 100%) / -2);
+}
+
 /* --- La ligne de service du groupe ---------------------------------------
    Deux étages plutôt qu'un long ruban : le nom sur sa ligne, l'effectif et
-   les compétitions en dessous. Sur un seul rang, un nom de groupe un peu long
-   suivi de deux compétitions repoussait le menu hors de vue. */
+   les compétitions en dessous. */
 
 .grp__head {
     border-top: var(--border-w) solid var(--grp);
     border-bottom: var(--border-w) solid var(--grp);
-    padding: 0.5rem 0;
+    padding: 0.6rem 0;
 }
 
 .grp__bar {
@@ -75,7 +84,6 @@
     letter-spacing: 0.04em;
     color: var(--grp);
     margin: 0;
-    /* Un nom très long ne doit pas pousser le menu hors de l'écran. */
     min-width: 0;
     overflow-wrap: anywhere;
 }
@@ -88,8 +96,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.2rem 0.8rem;
-    margin-top: 0.35rem;
+    gap: 0.2rem 0.9rem;
+    margin-top: 0.4rem;
 }
 
 .grp__meta {
@@ -104,22 +112,26 @@
 .grp__note {
     color: var(--ink-faint);
     font-size: 0.9rem;
-    margin: 0.6rem 0 0;
+    margin: 0.7rem 0 0;
 }
 
-/* --- Deux colonnes : l'échelle, puis les pronostics ------------------------ */
+/* --- Deux colonnes ---------------------------------------------------------
+   Le rail passe à 24 rem : à 19, l'échelle devait choisir entre tronquer le
+   pseudo et replier sa sous-ligne. La colonne des pronostics garde le reste,
+   qui est large maintenant que la fiche déborde du shell. */
 
 .grp__layout {
     display: grid;
-    grid-template-columns: minmax(19rem, 23rem) 1fr;
-    gap: 1.4rem;
+    grid-template-columns: minmax(24rem, 28rem) minmax(0, 1fr);
+    gap: 1.8rem;
     align-items: start;
-    margin-top: 1.2rem;
+    margin-top: 1.4rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
     .grp__layout {
         grid-template-columns: 1fr;
+        gap: 1.2rem;
     }
 
     .grp__rail {
@@ -138,7 +150,7 @@
     background: var(--grp);
     color: #000;
     margin: 0;
-    padding: 0.15rem 0.5rem;
+    padding: 0.2rem 0.6rem;
     font-size: 0.8rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -151,14 +163,17 @@
     gap: 0.5rem;
     flex-wrap: wrap;
     border-top: 1px solid var(--line);
-    padding: 0.5rem;
+    padding: 0.6rem;
 }
 
-/* --- L'échelle : le classement EST la navigation ---------------------------
-   Deux étages par ligne. Sur un seul, le pseudo se retrouvait coincé entre le
-   rang, l'avatar et les points, et se faisait tronquer dès sept caractères —
-   « Seizuma » devenait « Sei… ». Les chiffres descendent d'un cran, le nom
-   prend toute la largeur. */
+/* --- L'échelle -------------------------------------------------------------
+   Deux étages par ligne, et des minimums explicitement nuls.
+
+   `flex: 1` laissait la largeur du bouton se négocier avec son contenu, et un
+   `1fr` de grille porte un minimum implicite `auto` qui interdit à la colonne
+   de descendre sous la taille min-content de ce qu'elle contient. Entre les
+   deux, la colonne du nom se refermait alors que le rail avait de la place.
+   `minmax(0, 1fr)` et une largeur imposée suppriment la négociation. */
 
 .ladder {
     list-style: none;
@@ -166,13 +181,6 @@
     padding: 0;
 }
 
-/* Une grille, pas un flex, et des minimums explicitement nuls.
-   `flex: 1` laissait la largeur du bouton se négocier avec son contenu, et un
-   `1fr` de grille porte un minimum implicite `auto` qui interdit à la colonne
-   de descendre sous la taille min-content de ce qu'elle contient. Entre les
-   deux, la colonne du nom se refermait alors même que le rail avait cent
-   trente pixels libres à droite. `minmax(0, 1fr)` et une largeur imposée
-   suppriment la négociation : la ligne occupe le rail, point. */
 .ladder__row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -188,34 +196,33 @@
     width: 100%;
     min-width: 0;
     display: grid;
-    grid-template-columns: 2.4rem minmax(0, 1fr);
+    grid-template-columns: 2.8rem minmax(0, 1fr);
     grid-template-areas:
         'rank who'
         'rank sub';
-    column-gap: 0.55rem;
+    column-gap: 0.7rem;
+    row-gap: 0.15rem;
     align-items: center;
-    padding: 0.4rem 0.5rem;
+    padding: 0.6rem 0.7rem;
     background: none;
     border: 0;
     color: var(--ink);
     text-align: left;
     cursor: pointer;
     font-family: inherit;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
 .ladder__pick:hover {
     background: var(--surface-2);
 }
 
-/* La sélection est un liseré, pas un fond plein : le fond volerait la couleur
-   du bandeau et l'écran finirait bariolé. */
 .ladder__row--on {
     border-left: 3px solid var(--grp);
 }
 
 .ladder__row--on .ladder__pick {
-    padding-left: calc(0.5rem - 3px);
+    padding-left: calc(0.7rem - 3px);
     background: var(--surface-2);
 }
 
@@ -223,7 +230,7 @@
     grid-area: rank;
     align-self: center;
     font-family: var(--font-display);
-    font-size: 1.7rem;
+    font-size: 1.9rem;
     line-height: 1;
     color: var(--grp);
     text-align: right;
@@ -237,14 +244,14 @@
     grid-area: who;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     min-width: 0;
 }
 
-/* `flex: 1 1 auto` : le nom prend tout ce qui reste après l'avatar et
-   l'étoile. Sans lui, il garde sa largeur de contenu et c'est le conteneur
-   qui décide de le rogner. L'ellipse reste, mais comme filet de sécurité pour
-   les pseudos vraiment longs — plus comme comportement ordinaire. */
+/* `flex: 1 1 auto` : le nom réclame ce qui reste après l'avatar et l'étoile.
+   Sans lui, il garde sa largeur de contenu et c'est le conteneur qui décide de
+   le rogner. L'ellipse reste, mais comme filet pour les pseudos vraiment
+   longs — plus comme comportement ordinaire. */
 .ladder__name {
     flex: 1 1 auto;
     min-width: 0;
@@ -253,12 +260,12 @@
     white-space: nowrap;
 }
 
-/* Sur une seule ligne : repliée sur deux, elle doublait la hauteur des lignes
-   et poussait la colonne du nom à se rétrécir pour lui faire de la place. */
+/* Sur une seule ligne : repliée sur deux, elle poussait la colonne du nom à se
+   rétrécir pour lui faire de la place. */
 .ladder__sub {
     grid-area: sub;
     font-family: var(--font-data);
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     letter-spacing: 0.04em;
     color: var(--ink-faint);
     min-width: 0;
@@ -282,12 +289,10 @@
     flex: none;
 }
 
-/* Le menu d'administration, sur la ligne du membre plutôt que dans une
-   seconde liste plus bas : la personne y est déjà affichée. */
 .ladder__acts {
     display: flex;
     align-items: center;
-    padding-right: 0.25rem;
+    padding-right: 0.3rem;
 }
 
 /* --- La mosaïque des pronostics -------------------------------------------- */
@@ -298,8 +303,8 @@
 
 .mosaic {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 0.6rem;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: 0.7rem;
 }
 
 .mosaic__card {
@@ -310,7 +315,7 @@
     border-left: 3px solid var(--grp);
     background: var(--surface);
     color: var(--ink);
-    padding: 0.6rem 0.7rem;
+    padding: 0.7rem 0.8rem;
     cursor: pointer;
     font-family: inherit;
     font-size: 1rem;
@@ -323,7 +328,7 @@
 .mosaic__who {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     min-width: 0;
 }
 
@@ -355,7 +360,7 @@
     flex: none;
 }
 
-/* --- Le périmètre : les compétitions suivies -------------------------------- */
+/* --- Le périmètre ----------------------------------------------------------- */
 
 .scope {
     display: flex;
@@ -380,20 +385,229 @@
 }
 
 /* ===========================================================================
-   LES BULLES ANCRÉES
+   LA PAGE « MES GROUPES »
+   =========================================================================== */
 
-   Une pastille posée sur un élément du pronostic, qui ouvre le fil attaché à
-   cet endroit. La position est recalculée à partir de la boîte de l'élément
-   visé — jamais mémorisée en pixels, qui seraient faux à la première largeur
-   d'écran différente.
+.grouplist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 0.7rem;
+}
+
+.groupcard {
+    display: block;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--grp);
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.groupcard:hover {
+    background: var(--surface-2);
+}
+
+.groupcard__top {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.groupcard__name {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    line-height: 1.1;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--grp);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.groupcard__note {
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+    margin: 0.35rem 0 0;
+}
+
+.groupcard__meta {
+    font-family: var(--font-data);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0.45rem 0 0;
+}
+
+/* Les deux portes côte à côte : créer un groupe, ou entrer dans celui de
+   quelqu'un d'autre. Elles ont la même importance ; l'une était invisible. */
+.doors {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: 0.9rem;
+    align-items: start;
+}
+
+.doors .field input {
+    width: 100%;
+}
+
+/* ===========================================================================
+   LA PAGE D'INVITATION
+   =========================================================================== */
+
+.joinpage {
+    max-width: 40rem;
+}
+
+.joinwhat {
+    border: 1px solid var(--line);
+    margin-top: 1.2rem;
+}
+
+.joinwhat__list {
+    margin: 0;
+    padding: 0.7rem 0.9rem 0.7rem 2rem;
+    color: var(--ink-faint);
+    font-size: 0.92rem;
+}
+
+.joinwhat__list li+li {
+    margin-top: 0.35rem;
+}
+
+.joinact {
+    margin-top: 1.2rem;
+}
+
+/* Le geste décisif prend toute la largeur : sur cette page, il n'y a qu'une
+   chose à faire, et rien ne doit venir la concurrencer du coin de l'œil. */
+.btn--wide {
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-top: 0.6rem;
+}
+
+/* ===========================================================================
+   LA CLOCHE
+   =========================================================================== */
+
+.bell {
+    position: relative;
+    display: inline-flex;
+}
+
+.bell__btn {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+    font-family: var(--font-data);
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0.25rem 0.45rem;
+    cursor: pointer;
+    position: relative;
+}
+
+.bell__btn:hover {
+    color: var(--ink);
+    border-color: var(--ink-faint);
+}
+
+/* La pastille est rouge et c'est la seule exception à la règle « le rouge est
+   réservé aux alertes » : ici il ne signale pas une panne mais une chose non
+   lue, et c'est le seul endroit du site où l'attention doit être happée. */
+.bell__dot {
+    position: absolute;
+    top: -0.45rem;
+    right: -0.45rem;
+    background: var(--r);
+    color: #000;
+    font-family: var(--font-data);
+    font-size: 0.65rem;
+    line-height: 1;
+    padding: 0.1rem 0.25rem;
+}
+
+.notifs {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    z-index: 40;
+    width: min(24rem, calc(100vw - 2rem));
+    max-height: 24rem;
+    overflow-y: auto;
+    background: var(--screen);
+    border: var(--border-w) solid var(--c);
+    padding: 0.5rem 0.6rem;
+    text-align: left;
+}
+
+.notifs__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.4rem;
+}
+
+.notifs__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.notif {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-faint);
+    font-family: inherit;
+    font-size: 0.92rem;
+    padding: 0.5rem 0.2rem;
+    cursor: pointer;
+}
+
+.notif:hover {
+    background: var(--surface-2);
+}
+
+/* Le non-lu se distingue par un liseré et la couleur du texte, pas par une
+   graisse : la fonte d'écran n'a qu'un seul poids. */
+.notif--new {
+    color: var(--ink);
+    border-left: 3px solid var(--c);
+    padding-left: 0.4rem;
+}
+
+.notif__text {
+    min-width: 0;
+    display: block;
+}
+
+.notif__when {
+    display: block;
+    font-family: var(--font-data);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    margin-top: 0.15rem;
+}
+
+/* ===========================================================================
+   LES BULLES ANCRÉES
    =========================================================================== */
 
 .canvas {
     position: relative;
 }
 
-/* Mode pose : le curseur change, et chaque élément accrochable se signale au
-   survol. Sans ce retour, on clique à l'aveugle en espérant que ça prenne. */
 .canvas--placing {
     cursor: crosshair;
 }
@@ -480,7 +694,6 @@
 
 .note__body {
     margin: 0.2rem 0 0;
-    /* Les retours à la ligne saisis sont conservés, aucun balisage interprété. */
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
@@ -489,87 +702,4 @@
     display: flex;
     gap: 0.3rem;
     margin-top: 0.2rem;
-}
-
-
-/* ===========================================================================
-   LA PAGE « MES GROUPES »
-
-   Quatre blocs empilés dans une colonne étroite donnaient une impression
-   d'entassement : le formulaire de création avait des champs plus courts que
-   leurs propres exemples, et le compteur flottait seul à droite du titre.
-   Les vignettes reçoivent une hiérarchie — nom en display à la couleur du
-   groupe, chiffres en sous-ligne — et le formulaire passe en bande
-   horizontale, qui ne se replie qu'à l'étroit.
-   =========================================================================== */
-
-.grouplist {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    gap: 0.7rem;
-}
-
-.groupcard {
-    display: block;
-    border: 1px solid var(--line);
-    border-left: 3px solid var(--grp);
-    background: var(--surface);
-    padding: 0.7rem 0.8rem;
-    color: var(--ink);
-}
-
-.groupcard:hover {
-    background: var(--surface-2);
-}
-
-.groupcard__top {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-}
-
-.groupcard__name {
-    font-family: var(--font-display);
-    font-size: 1.35rem;
-    line-height: 1.1;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--grp);
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-.groupcard__note {
-    color: var(--ink-faint);
-    font-size: 0.9rem;
-    margin: 0.35rem 0 0;
-}
-
-.groupcard__meta {
-    font-family: var(--font-data);
-    font-size: 0.75rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    margin: 0.45rem 0 0;
-}
-
-/* La bande de création. Les deux champs partagent la largeur — la description
-   en reçoit davantage, elle en a besoin — et le bouton reste à droite. */
-.newgroup {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) auto;
-    gap: 0.7rem;
-    align-items: end;
-}
-
-.newgroup input {
-    width: 100%;
-}
-
-@media (max-width: 700px) {
-    .newgroup {
-        grid-template-columns: 1fr;
-        align-items: stretch;
-    }
 }

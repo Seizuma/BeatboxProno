@@ -9,12 +9,13 @@ import DiscordButton from '../components/DiscordButton.jsx';
  * La page d'une invitation.
  *
  * Elle s'affiche avant la connexion, et c'est le point : quelqu'un qui reçoit
- * un lien doit voir où il entre avant qu'on lui demande de s'identifier. Le
- * serveur ne rend ici que le nom, la description, les compétitions suivies et
- * le nombre de membres — de quoi reconnaître le groupe, rien de plus.
+ * un lien doit voir où il entre avant qu'on lui demande de s'identifier.
  *
- * Le bouton Discord emporte la destination : après la connexion, on revient
- * sur cette invitation, pas sur « mes pronostics ».
+ * Elle dit aussi ce que rejoindre IMPLIQUE, en clair et avant le bouton. Une
+ * adhésion rend ses pronostics lisibles par des inconnus et fait entrer ses
+ * points dans leur classement : découvrir ça après coup, c'est se sentir
+ * exposé par un site auquel on faisait confiance. Quatre lignes suffisent, et
+ * elles doivent précéder le geste, pas le suivre.
  */
 export default function JoinGroup() {
     const { code } = useParams();
@@ -62,52 +63,70 @@ export default function JoinGroup() {
 
     if (!invite) return <p className="faint" style={{ paddingTop: '2.5rem' }}>{t('common.loading')}</p>;
 
+    // Le seul cas où l'on peut réellement entrer. Les autres — déjà membre,
+    // complet, fermé, quota atteint — mènent chacun à un message précis plutôt
+    // qu'à un bouton grisé qui ne dit pas pourquoi.
+    const canJoin = user && !invite.alreadyMember && !invite.atLimit && !invite.full && invite.open;
+
     return (
-        <div className="grp stack" data-accent={invite.accent} style={{ maxWidth: '36rem' }}>
-            <header className="grp__bar">
-                <span className="grp__sigil">{t('join.eyebrow')}</span>
-                <h1 className="grp__name">{invite.name}</h1>
+        <div className="grp joinpage" data-accent={invite.accent}>
+            <header className="grp__head">
+                <div className="grp__bar">
+                    <span className="grp__sigil">{t('join.eyebrow')}</span>
+                    <h1 className="grp__name">{invite.name}</h1>
+                </div>
+                <div className="grp__strip">
+                    <p className="grp__meta">{t('join.members', { n: invite.memberCount })}</p>
+                    {invite.events.length > 0 && (
+                        <p className="grp__meta">{t('join.scope', { events: invite.events.join(' · ') })}</p>
+                    )}
+                </div>
             </header>
 
-            {invite.description && <p className="muted">{invite.description}</p>}
+            {invite.description && <p className="grp__note">{invite.description}</p>}
 
-            <p className="grp__meta">{t('join.members', { n: invite.memberCount })}</p>
-            {invite.events.length > 0 && (
-                <p className="grp__meta">{t('join.scope', { events: invite.events.join(' · ') })}</p>
-            )}
+            {error && <p className="notice" style={{ marginTop: '1rem' }}>{error}</p>}
 
-            {error && <p className="notice">{error}</p>}
+            {/* Ce que rejoindre implique — avant le bouton, toujours. */}
+            <section className="joinwhat">
+                <p className="grp__railhead">{t('join.what')}</p>
+                <ul className="joinwhat__list">
+                    <li>{t('join.what.standings')}</li>
+                    <li>{t('join.what.picks')}</li>
+                    <li>{t('join.what.private')}</li>
+                    <li>{t('join.what.leave')}</li>
+                </ul>
+            </section>
 
-            {!user ? (
-                <>
-                    <p className="muted">{t('join.signin')}</p>
-                    <p><DiscordButton next={`/groups/join/${code}`} /></p>
-                </>
-            ) : invite.alreadyMember ? (
-                <>
-                    <p className="notice notice--ok">{t('join.already')}</p>
-                    <p>
+            <div className="joinact">
+                {!user ? (
+                    <>
+                        <p className="muted" style={{ marginTop: 0 }}>{t('join.signin')}</p>
+                        <DiscordButton next={`/groups/join/${code}`} />
+                    </>
+                ) : invite.alreadyMember ? (
+                    <>
+                        <p className="notice notice--ok">{t('join.already')}</p>
                         <Link className="btn btn--primary" to={`/groups/${invite.slug}`}>
                             {t('join.open')}
                         </Link>
-                    </p>
-                </>
-            ) : invite.atLimit ? (
-                // Le quota se dit ICI, avant la tentative : découvrir qu'on est à cinq
-                // groupes après un aller-retour Discord est le pire moment pour
-                // l'apprendre.
-                <p className="notice">{t('join.limit', { max: invite.maxGroups })}</p>
-            ) : invite.full ? (
-                <p className="notice">{t('join.full')}</p>
-            ) : !invite.open ? (
-                <p className="notice">{t('join.closed')}</p>
-            ) : (
-                <p>
-                    <button className="btn btn--primary" disabled={busy} onClick={join}>
+                    </>
+                ) : invite.atLimit ? (
+                    // Le quota se dit ICI, avant la tentative : découvrir qu'on est à
+                    // cinq groupes après un aller-retour Discord est le pire moment.
+                    <p className="notice">{t('join.limit', { max: invite.maxGroups })}</p>
+                ) : invite.full ? (
+                    <p className="notice">{t('join.full')}</p>
+                ) : !invite.open ? (
+                    <p className="notice">{t('join.closed')}</p>
+                ) : null}
+
+                {canJoin && (
+                    <button className="btn btn--primary btn--wide" disabled={busy} onClick={join}>
                         {t('join.accept')}
                     </button>
-                </p>
-            )}
+                )}
+            </div>
         </div>
     );
 }

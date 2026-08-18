@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
 import { buildScoreboard } from '../lib/scoreboard.js';
+import { notifyComment, notifyGroupJoin } from '../lib/notifications.js';
 import {
     COMMENTS_PER_HOUR,
     MAX_COMMENT_LENGTH,
@@ -28,11 +29,6 @@ import {
  */
 export const groupRouter = Router();
 
-/**
- * Relaie les erreurs d'un gestionnaire asynchrone vers le middleware d'erreur.
- * Sans cela, une exception devient un rejet non géré : le processus tombe et le
- * navigateur voit une connexion coupée plutôt qu'un message.
- */
 const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /**
@@ -224,9 +220,9 @@ groupRouter.patch('/:slug', loadGroup, requireGroupOwner, guard(async (req, res)
 }));
 
 groupRouter.delete('/:slug', loadGroup, requireGroupOwner, guard(async (req, res) => {
-    // Le périmètre, les adhésions et les commentaires partent en cascade, comme
-    // déclaré au schéma. Les pronostics, eux, appartiennent à leurs auteurs :
-    // dissoudre un groupe n'efface que la conversation, jamais le jeu.
+    // Le périmètre, les adhésions, les commentaires et les avis partent en
+    // cascade, comme déclaré au schéma. Les pronostics, eux, appartiennent à
+    // leurs auteurs : dissoudre un groupe n'efface que la conversation.
     await prisma.group.delete({ where: { id: req.group.id } });
     console.log(`[groupes] ${req.group.slug} dissous par ${req.user.username}.`);
     res.json({ ok: true });
@@ -243,8 +239,7 @@ groupRouter.delete('/:slug', loadGroup, requireGroupOwner, guard(async (req, res
  * pendant qu'on en change.
  *
  * Retirer un événement ne supprime aucun commentaire. Ils redeviennent
- * simplement invisibles, et réapparaissent si l'événement est remis. Effacer
- * des échanges parce qu'on a décoché une case serait une surprise coûteuse.
+ * simplement invisibles, et réapparaissent si l'événement est remis.
  */
 groupRouter.put('/:slug/events', loadGroup, requireGroupOwner, guard(async (req, res) => {
     const { slugs } = z
@@ -390,14 +385,16 @@ groupRouter.patch('/:slug/invite', loadGroup, requireGroupOwner, guard(async (re
 groupRouter.post('/join/:code', guard(async (req, res) => {
     const group = await prisma.group.findUnique({
         where: { inviteCode: req.params.code },
-        include: { members: { select: { userId: true } } },
+        // Le rôle est nécessaire : c'est le propriétaire, et lui seul, qu'on
+        // prévient de l'arrivée.
+        include: { members: { select: { userId: true, role: true } } },
     });
 
     if (!group) return res.status(404).json({ error: 'Cette invitation n’est pas valide.' });
 
     if (group.members.some((m) => m.userId === req.user.id)) {
         // Déjà membre : ce n'est pas une erreur, c'est quelqu'un qui a recliqué sur
-        // le lien. On le renvoie chez lui.
+        // le lien. On le renvoie chez lui, sans prévenir personne.
         return res.json({ slug: group.slug, joined: false });
     }
 
@@ -418,6 +415,12 @@ groupRouter.post('/join/:code', guard(async (req, res) => {
     await prisma.groupMember.create({
         data: { groupId: group.id, userId: req.user.id, role: 'MEMBER' },
     });
+
+    // Après l'adhésion, jamais avant : un avis annonçant une arrivée qui a
+    // échoué serait pire que pas d'avis du tout. La fonction avale ses propres
+    // erreurs — perdre l'adhésion parce que la notification a échoué n'aurait
+    // aucun sens.
+    await notifyGroupJoin({ group, actorId: req.user.id });
 
     res.status(201).json({ slug: group.slug, joined: true });
 }));
@@ -499,8 +502,7 @@ groupRouter.post('/:slug/transfer', loadGroup, requireGroupOwner, guard(async (r
  * client sait dégrader : une ancre introuvable retombe dans le fil général.
  *
  * Ce qui est vérifié, c'est la forme : longueur bornée, alphabet restreint,
- * fractions dans [0,1]. De quoi empêcher qu'une chaîne arbitraire finisse
- * stockée et réinjectée dans un attribut.
+ * fractions dans [0,1].
  */
 const anchor = z.object({
     anchorKey: z
@@ -523,8 +525,7 @@ const commentInput = anchor.extend({
  * Trois conditions, et les trois comptent. Le pronostic doit être DÉPOSÉ — un
  * brouillon reste privé. Son auteur doit être MEMBRE du groupe. Et son
  * événement doit figurer au PÉRIMÈTRE : sans cela, un identifiant collé dans
- * l'URL rouvrirait la porte à tout ce que le périmètre venait justement de
- * refermer.
+ * l'URL rouvrirait la porte à tout ce que le périmètre venait de refermer.
  */
 async function commentablePrediction(group, groupEventIds, predictionId) {
     if (groupEventIds.length === 0) return null;
@@ -611,6 +612,15 @@ groupRouter.post('/:slug/predictions/:predictionId/comments', loadGroup, guard(a
         },
     });
 
+    // Après l'écriture : la liste des participants au fil inclut alors le
+    // commentaire qu'on vient de poser, et l'auteur en est écarté sur place.
+    await notifyComment({
+        groupId: req.group.id,
+        predictionId: prediction.id,
+        authorId: req.user.id,
+        predictionOwnerId: prediction.userId,
+    });
+
     res.status(201).json({ comment: shape(comment, req.user.id, req.membership.role) });
 }));
 
@@ -630,14 +640,15 @@ groupRouter.patch('/:slug/comments/:commentId', loadGroup, guard(async (req, res
 
     // Le texte seul se modifie. Déplacer une bulle après coup changerait le sens
     // de la conversation : les réponses en dessous répondent à ce qui était visé.
+    // Et aucune notification : une correction de faute de frappe n'est pas un
+    // événement, la pastille rouge doit rester rare pour vouloir dire quelque
+    // chose.
     const { body } = z
         .object({ body: z.string().trim().min(1).max(MAX_COMMENT_LENGTH) })
         .parse(req.body ?? {});
 
     const updated = await prisma.groupComment.update({
         where: { id: comment.id },
-        // `editedAt` est renseigné à la première modification : un commentaire
-        // retouché après coup ne doit pas pouvoir se faire passer pour l'original.
         data: { body, editedAt: new Date() },
     });
 

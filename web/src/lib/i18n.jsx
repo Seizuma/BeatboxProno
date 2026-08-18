@@ -195,6 +195,27 @@ const DICT = {
     'group.gone': 'Group dissolved.',
     'group.left': 'You left the group.',
 
+    'groups.join.title': 'Join a group',
+    'groups.join.lede':
+      'Somebody sent you an invite? Paste the link or the code here. Groups are never listed publicly — this is the only way in.',
+    'groups.join.field': 'Invite link or code',
+    'groups.join.submit': 'Continue',
+    'groups.join.invalid': 'That does not look like an invite link or code.',
+
+    'join.what': 'What joining means',
+    'join.what.standings': 'Your points appear in this group’s standings, alongside its members.',
+    'join.what.picks': 'Members can read the predictions you have filed, and pin comments on them.',
+    'join.what.private': 'Nothing becomes public: this stays between the members of this group.',
+    'join.what.leave': 'You can leave at any time, from the group page.',
+
+    'notif.title': 'Notifications',
+    'notif.empty': 'Nothing new.',
+    'notif.markAll': 'Mark all read',
+    'notif.GROUP_JOIN': '{name} joined {group}',
+    'notif.COMMENT_ON_MINE': '{name} commented on your prediction in {group}',
+    'notif.COMMENT_REPLY': '{name} wrote in a thread you took part in, in {group}',
+    'notif.someone': 'A former member',
+
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
     'join.members': '{n} people are already in.',
@@ -636,6 +657,27 @@ const DICT = {
       'Dissoudre ce groupe pour tout le monde ? Le classement et tous les commentaires sont perdus. Les pronostics ne le sont pas — ils appartiennent à leurs auteurs.',
     'group.gone': 'Groupe dissous.',
     'group.left': 'Vous avez quitté le groupe.',
+
+    'groups.join.title': 'Rejoindre un groupe',
+    'groups.join.lede':
+      'On vous a envoyé une invitation ? Collez le lien ou le code ici. Les groupes ne sont listés nulle part — c’est la seule porte d’entrée.',
+    'groups.join.field': 'Lien ou code d’invitation',
+    'groups.join.submit': 'Continuer',
+    'groups.join.invalid': 'Cela ne ressemble ni à un lien ni à un code d’invitation.',
+
+    'join.what': 'Ce que rejoindre implique',
+    'join.what.standings': 'Vos points apparaissent au classement de ce groupe, aux côtés de ses membres.',
+    'join.what.picks': 'Les membres peuvent lire les pronostics que vous avez déposés, et y épingler des commentaires.',
+    'join.what.private': 'Rien ne devient public : cela reste entre les membres de ce groupe.',
+    'join.what.leave': 'Vous pouvez partir à tout moment, depuis la page du groupe.',
+
+    'notif.title': 'Notifications',
+    'notif.empty': 'Rien de neuf.',
+    'notif.markAll': 'Tout marquer comme lu',
+    'notif.GROUP_JOIN': '{name} a rejoint {group}',
+    'notif.COMMENT_ON_MINE': '{name} a commenté votre pronostic dans {group}',
+    'notif.COMMENT_REPLY': '{name} a écrit dans un fil où vous êtes intervenu, dans {group}',
+    'notif.someone': 'Un ancien membre',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',

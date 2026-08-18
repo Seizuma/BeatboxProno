@@ -3,6 +3,7 @@ import { NavLink, Link, Outlet, useLocation } from 'react-router-dom';
 import { useSession, isStaff } from '../lib/context.jsx';
 import { useI18n, LANGS } from '../lib/i18n.jsx';
 import DiscordButton from './DiscordButton.jsx';
+import NotificationBell from './NotificationBell.jsx';
 
 /* ---------------------------------------------------------------------------
    L'habillage P411. L'en-tête est la ligne de service d'un décodeur
@@ -11,6 +12,7 @@ import DiscordButton from './DiscordButton.jsx';
    Les numéros ne sont pas décoratifs : ils identifient les pages, comme
    les vraies pages 411, 412, 413 des services de résultats sportifs.
    --------------------------------------------------------------------------- */
+
 
 /**
  * Vrai sur la préproduction. La valeur est figée au build par Vite, depuis
@@ -48,6 +50,9 @@ export default function Layout() {
             <LangSwitch />
             {user ? (
               <>
+                {/* La cloche avant l'avatar : c'est elle qui appelle, et on la
+                    cherche du côté droit par habitude. */}
+                <NotificationBell />
                 {/* La photo mène à ses pronostics : c'est le geste attendu, et
                     ça évite de chercher l'entrée de menu. */}
                 <Link to="/me" title={t('nav.mine')} aria-label={t('nav.mine')}>
