@@ -53,7 +53,7 @@ export function ArtistPage() {
   const { slug } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const { t } = useI18n();
+  const { t, number } = useI18n();
 
   useEffect(() => {
     api.get(`/artists/${slug}`).then(setData).catch((e) => setError(e.message));
@@ -76,7 +76,11 @@ export function ArtistPage() {
       </header>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        <Metric value={`${record.wins}–${record.losses}`} label={t('artists.record')} accent />
+        {/* Le bilan en battle a laissé la place aux points marqués : un
+            « 0–0 » sur une compète à venir ne dit rien, alors que les points
+            que la foule a tirés de lui se lisent dès le premier événement
+            scoré. */}
+        <Metric value={number(record.pointsFrom ?? 0)} label={t('artists.pointsFrom')} accent />
         <Metric value={record.podiums} label={t('artists.podiums')} />
         <Metric value={crowd.timesPickedToWinBattle} label={t('artists.pickedToWin')} />
         <Metric

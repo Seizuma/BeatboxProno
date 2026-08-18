@@ -225,7 +225,7 @@ const DICT = {
     'export.share': 'Share…',
     'export.share.unsupported': 'Your browser cannot share files. Download the image instead.',
     'export.hint':
-      'The card carries your announced winner, your qualifiers and your score — not the whole bracket, which nothing would make readable at thumbnail size.',
+      'The card carries the whole prediction: every ranking phase and every bracket round, with the picked winners and scores. It scales itself down to fit the format.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
@@ -295,7 +295,7 @@ const DICT = {
     'artists.search': 'Search a name',
     'artists.empty': 'No artist matches.',
     'artists.unknown': 'Origin unknown',
-    'artists.record': 'Battle record',
+    'artists.pointsFrom': 'Points scored thanks to them',
     'artists.podiums': 'Podiums',
     'artists.pickedToWin': 'Picked to win a battle',
     'artists.accuracy': 'Hit rate of those who picked them',
@@ -706,7 +706,7 @@ const DICT = {
     'export.share': 'Partager…',
     'export.share.unsupported': 'Votre navigateur ne sait pas partager de fichier. Téléchargez l’image à la place.',
     'export.hint':
-      'La carte porte votre vainqueur annoncé, vos qualifiés et votre score — pas l’arbre complet, que rien ne rendrait lisible en vignette.',
+      'La carte porte le pronostic entier : toutes les phases de classement et tous les tours du tableau, avec les vainqueurs choisis et les scores. Elle se met à l’échelle du format demandé.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',
@@ -776,7 +776,7 @@ const DICT = {
     'artists.search': 'Chercher un nom',
     'artists.empty': 'Aucun artiste ne correspond.',
     'artists.unknown': 'Origine inconnue',
-    'artists.record': 'Bilan en battle',
+    'artists.pointsFrom': 'Points marqués grâce à lui',
     'artists.podiums': 'Podiums',
     'artists.pickedToWin': 'Donné vainqueur d’une battle',
     'artists.accuracy': 'Réussite de ceux qui l’ont pris',
