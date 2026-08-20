@@ -53,10 +53,6 @@ export default function Admin() {
       {tab === 'structure' && <StructureAdmin />}
       {tab === 'artists' && <ArtistsAdmin />}
       {tab === 'results' && <ResultsAdmin />}
-      {/* L'onglet « Comptes » vit dans son propre fichier : il porte une
-          courbe, un décompte et une liste repliable, et n'a rien à voir avec la
-          structure des événements. `useFlash` lui est passé plutôt que dupliqué
-          — c'est le même bandeau de retour partout dans l'administration. */}
       {tab === 'people' && <AdminPeople currentUser={user} useFlash={useFlash} />}
     </div>
   );
@@ -1425,6 +1421,52 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
   );
   const [dirty, setDirty] = useState(false);
 
+  /**
+   * Resynchronise l'éditeur quand le serveur a recomposé le tableau.
+   *
+   * `picks` est initialisé une seule fois. Après un enregistrement du
+   * classement, le serveur redéduit le premier tour et le rechargement rapporte
+   * de nouvelles affiches — mais l'état local gardait les anciennes et les
+   * repoussait au prochain envoi, annulant en silence le recalcul.
+   *
+   * La signature compare le contenu, pas la référence : le rechargement crée
+   * de nouveaux objets à chaque fois, et se fier à l'identité relancerait la
+   * remise à zéro sans fin.
+   *
+   * Une saisie en cours n'est jamais écrasée : tant que `dirty` tient, ce que
+   * l'organisateur a sous les doigts prime.
+   */
+  const signature = useMemo(
+    () =>
+      (phase.battles ?? [])
+        .map((b) => [b.round, b.slot, b.contenderAId, b.contenderBId, b.winnerId, b.scoreA, b.scoreB].join('~'))
+        .join('|'),
+    [phase.battles]
+  );
+  const applied = useRef(signature);
+
+  useEffect(() => {
+    if (dirty || signature === applied.current) return;
+    applied.current = signature;
+    setPicks(
+      Object.fromEntries(
+        (phase.battles ?? []).map((b) => [
+          `${b.round}:${b.slot}`,
+          {
+            phaseId: phase.id,
+            round: b.round,
+            slot: b.slot,
+            contenderAId: b.contenderAId,
+            contenderBId: b.contenderBId,
+            winnerId: b.winnerId,
+            scoreA: b.scoreA,
+            scoreB: b.scoreB,
+          },
+        ])
+      )
+    );
+  }, [signature, dirty, phase.battles, phase.id]);
+
   const change = (next) => {
     setPicks(next);
     setDirty(true);
@@ -1545,7 +1587,7 @@ function RankingResults({ phase, contenders, onDone, run }) {
 
   const send = (resolved) =>
     run(async () => {
-      await api.put(`/admin/phases/${phase.id}/results`, {
+      const { reseed } = await api.put(`/admin/phases/${phase.id}/results`, {
         resolved,
         entries: order.map((contenderId, i) => ({
           contenderId,
@@ -1555,9 +1597,18 @@ function RankingResults({ phase, contenders, onDone, run }) {
       });
       setDirty(false);
       await onDone();
-      return resolved
+
+      // Ce que le tableau est devenu fait partie du retour : recomposer le
+      // premier tour peut effacer des vainqueurs déjà saisis, et l'apprendre
+      // en changeant d'onglet serait une mauvaise surprise.
+      const moved = reseed?.phases
+        ? ` Tableau recomposé : ${reseed.battles} affiche${reseed.battles > 1 ? 's' : ''} mise${reseed.battles > 1 ? 's' : ''} à jour` +
+        (reseed.cleared ? `, ${reseed.cleared} vidée${reseed.cleared > 1 ? 's' : ''}.` : '.')
+        : '';
+
+      return (resolved
         ? `${phase.name} publiée : les pronostics ont été recalculés.`
-        : `${phase.name} enregistrée en brouillon — rien n'est encore visible des joueurs.`;
+        : `${phase.name} enregistrée en brouillon — rien n'est encore visible des joueurs.`) + moved;
     });
 
   return (

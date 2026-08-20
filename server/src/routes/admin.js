@@ -5,8 +5,13 @@ import { requireRole } from '../lib/auth.js';
 import { contenderName, withName } from '../lib/naming.js';
 import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
-import { validateSeedPairs, patternFor, reresolvePhase, firstRoundOf } from '../lib/seeding.js';
-import { lastDays, localDay } from '../lib/presence.js';
+import {
+  validateSeedPairs,
+  patternFor,
+  reresolvePhase,
+  firstRoundOf,
+  reseedOfficialBracket,
+} from '../lib/seeding.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireRole('ADMIN', 'OWNER'));
@@ -884,7 +889,12 @@ adminRouter.patch('/phases/:id/qualifiers', async (req, res) => {
     );
   }
 
-  res.json({ phase });
+  // La coupe décide qui entre au tableau : la déplacer change le premier tour
+  // aussi sûrement que réordonner le classement.
+  const reseed = await reseedOfficialBracket(phase.categoryId);
+  if (reseed.phases > 0) await rescoreCategory(phase.categoryId);
+
+  res.json({ phase, reseed });
 });
 
 adminRouter.put('/phases/:phaseId/results', async (req, res) => {
@@ -912,8 +922,24 @@ adminRouter.put('/phases/:phaseId/results', async (req, res) => {
   ]);
 
   const phase = await prisma.phase.findUnique({ where: { id: req.params.phaseId } });
+
+  /**
+   * Le tableau suit le classement, publication ou non.
+   *
+   * C'est le geste attendu : on saisit ses éliminations, on regarde le premier
+   * tour qui en découle, on corrige, on regarde à nouveau. Sans ce recalcul,
+   * les affiches restaient celles du tout premier classement enregistré — et
+   * pire, une affiche déjà pourvue d'un vainqueur faisait autorité et cessait
+   * définitivement de bouger.
+   *
+   * Les vainqueurs déjà saisis survivent tant qu'ils figurent encore dans leur
+   * affiche recomposée. Un qualifié qui sort du top perd les siens, ce qui est
+   * la seule issue cohérente : il n'est plus censé avoir joué.
+   */
+  const reseed = await reseedOfficialBracket(phase.categoryId);
+
   const count = await rescoreCategory(phase.categoryId);
-  res.json({ ok: true, rescored: count });
+  res.json({ ok: true, rescored: count, reseed });
 });
 
 /** Résultat d'une battle. */
@@ -1024,92 +1050,15 @@ adminRouter.post('/events/:eventId/rescore', async (req, res) => {
 
 adminRouter.get('/users', async (req, res) => {
   const q = String(req.query.q ?? '').trim();
-  const where = q
-    ? {
-      OR: [
-        { username: { contains: q, mode: 'insensitive' } },
-        // Le nom d'affichage était absent de la recherche : quelqu'un qui a
-        // changé de pseudo Discord restait introuvable sous le nom que tout le
-        // monde lui connaît.
-        { globalName: { contains: q, mode: 'insensitive' } },
-        { discordId: q },
-      ],
-    }
-    : {};
-
-  // Trois nombres, pas un. `total` est l'effectif du site ; `matching` ce que
-  // la recherche a trouvé ; la longueur de `users` ce qui est réellement rendu.
-  // Sans les deux premiers, une liste plafonnée à cent lignes se lisait comme
-  // « le site compte cent comptes ».
-  const [total, matching, users] = await Promise.all([
-    prisma.user.count(),
-    q ? prisma.user.count({ where }) : prisma.user.count(),
-    prisma.user.findMany({
-      where,
-      orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
-      take: 100,
-      select: {
-        id: true, discordId: true, username: true, globalName: true,
-        avatarUrl: true, role: true, createdAt: true, lastSeenAt: true,
-      },
-    }),
-  ]);
-
-  res.json({ users, total, matching, capped: matching > users.length });
-});
-
-/**
- * La courbe des arrivées et de la fréquentation.
- *
- * Deux séries sur la même grille de journées : les comptes créés ce jour-là, et
- * les personnes qui se sont manifestées. Séparées, elles ne diraient pas
- * grand-chose ; côte à côte elles répondent à la seule question qui compte
- * après une annonce — les nouveaux venus sont-ils restés ?
- *
- * La journée est locale, comme partout ailleurs sur le site : un découpage UTC
- * ferait basculer le compteur à 2 h du matin l'été, en plein pic d'activité un
- * soir de compète.
- */
-adminRouter.get('/users/activity', async (req, res) => {
-  // Bornes serrées : sous une semaine la courbe n'a pas de forme, au-delà de
-  // six mois elle ne tient plus dans la largeur d'un écran.
-  const days = Math.min(Math.max(Number(req.query.days) || 30, 7), 180);
-  const window = lastDays(days);
-
-  // On remonte un jour plus tôt en UTC que la première journée locale : selon
-  // le fuseau, une inscription du 1er à 00 h 30 locale porte un horodatage UTC
-  // de la veille, et serait perdue par une comparaison naïve.
-  const since = new Date(`${window[0]}T00:00:00Z`);
-  since.setUTCDate(since.getUTCDate() - 1);
-
-  const [created, visits] = await Promise.all([
-    prisma.user.findMany({
-      where: { createdAt: { gte: since } },
-      select: { createdAt: true },
-    }),
-    // Visit.day est déjà une journée locale : une simple comparaison de chaînes
-    // ISO suffit, l'ordre lexicographique étant chronologique.
-    prisma.visit.groupBy({
-      by: ['day'],
-      where: { day: { gte: window[0] } },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const signupsByDay = new Map();
-  for (const u of created) {
-    const day = localDay(u.createdAt);
-    signupsByDay.set(day, (signupsByDay.get(day) ?? 0) + 1);
-  }
-  const activeByDay = new Map(visits.map((v) => [v.day, v._count._all]));
-
-  res.json({
-    days: window.map((day) => ({
-      day,
-      signups: signupsByDay.get(day) ?? 0,
-      active: activeByDay.get(day) ?? 0,
-    })),
+  const users = await prisma.user.findMany({
+    where: q
+      ? { OR: [{ username: { contains: q, mode: 'insensitive' } }, { discordId: q }] }
+      : {},
+    orderBy: [{ role: 'asc' }, { username: 'asc' }],
+    take: 100,
+    select: { id: true, discordId: true, username: true, globalName: true, avatarUrl: true, role: true, createdAt: true },
   });
+  res.json({ users });
 });
 
 /**

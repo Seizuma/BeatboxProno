@@ -158,6 +158,162 @@ export async function reresolvePhase(phaseId) {
     return { predictions: touched, battles: written };
 }
 
+/**
+ * Recompose le tableau OFFICIEL d'une catégorie à partir de son classement de
+ * qualification.
+ *
+ * ─── Le besoin ───────────────────────────────────────────────────────────────
+ *
+ * Un organisateur saisit ses éliminations, regarde le tableau qui en découle,
+ * corrige le classement, regarde à nouveau. C'est un aller-retour, pas une
+ * saisie en une passe. Or le tableau restait figé sur le premier classement
+ * enregistré.
+ *
+ * ─── Pourquoi l'affichage seul ne suffisait pas ──────────────────────────────
+ *
+ * `resolveBracket` fait déjà le bon calcul, mais sa règle `trustsOfficial`
+ * commence par `battle.played` : dès qu'un vainqueur est enregistré sur une
+ * affiche, celle-ci fait autorité et cesse d'être déduite. C'est la bonne règle
+ * pour afficher des résultats — mais elle gèle le premier tour dès la première
+ * saisie, et plus aucun classement ne le déplace.
+ *
+ * On repart donc d'un SQUELETTE : mêmes tours, mêmes emplacements, mais sans
+ * participants ni drapeau « jouée » sur la ligne principale. La résolution
+ * n'a alors plus rien à quoi se raccrocher et redéduit tout du classement.
+ * Les vainqueurs déjà saisis sont proposés en entrée et ne survivent que s'ils
+ * figurent encore dans leur affiche recomposée — c'est le rôle du dernier
+ * garde-fou de `resolveBracket`, qui vaut ici comme ailleurs.
+ *
+ * Les affiches LEGACY sont épargnées : elles sont composées à la main, sans
+ * tour amont, et aucun classement ne les concerne.
+ *
+ * Sans classement du tout — une Loopstation sans éliminations — la fonction ne
+ * touche à rien : les appariements manuels sont la seule vérité disponible.
+ *
+ * @returns {Promise<{phases: number, battles: number, cleared: number}>}
+ */
+export async function reseedOfficialBracket(categoryId) {
+    const category = await prisma.category.findUnique({
+        where: { id: categoryId },
+        include: { phases: { include: { battles: true, entries: true } } },
+    });
+    if (!category) return { phases: 0, battles: 0, cleared: 0 };
+
+    const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
+
+    // La dernière phase de classement qui porte un résultat, publiée ou non :
+    // côté organisateur, un classement enregistré est déjà une décision.
+    const qualifying = [...category.phases]
+        .filter((p) => RANKING_TYPES.includes(p.type) && p.entries.length > 0)
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        .pop();
+
+    if (!qualifying) return { phases: 0, battles: 0, cleared: 0 };
+
+    const seed = [...qualifying.entries]
+        .filter((e) => e.rank != null && (qualifying.qualifierCount ? e.qualified : true))
+        .sort((a, b) => a.rank - b.rank)
+        .map((e) => e.contenderId);
+
+    let phases = 0;
+    let written = 0;
+    let cleared = 0;
+
+    for (const phase of category.phases) {
+        if (RANKING_TYPES.includes(phase.type)) continue;
+        if (phase.battles.length === 0) continue;
+
+        const rounds = [...new Set(phase.battles.map((b) => b.round))];
+
+        // Le squelette : la ligne principale perd ses participants et son
+        // drapeau « jouée », pour que rien ne fasse autorité contre le
+        // classement. Voir l'en-tête de la fonction.
+        const battlesOf = {};
+        for (const b of phase.battles) {
+            const bare =
+                b.round === 'LEGACY'
+                    ? b
+                    : { ...b, contenderAId: null, contenderBId: null, played: false };
+            (battlesOf[bare.round] ??= []).push(bare);
+        }
+        for (const list of Object.values(battlesOf)) list.sort((x, y) => x.slot - y.slot);
+
+        const picks = {};
+        for (const b of phase.battles) {
+            picks[bracketKey(b.round, b.slot)] = {
+                round: b.round,
+                slot: b.slot,
+                winnerId: b.winnerId,
+                scoreA: b.scoreA,
+                scoreB: b.scoreB,
+            };
+        }
+
+        const resolved = resolveBracket({
+            battlesOf,
+            rounds,
+            picks,
+            seedFromRanking: seed,
+            resolvedPhase: false,
+            // Ni l'un ni l'autre : c'est justement ce qui empêcherait la
+            // redéduction. On veut le calcul nu.
+            authoritative: false,
+            officialDraw: false,
+            seedPairs: phase.seedPairs ?? null,
+        });
+
+        const updates = [];
+        for (const battle of phase.battles) {
+            if (battle.round === 'LEGACY') continue;
+
+            const r = resolved.get(bracketKey(battle.round, battle.slot));
+            const a = r?.a ?? null;
+            const b = r?.b ?? null;
+            const winnerId = r?.winnerId ?? null;
+            const scoreA = winnerId ? r?.scoreA ?? null : null;
+            const scoreB = winnerId ? r?.scoreB ?? null : null;
+
+            const same =
+                battle.contenderAId === a &&
+                battle.contenderBId === b &&
+                battle.winnerId === winnerId &&
+                battle.scoreA === scoreA &&
+                battle.scoreB === scoreB;
+            if (same) continue;
+
+            if (!a && !b) cleared += 1;
+            else written += 1;
+
+            updates.push(
+                prisma.battle.update({
+                    where: { id: battle.id },
+                    data: {
+                        contenderAId: a,
+                        contenderBId: b,
+                        winnerId,
+                        scoreA,
+                        scoreB,
+                        // Une affiche est jouée si et seulement si elle a un
+                        // vainqueur : effacer le vainqueur sans lever le drapeau
+                        // laisserait une battle « jouée » sans résultat, que le
+                        // classement compterait au dénominateur.
+                        played: Boolean(winnerId),
+                    },
+                })
+            );
+        }
+
+        if (updates.length) {
+            // En bloc : un tableau à moitié reconstruit est pire qu'un tableau
+            // périmé, parce que rien ne dit lequel des deux on regarde.
+            await prisma.$transaction(updates);
+            phases += 1;
+        }
+    }
+
+    return { phases, battles: written, cleared };
+}
+
 /** Le premier tour d'un tableau, pour dimensionner le tirage. */
 export function firstRoundOf(battles) {
     const rounds = new Set(battles.map((b) => b.round));
