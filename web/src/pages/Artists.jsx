@@ -76,16 +76,23 @@ export function ArtistPage() {
       </header>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        {/* Le bilan en battle a laissé la place aux points marqués : un
-            « 0–0 » sur une compète à venir ne dit rien, alors que les points
-            que la foule a tirés de lui se lisent dès le premier événement
-            scoré. */}
+        {/* Quatre chiffres, choisis pour dire quelque chose DÈS le premier
+            pronostic déposé. Le bilan en battle et les podiums ont sauté : sur
+            une compétition à venir, ils affichaient « 0–0 » et « 0 », ce qui
+            se lit comme un jugement alors que rien ne s'est encore joué.
+
+            La fiabilité reste, mais en dernier : elle ne peut rien dire tant
+            qu'aucune battle n'a été disputée, et les trois autres couvrent
+            désormais cette période. */}
         <Metric value={number(record.pointsFrom ?? 0)} label={t('artists.pointsFrom')} accent />
-        <Metric value={record.podiums} label={t('artists.podiums')} />
         <Metric value={crowd.timesPickedToWinBattle} label={t('artists.pickedToWin')} />
         <Metric
-          value={crowd.accuracy == null ? '—' : `${crowd.accuracy} %`}
-          label={t('artists.accuracy')}
+          value={crowd.qualifiedShare == null ? '—' : `${crowd.qualifiedShare} %`}
+          label={t('artists.qualifiedShare')}
+        />
+        <Metric
+          value={crowd.averageRank == null ? '—' : crowd.averageRank}
+          label={t('artists.averageRank')}
         />
       </div>
 
@@ -100,7 +107,9 @@ export function ArtistPage() {
                 <tr>
                   <th>{t('artists.col.event')}</th>
                   <th>{t('artists.col.category')}</th>
-                  <th>{t('artists.col.as')}</th>
+                  {/* « Sous le nom de » retiré : dans l'immense majorité des
+                      cas il répétait le nom de l'artiste, et une colonne qui
+                      recopie la ligne d'à côté ne fait qu'user la largeur. */}
                   <th className="num">{t('common.seed')}</th>
                 </tr>
               </thead>
@@ -109,7 +118,6 @@ export function ArtistPage() {
                   <tr key={i}>
                     <td><Link to={`/events/${a.eventSlug}`}>{a.event}</Link></td>
                     <td className="muted">{a.category}</td>
-                    <td>{a.contender}</td>
                     <td className="num">{a.seed ?? '—'}</td>
                   </tr>
                 ))}

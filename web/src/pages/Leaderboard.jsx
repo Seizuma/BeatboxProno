@@ -133,14 +133,13 @@ export default function Leaderboard() {
                   <tr>
                     <th></th>
                     <th>{t('leaderboard.col.player')}</th>
-                    {/* `col-opt` : masquée sous 620 px. Ces deux chiffres se
-                        retrouvent sur le profil du joueur, où l'on va de toute
-                        façon quand ils intriguent. Rang, pseudo, points et
-                        réussite suffisent à répondre à la question qu'on se
-                        pose en ouvrant un classement. */}
+                    {/* La moyenne par pronostic a disparu : elle variait
+                        surtout avec le nombre de catégories jouées, pas avec
+                        l'adresse du pronostiqueur, et personne ne la lisait.
+                        `col-opt` masque le décompte sous 620 px — il reste
+                        lisible sur le profil du joueur. */}
                     <th className="num col-opt">{t('stats.col.predictions')}</th>
                     <th className="num">{t('leaderboard.col.points')}</th>
-                    <th className="num col-opt">{t('stats.col.average')}</th>
                     <th>{t('stats.col.accuracy')}</th>
                   </tr>
                 </thead>
@@ -158,11 +157,9 @@ export default function Leaderboard() {
                       </td>
                       <td className="num muted col-opt">{p.predictions}</td>
                       <td className="num" style={{ fontWeight: 600 }}>{p.points}</td>
-                      <td className="num muted col-opt">{p.average ?? '—'}</td>
-                      {/* `minWidth` en rem : sur un écran de 360 px, cette
+                      {/* `minWidth` réduit : sur un écran de 360 px, cette
                           seule cellule réclamait un quart de la largeur et
-                          poussait le tableau hors du document. La jauge se
-                          contente de ce qu'on lui laisse. */}
+                          poussait le tableau hors du document. */}
                       <td style={{ minWidth: '6rem' }}>
                         {p.accuracy == null ? (
                           <span className="faint">—</span>

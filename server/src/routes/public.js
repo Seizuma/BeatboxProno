@@ -4,6 +4,8 @@ import { withName } from '../lib/naming.js';
 
 export const publicRouter = Router();
 
+const isStaff = (user) => Boolean(user) && ['ADMIN', 'OWNER'].includes(user.role);
+
 const visible = (user) =>
   user && ['ADMIN', 'OWNER'].includes(user.role)
     ? {}
@@ -135,7 +137,24 @@ publicRouter.get('/events/:slug', async (req, res) => {
     category.contenders = category.contenders.map(withName);
   }
 
-  res.json({ event: redactEvent(event), myPredictions });
+  /**
+   * La censure ne s'applique pas aux organisateurs.
+   *
+   * Elle existe pour empêcher qu'un résultat saisi mais pas encore publié
+   * fuite vers les joueurs. Appliquée à l'administrateur lui-même, elle lui
+   * renvoyait ses propres classements avec `rank: null` — l'éditeur de tableau
+   * ne trouvait donc aucun qualifié et refusait de composer le premier tour
+   * tant que les éliminations n'étaient pas publiées.
+   *
+   * C'est exactement l'inverse du besoin : on prépare le tableau AVANT de
+   * publier, pour vérifier qu'il tient debout. La page événement rend donc les
+   * données brutes au staff, comme elle lui rend déjà les événements en
+   * brouillon.
+   */
+  res.json({
+    event: isStaff(req.user) ? event : redactEvent(event),
+    myPredictions,
+  });
 });
 
 /**
@@ -336,7 +355,9 @@ publicRouter.get('/artists/:slug', async (req, res) => {
       select: { round: true, phaseId: true, contenderAId: true, contenderBId: true, winnerId: true },
     }),
 
-    // Le palmarès réel de l'artiste — ses vrais podiums, pas un pari.
+    // Le palmarès réel de l'artiste — ses vrais podiums, pas un pari. Plus
+    // affiché sur la fiche, mais conservé : il alimente le décompte de
+    // participations et ne coûte qu'une requête sur une table minuscule.
     prisma.podiumSlot.findMany({ where: { contenderId: { in: contenderIds } } }),
 
     /**
@@ -356,6 +377,36 @@ publicRouter.get('/artists/:slug', async (req, res) => {
   ]);
 
   const wins = battles.filter((b) => contenderIds.includes(b.winnerId)).length;
+
+  /**
+   * La lecture que la foule fait de lui AVANT que rien ne soit joué.
+   *
+   * La fiabilité ne peut rien dire tant qu'aucune battle n'a été disputée : sur
+   * une compétition à venir, elle affichait un tiret et n'apprenait rien. Or
+   * c'est justement à ce moment-là qu'on vient voir une fiche d'artiste.
+   *
+   * Deux chiffres disponibles dès le premier pronostic déposé : la part des
+   * pronostiqueurs qui le voient passer la coupe, et le rang moyen qu'ils lui
+   * donnent. Le second départage les artistes que tout le monde qualifie —
+   * être qualifié par 95 % ne dit pas si on est vu premier ou huitième.
+   */
+  const placements = await prisma.predictedRank.findMany({
+    where: { contenderId: { in: contenderIds }, prediction: { submitted: true } },
+    select: { rank: true, phase: { select: { qualifierCount: true } } },
+  });
+
+  let cutSeen = 0;
+  let cutThrough = 0;
+  let rankSum = 0;
+  for (const placement of placements) {
+    rankSum += placement.rank;
+    // Sans coupe déclarée, la phase ne qualifie personne : la compter fausserait
+    // la part dans les deux sens selon les compétitions.
+    const cut = placement.phase?.qualifierCount;
+    if (!cut) continue;
+    cutSeen += 1;
+    if (placement.rank <= cut) cutThrough += 1;
+  }
 
   /**
    * Les points que les pronostiqueurs ont marqués sur des lignes où il figure.
@@ -433,6 +484,13 @@ publicRouter.get('/artists/:slug', async (req, res) => {
       pickedAndRight: correct,
       accuracy: judged ? Math.round((correct / judged) * 100) : null,
       judged,
+      // Part des placements qui le mettent dans les qualifiés, et rang moyen
+      // qu'on lui donne. Disponibles dès le premier pronostic déposé.
+      qualifiedShare: cutSeen ? Math.round((cutThrough / cutSeen) * 100) : null,
+      averageRank: placements.length
+        ? Math.round((rankSum / placements.length) * 10) / 10
+        : null,
+      placements: placements.length,
     },
   });
 });

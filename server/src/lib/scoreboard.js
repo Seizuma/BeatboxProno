@@ -6,8 +6,7 @@ import { prisma } from './prisma.js';
  * Ce calcul vivait dans `routes/stats.js`, où il servait une seule page. Les
  * groupes privés demandent exactement le même travail sur un sous-ensemble de
  * joueurs et de compétitions : le copier aurait créé deux barèmes qui divergent
- * au premier ajustement. Il sort donc de la route, qui n'a plus qu'à lire ses
- * paramètres et rendre le résultat.
+ * au premier ajustement.
  *
  * Rien n'est écrit ici : une fonction pure de la base, comme `lib/scoring.js`
  * l'est du pronostic.
@@ -74,13 +73,10 @@ export async function buildScoreboard({
         readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 },
     };
 
-    // Un groupe sans membre, ou sans périmètre : cinq requêtes pour rendre du
-    // vide n'apprendraient rien à personne. Et surtout, une liste d'événements
-    // vide ne doit JAMAIS être traitée comme « tous » — c'est exactement le
-    // glissement que le périmètre explicite existe pour empêcher.
-    if ((userIds && userIds.length === 0) || (eventIds && eventIds.length === 0)) {
-        return { ...empty, players: pad ? [] : [] };
-    }
+    // Un groupe sans membre, ou sans périmètre. Une liste d'événements vide ne
+    // doit JAMAIS être traitée comme « tous » — c'est le glissement que le
+    // périmètre explicite existe pour empêcher.
+    if ((userIds && userIds.length === 0) || (eventIds && eventIds.length === 0)) return empty;
 
     const eventFilter = eventIds ? { eventId: { in: eventIds } } : eventId ? { eventId } : {};
     const categoryEventFilter = eventIds
@@ -98,14 +94,13 @@ export async function buildScoreboard({
         ...(userIds ? { userId: { in: userIds } } : {}),
     };
 
-    // Le même périmètre, exprimé côté phases.
     const categoryScope = {
         ...categoryEventFilter,
         ...(categoryKind ? { kind: categoryKind } : {}),
     };
     const phaseScope = Object.keys(categoryScope).length ? { category: categoryScope } : {};
 
-    const [grouped, battles, picks, officialRanks, predictedRanks] = await Promise.all([
+    const [grouped, battles, picks, submissions, officialRanks, predictedRanks] = await Promise.all([
         prisma.prediction.groupBy({
             by: ['userId'],
             where: predictionWhere,
@@ -115,13 +110,22 @@ export async function buildScoreboard({
             take,
         }),
 
+        // Les battles officielles jouées du périmètre, avec la catégorie à laquelle
+        // elles appartiennent : c'est elle qui dit à qui la question se pose.
         prisma.battle.findMany({
             where: {
                 played: true,
                 winnerId: { not: null },
                 ...(Object.keys(phaseScope).length ? { phase: phaseScope } : {}),
             },
-            select: { phaseId: true, round: true, contenderAId: true, contenderBId: true, winnerId: true },
+            select: {
+                phaseId: true,
+                round: true,
+                contenderAId: true,
+                contenderBId: true,
+                winnerId: true,
+                phase: { select: { categoryId: true } },
+            },
         }),
 
         prisma.predictedBattle.findMany({
@@ -136,9 +140,15 @@ export async function buildScoreboard({
             },
         }),
 
+        // Qui a déposé dans quelle catégorie. Sans cette liste, impossible de
+        // distinguer « il s'est trompé » de « il ne jouait pas cette catégorie ».
+        prisma.prediction.findMany({
+            where: predictionWhere,
+            select: { userId: true, categoryId: true },
+        }),
+
         // Le classement officiel de chaque phase résolue, avec les places
         // pronostiquées correspondantes : de quoi mesurer qui la foule a bien lu.
-        // Inutile quand les lectures ne sont pas demandées.
         readings
             ? prisma.phaseEntry.findMany({
                 where: { phase: { resolved: true, ...phaseScope } },
@@ -154,33 +164,64 @@ export async function buildScoreboard({
             : [],
     ]);
 
-    // --- Réussite en battle, joueur par joueur --------------------------------
+    // --- Réussite en battle -----------------------------------------------------
+    //
+    // L'ancienne définition comptait, parmi les affiches qu'une personne avait
+    // correctement APPARIÉES, la part dont elle avait aussi trouvé le vainqueur.
+    // Elle était incohérente, et dans le mauvais sens : quelqu'un qui se trompe
+    // sur tout le tableau n'apparie presque rien, son dénominateur fond, et les
+    // une ou deux affiches qu'il a devinées lui donnent 100 %. Le pronostiqueur
+    // le plus imprudent finissait le plus « fiable ».
+    //
+    // La nouvelle question est celle qu'on se pose vraiment : sur les battles
+    // réellement disputées des catégories où j'ai déposé, combien en ai-je
+    // appelées correctement ? Une affiche mal appariée est alors une erreur
+    // comptée comme telle, ce qu'elle est.
+    //
+    // Le dénominateur reste limité aux catégories où la personne a joué : lui
+    // reprocher les battles d'une Loopstation qu'elle n'a pas pronostiquée
+    // n'aurait aucun sens.
 
-    const officialWinners = new Map();
+    const battlesByCategory = new Map();
     for (const b of battles) {
-        officialWinners.set(battleKey(b.phaseId, b.round, b.contenderAId, b.contenderBId), b.winnerId);
+        const key = b.phase.categoryId;
+        if (!battlesByCategory.has(key)) battlesByCategory.set(key, []);
+        battlesByCategory.get(key).push(b);
     }
 
-    const tally = new Map(); // userId → { picks, hits }
-    let globalPicks = 0;
-    let globalHits = 0;
+    const categoriesByUser = new Map();
+    for (const s of submissions) {
+        if (!categoriesByUser.has(s.userId)) categoriesByUser.set(s.userId, new Set());
+        categoriesByUser.get(s.userId).add(s.categoryId);
+    }
 
+    const picksByUser = new Map();
     for (const pick of picks) {
-        const winner = officialWinners.get(
-            battleKey(pick.phaseId, pick.round, pick.contenderAId, pick.contenderBId)
-        );
-        if (winner === undefined) continue; // battle pas encore jouée : on ne compte pas
-
         const userId = pick.prediction.userId;
-        const row = tally.get(userId) ?? { picks: 0, hits: 0 };
-        row.picks += 1;
-        globalPicks += 1;
-        if (winner === pick.winnerId) {
-            row.hits += 1;
-            globalHits += 1;
-        }
-        tally.set(userId, row);
+        if (!picksByUser.has(userId)) picksByUser.set(userId, new Map());
+        picksByUser
+            .get(userId)
+            .set(battleKey(pick.phaseId, pick.round, pick.contenderAId, pick.contenderBId), pick.winnerId);
     }
+
+    const record = (userId) => {
+        const cats = categoriesByUser.get(userId);
+        if (!cats) return { played: 0, hits: 0 };
+
+        const mine = picksByUser.get(userId) ?? new Map();
+        let played = 0;
+        let hits = 0;
+
+        for (const categoryId of cats) {
+            for (const b of battlesByCategory.get(categoryId) ?? []) {
+                played += 1;
+                const guess = mine.get(battleKey(b.phaseId, b.round, b.contenderAId, b.contenderBId));
+                if (guess && guess === b.winnerId) hits += 1;
+            }
+        }
+
+        return { played, hits };
+    };
 
     // Les inactifs d'un groupe figurent quand même au tableau. Sur le classement
     // général, faire apparaître les milliers de comptes qui n'ont jamais rien
@@ -195,26 +236,33 @@ export async function buildScoreboard({
     });
     const byId = new Map(users.map((u) => [u.id, u]));
 
+    let globalPlayed = 0;
+    let globalHits = 0;
+
     const players = [
         ...grouped.map((g) => {
-            const row = tally.get(g.userId) ?? { picks: 0, hits: 0 };
+            const row = record(g.userId);
+            globalPlayed += row.played;
+            globalHits += row.hits;
+
             const count = g._count._all;
             const points = g._sum.points ?? 0;
             return {
                 user: byId.get(g.userId) ?? null,
                 predictions: count,
                 points,
-                average: count ? Math.round((points / count) * 10) / 10 : null,
-                battlePicks: row.picks,
+                // `battlePicks` porte désormais le nombre de battles JOUÉES qui le
+                // concernaient, pas le nombre de ses paris retenus : c'est le
+                // dénominateur affiché sous la jauge.
+                battlePicks: row.played,
                 battleHits: row.hits,
-                accuracy: row.picks ? Math.round((row.hits / row.picks) * 100) : null,
+                accuracy: row.played ? Math.round((row.hits / row.played) * 100) : null,
             };
         }),
         ...idle.map((id) => ({
             user: byId.get(id) ?? null,
             predictions: 0,
             points: 0,
-            average: null,
             battlePicks: 0,
             battleHits: 0,
             accuracy: null,
@@ -226,8 +274,8 @@ export async function buildScoreboard({
         submitted: grouped.reduce((n, g) => n + g._count._all, 0),
         points: grouped.reduce((n, g) => n + (g._sum.points ?? 0), 0),
         battlesPlayed: battles.length,
-        battlePicks: globalPicks,
-        accuracy: globalPicks ? Math.round((globalHits / globalPicks) * 100) : null,
+        battlePicks: globalPlayed,
+        accuracy: globalPlayed ? Math.round((globalHits / globalPlayed) * 100) : null,
     };
 
     if (!readings) {
