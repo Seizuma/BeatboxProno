@@ -1389,17 +1389,37 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
   // est déjà une décision, et l'arbre doit le refléter pour qu'on puisse
   // préparer la suite avant de publier. Le tri par `position` est nécessaire —
   // `pop()` sur un tableau non trié prenait une phase au hasard.
+  /**
+   * La phase de qualification qui alimente ce tableau, s'il en existe une.
+   *
+   * Son EXISTENCE et son CONTENU répondent à deux questions différentes, et les
+   * confondre était le défaut. Qu'elle existe décide si le premier tour se
+   * déduit ou se compose à la main. Ce qu'elle contient décide de QUI y figure.
+   *
+   * Un classement vidé restait indiscernable d'une catégorie sans éliminations :
+   * l'écran retombait en mode manuel, redonnait autorité aux affiches
+   * enregistrées, et le tableau gardait les participants d'un classement
+   * effacé.
+   */
+  const qualifying = useMemo(
+    () =>
+      [...(category?.phases ?? [])]
+        .filter((p) => ['SEEDING', 'WILDCARD', 'ELIMINATION'].includes(p.type))
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        .pop() ?? null,
+    [category]
+  );
+
+  // Publié ou non : côté organisateur, un classement enregistré en brouillon
+  // est déjà une décision, et l'arbre doit le refléter pour qu'on puisse
+  // préparer la suite avant de publier.
   const seedFromRanking = useMemo(() => {
-    const qualifying = [...(category?.phases ?? [])]
-      .filter((p) => ['SEEDING', 'WILDCARD', 'ELIMINATION'].includes(p.type))
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-      .pop();
     if (!qualifying?.entries?.length) return [];
     return [...qualifying.entries]
       .sort((a, b) => a.rank - b.rank)
       .filter((e) => (qualifying.qualifierCount ? e.qualified : true))
       .map((e) => e.contenderId);
-  }, [category]);
+  }, [qualifying]);
 
   // L'état local reprend la forme attendue par BracketBoard.
   const [picks, setPicks] = useState(() =>
@@ -1427,11 +1447,11 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
    * `picks` est initialisé une seule fois. Après un enregistrement du
    * classement, le serveur redéduit le premier tour et le rechargement rapporte
    * de nouvelles affiches — mais l'état local gardait les anciennes et les
-   * repoussait au prochain envoi, annulant en silence le recalcul.
+   * repoussait au prochain envoi, annulant le recalcul en silence.
    *
-   * La signature compare le contenu, pas la référence : le rechargement crée
-   * de nouveaux objets à chaque fois, et se fier à l'identité relancerait la
-   * remise à zéro sans fin.
+   * La signature compare le CONTENU, pas la référence : le rechargement crée de
+   * nouveaux objets à chaque fois, et se fier à l'identité relancerait la remise
+   * à zéro sans fin.
    *
    * Une saisie en cours n'est jamais écrasée : tant que `dirty` tient, ce que
    * l'organisateur a sous les doigts prime.
@@ -1439,7 +1459,9 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
   const signature = useMemo(
     () =>
       (phase.battles ?? [])
-        .map((b) => [b.round, b.slot, b.contenderAId, b.contenderBId, b.winnerId, b.scoreA, b.scoreB].join('~'))
+        .map((b) =>
+          [b.round, b.slot, b.contenderAId, b.contenderBId, b.winnerId, b.scoreA, b.scoreB].join('~')
+        )
         .join('|'),
     [phase.battles]
   );
@@ -1527,8 +1549,9 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
 
       {seedFromRanking.length === 0 && (
         <p className="faint" style={{ fontSize: '0.86rem', margin: 0 }}>
-          Aucun classement de qualification enregistré : composez les affiches du premier tour à la
-          main, ou saisissez d'abord la phase d'éliminations.
+          {qualifying
+            ? `« ${qualifying.name} » ne contient aucun qualifié : le premier tour reste vide et se remplira dès que le classement sera saisi et enregistré.`
+            : 'Aucune phase de qualification dans cette catégorie : composez les affiches du premier tour à la main.'}
         </p>
       )}
 
@@ -1542,12 +1565,12 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
         seedFromRanking={seedFromRanking}
         event={event}
         authoritative
-        // Un classement existe : le premier tour s'en déduit, il ne doit pas
-        // rester figé sur ce qui est enregistré — sinon saisir un nouveau
-        // classement ne changerait plus rien à l'arbre. Sans classement — une
-        // Loopstation sans éliminations — les affiches composées à la main
-        // tiennent.
-        officialDraw={seedFromRanking.length === 0}
+        // Le premier tour se déduit dès qu'une PHASE de qualification existe,
+        // pleine ou vide. Se fier au nombre de qualifiés ramenait l'autorité
+        // aux affiches enregistrées sitôt le classement effacé, et le tableau
+        // ne se vidait jamais. Sans phase de qualification — une Loopstation
+        // sans éliminations — les affiches composées à la main tiennent.
+        officialDraw={!qualifying}
       />
     </div>
   );
@@ -1599,12 +1622,12 @@ function RankingResults({ phase, contenders, onDone, run }) {
       await onDone();
 
       // Ce que le tableau est devenu fait partie du retour : recomposer le
-      // premier tour peut effacer des vainqueurs déjà saisis, et l'apprendre
-      // en changeant d'onglet serait une mauvaise surprise.
-      const moved = reseed?.phases
-        ? ` Tableau recomposé : ${reseed.battles} affiche${reseed.battles > 1 ? 's' : ''} mise${reseed.battles > 1 ? 's' : ''} à jour` +
-        (reseed.cleared ? `, ${reseed.cleared} vidée${reseed.cleared > 1 ? 's' : ''}.` : '.')
-        : '';
+      // premier tour peut effacer des vainqueurs déjà saisis, et l'apprendre en
+      // changeant d'onglet serait une mauvaise surprise.
+      const parts = [];
+      if (reseed?.battles) parts.push(`${reseed.battles} affiche(s) mise(s) à jour`);
+      if (reseed?.cleared) parts.push(`${reseed.cleared} vidée(s)`);
+      const moved = parts.length ? ` Tableau recomposé : ${parts.join(', ')}.` : '';
 
       return (resolved
         ? `${phase.name} publiée : les pronostics ont été recalculés.`

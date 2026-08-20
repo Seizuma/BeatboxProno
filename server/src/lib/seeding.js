@@ -166,29 +166,38 @@ export async function reresolvePhase(phaseId) {
  *
  * Un organisateur saisit ses éliminations, regarde le tableau qui en découle,
  * corrige le classement, regarde à nouveau. C'est un aller-retour, pas une
- * saisie en une passe. Or le tableau restait figé sur le premier classement
- * enregistré.
+ * saisie en une passe. Le tableau doit donc suivre — se remplir ET se vider.
  *
- * ─── Pourquoi l'affichage seul ne suffisait pas ──────────────────────────────
+ * ─── Ce qui décide : la PHASE, pas les résultats ─────────────────────────────
  *
- * `resolveBracket` fait déjà le bon calcul, mais sa règle `trustsOfficial`
- * commence par `battle.played` : dès qu'un vainqueur est enregistré sur une
- * affiche, celle-ci fait autorité et cesse d'être déduite. C'est la bonne règle
- * pour afficher des résultats — mais elle gèle le premier tour dès la première
- * saisie, et plus aucun classement ne le déplace.
+ * La distinction est le cœur de cette fonction, et s'y tromper la rend inerte.
  *
- * On repart donc d'un SQUELETTE : mêmes tours, mêmes emplacements, mais sans
- * participants ni drapeau « jouée » sur la ligne principale. La résolution
- * n'a alors plus rien à quoi se raccrocher et redéduit tout du classement.
- * Les vainqueurs déjà saisis sont proposés en entrée et ne survivent que s'ils
- * figurent encore dans leur affiche recomposée — c'est le rôle du dernier
- * garde-fou de `resolveBracket`, qui vaut ici comme ailleurs.
+ * Une catégorie qui POSSÈDE une phase de classement voit son tableau déduit de
+ * cette phase, toujours — y compris quand elle est vide, auquel cas le premier
+ * tour se vide aussi. Une catégorie qui n'en possède AUCUNE — une Loopstation
+ * sans éliminations — a des affiches composées à la main, et rien ici ne doit
+ * y toucher.
  *
- * Les affiches LEGACY sont épargnées : elles sont composées à la main, sans
- * tour amont, et aucun classement ne les concerne.
+ * Une première version testait la présence de résultats plutôt que de la
+ * phase. Vider un classement devenait alors indiscernable de ne pas en avoir :
+ * la fonction sortait sans rien faire, et le tableau gardait les participants
+ * d'un classement effacé.
  *
- * Sans classement du tout — une Loopstation sans éliminations — la fonction ne
- * touche à rien : les appariements manuels sont la seule vérité disponible.
+ * ─── Pourquoi le squelette ───────────────────────────────────────────────────
+ *
+ * `resolveBracket` fait le bon calcul, mais sa règle `trustsOfficial` commence
+ * par `battle.played` : dès qu'un vainqueur est enregistré, l'affiche fait
+ * autorité et cesse d'être déduite. Bonne règle pour afficher des résultats,
+ * mais elle gèle le premier tour dès la première saisie.
+ *
+ * On repart donc d'un squelette : mêmes tours, mêmes emplacements, sans
+ * participants ni drapeau « jouée » sur la ligne principale. La résolution n'a
+ * plus rien à quoi se raccrocher et redéduit tout du classement. Les vainqueurs
+ * déjà saisis sont proposés en entrée et ne survivent que s'ils figurent encore
+ * dans leur affiche recomposée.
+ *
+ * Les affiches LEGACY sont épargnées : composées à la main, sans tour amont,
+ * aucun classement ne les concerne.
  *
  * @returns {Promise<{phases: number, battles: number, cleared: number}>}
  */
@@ -201,15 +210,17 @@ export async function reseedOfficialBracket(categoryId) {
 
     const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
-    // La dernière phase de classement qui porte un résultat, publiée ou non :
-    // côté organisateur, un classement enregistré est déjà une décision.
+    // La dernière phase de classement de la catégorie. Son CONTENU n'entre pas
+    // dans la condition : c'est son existence qui dit que le tableau se déduit.
     const qualifying = [...category.phases]
-        .filter((p) => RANKING_TYPES.includes(p.type) && p.entries.length > 0)
+        .filter((p) => RANKING_TYPES.includes(p.type))
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
         .pop();
 
+    // Aucune phase de classement : composition manuelle, on se retire.
     if (!qualifying) return { phases: 0, battles: 0, cleared: 0 };
 
+    // Peut être vide, et c'est un cas légitime : le tableau se videra.
     const seed = [...qualifying.entries]
         .filter((e) => e.rank != null && (qualifying.qualifierCount ? e.qualified : true))
         .sort((a, b) => a.rank - b.rank)
@@ -225,9 +236,6 @@ export async function reseedOfficialBracket(categoryId) {
 
         const rounds = [...new Set(phase.battles.map((b) => b.round))];
 
-        // Le squelette : la ligne principale perd ses participants et son
-        // drapeau « jouée », pour que rien ne fasse autorité contre le
-        // classement. Voir l'en-tête de la fonction.
         const battlesOf = {};
         for (const b of phase.battles) {
             const bare =
@@ -255,8 +263,8 @@ export async function reseedOfficialBracket(categoryId) {
             picks,
             seedFromRanking: seed,
             resolvedPhase: false,
-            // Ni l'un ni l'autre : c'est justement ce qui empêcherait la
-            // redéduction. On veut le calcul nu.
+            // Ni l'un ni l'autre : ce sont précisément ces deux drapeaux qui
+            // empêcheraient la redéduction. On veut le calcul nu.
             authoritative: false,
             officialDraw: false,
             seedPairs: phase.seedPairs ?? null,
@@ -269,7 +277,9 @@ export async function reseedOfficialBracket(categoryId) {
             const r = resolved.get(bracketKey(battle.round, battle.slot));
             const a = r?.a ?? null;
             const b = r?.b ?? null;
-            const winnerId = r?.winnerId ?? null;
+            // Un vainqueur sans affiche n'a aucun sens : quand les deux camps
+            // tombent, le résultat tombe avec eux.
+            const winnerId = a || b ? r?.winnerId ?? null : null;
             const scoreA = winnerId ? r?.scoreA ?? null : null;
             const scoreB = winnerId ? r?.scoreB ?? null : null;
 
@@ -293,10 +303,10 @@ export async function reseedOfficialBracket(categoryId) {
                         winnerId,
                         scoreA,
                         scoreB,
-                        // Une affiche est jouée si et seulement si elle a un
-                        // vainqueur : effacer le vainqueur sans lever le drapeau
-                        // laisserait une battle « jouée » sans résultat, que le
-                        // classement compterait au dénominateur.
+                        // Jouée si et seulement si elle a un vainqueur : effacer
+                        // le vainqueur sans lever le drapeau laisserait une
+                        // battle « jouée » sans résultat, que le classement
+                        // compterait au dénominateur.
                         played: Boolean(winnerId),
                     },
                 })
