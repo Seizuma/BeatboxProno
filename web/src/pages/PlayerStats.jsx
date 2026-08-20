@@ -56,8 +56,8 @@ export default function PlayerStats() {
             <Metric value={number(data.totals.submitted)} label={t('stats.predictions')} />
             <Metric value={number(data.totals.points)} label={t('stats.pointsGiven')} />
             <Metric
-              value={data.totals.accuracy == null ? '—' : `${data.totals.accuracy} %`}
-              label={t('stats.battlesRead')}
+              value={data.totals.precision == null ? '—' : `${data.totals.precision} %`}
+              label={t('stats.precision')}
             />
           </div>
 
@@ -74,8 +74,12 @@ export default function PlayerStats() {
                       <th>{t('stats.col.player')}</th>
                       <th className="num">{t('stats.col.predictions')}</th>
                       <th className="num">{t('stats.col.points')}</th>
-                      <th className="num">{t('stats.col.average')}</th>
-                      <th>{t('stats.col.accuracy')}</th>
+                      {/* La moyenne par pronostic reste ici : sur une fiche
+                          individuelle elle compare les catégories entre elles,
+                          ce qui a du sens, alors que dans un classement général
+                          elle mesurait surtout le nombre de catégories jouées. */}
+                      <th className="num col-opt">{t('stats.col.average')}</th>
+                      <th>{t('stats.col.precision')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -94,17 +98,19 @@ export default function PlayerStats() {
                         </td>
                         <td className="num muted">{p.predictions}</td>
                         <td className="num" style={{ fontWeight: 600 }}>{p.points}</td>
-                        <td className="num muted">{p.average ?? '—'}</td>
-                        <td style={{ minWidth: '9rem' }}>
-                          {p.accuracy == null ? (
+                        <td className="num muted col-opt">
+                          {p.predictions ? Math.round((p.points / p.predictions) * 10) / 10 : '—'}
+                        </td>
+                        <td style={{ minWidth: '6rem' }}>
+                          {p.precision == null ? (
                             <span className="faint">—</span>
                           ) : (
                             <>
                               <span className="data" style={{ fontSize: '0.78rem' }}>
-                                {p.accuracy} % · {p.battleHits}/{p.battlePicks}
+                                {p.precision} % · {number(p.points)}/{number(p.possible)}
                               </span>
                               <span className="meter">
-                                <span style={{ width: `${p.accuracy}%` }} />
+                                <span style={{ width: `${p.precision}%` }} />
                               </span>
                             </>
                           )}

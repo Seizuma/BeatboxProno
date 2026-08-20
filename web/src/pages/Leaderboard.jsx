@@ -117,8 +117,8 @@ export default function Leaderboard() {
             <Metric value={number(data.totals.submitted)} label={t('stats.predictions')} />
             <Metric value={number(data.totals.points)} label={t('stats.pointsGiven')} />
             <Metric
-              value={data.totals.accuracy == null ? '—' : `${data.totals.accuracy} %`}
-              label={t('stats.battlesRead')}
+              value={data.totals.precision == null ? '—' : `${data.totals.precision} %`}
+              label={t('stats.precision')}
             />
           </div>
 
@@ -135,12 +135,11 @@ export default function Leaderboard() {
                     <th>{t('leaderboard.col.player')}</th>
                     {/* La moyenne par pronostic a disparu : elle variait
                         surtout avec le nombre de catégories jouées, pas avec
-                        l'adresse du pronostiqueur, et personne ne la lisait.
-                        `col-opt` masque le décompte sous 620 px — il reste
-                        lisible sur le profil du joueur. */}
+                        l'adresse du pronostiqueur. `col-opt` masque le décompte
+                        sous 620 px — il reste lisible sur le profil. */}
                     <th className="num col-opt">{t('stats.col.predictions')}</th>
                     <th className="num">{t('leaderboard.col.points')}</th>
-                    <th>{t('stats.col.accuracy')}</th>
+                    <th>{t('stats.col.precision')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -161,15 +160,19 @@ export default function Leaderboard() {
                           seule cellule réclamait un quart de la largeur et
                           poussait le tableau hors du document. */}
                       <td style={{ minWidth: '6rem' }}>
-                        {p.accuracy == null ? (
+                        {p.precision == null ? (
                           <span className="faint">—</span>
                         ) : (
                           <>
+                            {/* Le rapport brut sous le pourcentage : « 62 % »
+                                seul ne dit pas s'il repose sur une phase ou sur
+                                dix, et c'est ce qui rend deux joueurs
+                                comparables ou non. */}
                             <span className="data" style={{ fontSize: '0.78rem' }}>
-                              {p.accuracy} % · {p.battleHits}/{p.battlePicks}
+                              {p.precision} % · {number(p.points)}/{number(p.possible)}
                             </span>
                             <span className="meter">
-                              <span style={{ width: `${p.accuracy}%` }} />
+                              <span style={{ width: `${p.precision}%` }} />
                             </span>
                           </>
                         )}
