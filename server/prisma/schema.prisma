@@ -119,6 +119,18 @@ model Category {
   slug      String
   position  Int          @default(0)
 
+  // Le jury de la catégorie, en clair.
+  //
+  // Des chaînes et non des relations vers Artist : un jury comprend
+  // régulièrement des gens qui ne concourent nulle part — des beatboxers
+  // retirés, des invités d'une autre discipline. Les faire entrer au
+  // référentiel des artistes pour les citer une fois polluerait la page
+  // Artistes et fausserait ses statistiques.
+  //
+  // Par catégorie et non par événement : une même compétition juge rarement le
+  // Solo et le Loopstation avec le même panel.
+  judges    String[]     @default([])
+
   contenders  Contender[]
   phases      Phase[]
   predictions Prediction[]
@@ -218,6 +230,12 @@ model PhaseEntry {
 }
 
 enum RoundType {
+  // Un tour de 32 n'existe que sur les très gros plateaux, mais il doit figurer
+  // ici pour que la base accepte les affiches correspondantes. Trois autres
+  // endroits doivent rester d'accord avec cette liste : MAIN_LINE dans
+  // bracket.js, BRACKET_FORMATS dans routes/admin.js, et les listes
+  // d'affichage des écrans qui dessinent un arbre.
+  ROUND_OF_32
   ROUND_OF_16
   QUARTER
   SEMI

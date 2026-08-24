@@ -1,11 +1,55 @@
-import { scoreMatchesWinner } from './scores.js';
+/**
+ * Un score est-il cohérent avec le camp désigné vainqueur ?
+ *
+ * Définie ICI plutôt qu'importée de `scores.js`, et c'est délibéré.
+ *
+ * Ce fichier existe en deux exemplaires — `server/src/lib/` et `web/src/lib/` —
+ * parce que le serveur et le client construisent des images Docker séparées :
+ * aucun des deux ne peut lire dans le dossier de l'autre. Un test de parité
+ * rejoue des milliers de configurations contre les deux copies pour qu'elles ne
+ * divergent jamais.
+ *
+ * Or `scores.js` n'a de sens que côté client : il alimente les listes
+ * déroulantes de score de l'administration. L'importer ici rendait les deux
+ * copies impossibles à garder identiques — le serveur aurait eu besoin d'un
+ * fichier dont il n'a que faire, et sans lui l'import échouait au démarrage.
+ *
+ * Cinq lignes recopiées valent mieux qu'une dépendance qui ne peut pas exister
+ * des deux côtés. Et le bénéfice va plus loin : les deux fichiers étant
+ * désormais identiques au caractère près, la parité peut se vérifier par une
+ * simple comparaison d'octets, bien plus sûre qu'un tirage aléatoire.
+ *
+ * La règle elle-même : « sans avis » reste valide — un score absent n'est pas
+ * une contradiction, c'est une abstention.
+ */
+function scoreMatchesWinner(scoreA, scoreB, side) {
+    if (scoreA == null || scoreB == null) return true;
+    if (side === 'a') return scoreA > scoreB;
+    if (side === 'b') return scoreB > scoreA;
+    return false;
+}
 
-/** La ligne principale du tableau : chaque tour alimente le suivant. */
-export const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
+/**
+ * La ligne principale du tableau : chaque tour alimente le suivant.
+ *
+ * Ajouter un tour ici ne suffit pas à faire exister un format. Il faut aussi
+ * qu'il figure dans le type énuméré `RoundType` de la base, dans le catalogue
+ * `BRACKET_FORMATS` de l'administration, et dans les listes d'affichage des
+ * trois écrans qui dessinent un arbre. Les quatre doivent rester d'accord.
+ */
+export const MAIN_LINE = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
 
 // L'ordre dans lequel les affiches se déduisent les unes des autres : la petite
 // finale a besoin des demies, la finale aussi.
-export const RESOLVE_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+export const RESOLVE_ORDER = [
+    'ROUND_OF_32',
+    'ROUND_OF_16',
+    'QUARTER',
+    'SEMI',
+    'SMALL_FINAL',
+    'FINAL',
+    'LEGACY',
+];
 
 export const bracketKey = (round, slot) => `${round}:${slot}`;
 const key = bracketKey;
@@ -37,6 +81,28 @@ export function firstRoundPair(seedPairs, slot, size) {
     const pair = Array.isArray(seedPairs) ? seedPairs[slot] : null;
     if (Array.isArray(pair)) return [pair[0] ?? null, pair[1] ?? null];
     return [slot + 1, size - slot];
+}
+
+/**
+ * L'ordre d'entrée d'une catégorie qui n'a AUCUNE phase de qualification.
+ *
+ * Une Loopstation se joue souvent en tableau direct : pas d'éliminations, les
+ * participants entrent sur leur seed d'inscription. Sans cette fonction, rien
+ * n'alimentait le premier tour — `seedFromRanking` restait vide, aucune règle
+ * de `resolveBracket` ne s'appliquait, et le tableau s'affichait désespérément
+ * vide alors que les participants étaient bien là.
+ *
+ * Deux seeds au minimum : un seul ne compose aucune affiche, et prendre l'ordre
+ * d'inscription à défaut produirait un tirage que personne n'a décidé.
+ *
+ * Les participants sans seed sont écartés plutôt que rangés en fin de liste :
+ * un tableau à moitié seedé n'est pas un tableau, et mieux vaut le laisser vide
+ * pour que l'organisateur s'en aperçoive.
+ */
+export function seedFromContenders(contenders = []) {
+    const seeded = contenders.filter((c) => Number.isFinite(c?.seed));
+    if (seeded.length < 2) return [];
+    return [...seeded].sort((a, b) => a.seed - b.seed).map((c) => c.id);
 }
 
 /**

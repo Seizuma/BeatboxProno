@@ -14,11 +14,6 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
  * Ne s'ouvre que sur un pronostic déposé — le serveur refuse les brouillons
  * d'autrui. On y voit ce que la personne avait annoncé : ses classements et
  * ses vainqueurs, dans l'ordre des phases.
- *
- * Ouverte depuis un groupe (`groupSlug`), la fiche devient annotable : chaque
- * rang, chaque affiche et chaque phase porte un `data-anchor`, et les
- * commentaires viennent s'y accrocher. Ouverte depuis un profil public, elle
- * reste ce qu'elle était — aucune conversation ne s'y attache.
  */
 export default function PredictionView({ predictionId, onClose, groupSlug, groupName }) {
     const { t, date } = useI18n();
@@ -28,7 +23,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     const [exporting, setExporting] = useState(false);
 
     // La boîte annotée : c'est elle qui porte `position: relative`, donc
-    // l'origine du repère dans lequel les pastilles se placent.
+    // l'origine du repère dans lequel les pastilles de commentaire se placent.
     const canvas = useRef(null);
 
     useEffect(() => {
@@ -62,12 +57,6 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                         {data?.label}
                         {data?.updatedAt && ` · ${date(data.updatedAt)}`}
                     </span>
-
-                    {/* L'export est proposé sur TOUT pronostic déposé, pas
-                        seulement les siens : partager la prédiction de
-                        quelqu'un d'autre pour la commenter est un usage aussi
-                        naturel que partager la sienne, et la carte porte de
-                        toute façon le nom de son auteur. */}
                     {data && (
                         <button className="btn btn--small" onClick={() => setExporting(true)}>
                             {t('export.open')}
@@ -76,8 +65,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
 
                     {/* Le mode pose. Un interrupteur plutôt qu'un clic droit ou
                         un appui long : sur mobile ces deux gestes appartiennent
-                        déjà au navigateur, et rien à l'écran ne dirait qu'ils
-                        font quelque chose ici. */}
+                        déjà au navigateur. */}
                     {data && groupSlug && (
                         <button
                             className={`btn btn--small${placing ? ' btn--primary' : ''}`}
@@ -99,10 +87,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
             {placing && <p className="notice notice--ok">{t('pin.mode.hint')}</p>}
 
             {data && (
-                <div
-                    ref={canvas}
-                    className={`canvas${placing ? ' canvas--placing' : ''}`}
-                >
+                <div ref={canvas} className={`canvas${placing ? ' canvas--placing' : ''}`}>
                     <Body prediction={data} />
 
                     {groupSlug && (
@@ -125,7 +110,15 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     );
 }
 
-const ROUND_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+/**
+ * L'ordre des tours, tour de 32 compris.
+ *
+ * Ajouter une valeur ici ne suffit pas à faire exister le format : il faut
+ * aussi qu'elle figure dans `MAIN_LINE` de `bracket.js`, qui décide de ce qui
+ * alimente quoi, et dans le type énuméré de la base. Les trois doivent rester
+ * d'accord.
+ */
+const ROUND_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
 
 /**
  * L'arbre d'un pronostic, en lecture seule.
@@ -144,7 +137,7 @@ function ReadOnlyBracket({ battles, byId, photo }) {
 
     const present = ROUND_ORDER.filter((r) => byRound[r]);
     const columns = [];
-    for (const r of ['ROUND_OF_16', 'QUARTER', 'SEMI']) {
+    for (const r of ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI']) {
         if (present.includes(r)) columns.push({ key: r, main: r, extra: null });
     }
     if (present.includes('FINAL') || present.includes('SMALL_FINAL')) {
@@ -159,9 +152,6 @@ function ReadOnlyBracket({ battles, byId, photo }) {
     const card = (b) => {
         const sides = [b.contenderAId, b.contenderBId];
         return (
-            // L'ancre porte la PHASE, le TOUR et le SLOT — jamais la position à
-            // l'écran. Une bulle posée sur ce quart de finale y reste quand la
-            // fenêtre rétrécit et que les colonnes se replient.
             <div
                 className="bracket__node"
                 key={`${b.round}:${b.slot}`}
@@ -261,9 +251,8 @@ function Body({ prediction }) {
 
                 return (
                     <section className="stack" key={phase.id} style={{ gap: '0.5rem' }}>
-                        {/* Le titre de phase est accrochable lui aussi : c'est là
-                            qu'on pose « il a complètement raté ses wildcards »,
-                            une remarque qui ne vise aucune ligne en particulier. */}
+                        {/* Le titre de phase est accrochable : c'est là qu'on
+                            pose « il a complètement raté ses wildcards ». */}
                         <h3 data-anchor={`phase:${phase.id}`}>
                             {phase.name}
                             {phase.qualifierCount ? ` — ${t('ranking.cut', { n: phase.qualifierCount })}` : ''}
@@ -277,10 +266,6 @@ function Body({ prediction }) {
                                             const c = byId.get(r.contenderId);
                                             const qualified = phase.qualifierCount && r.rank <= phase.qualifierCount;
                                             return (
-                                                // L'ancre désigne le contender dans la phase,
-                                                // pas la ligne : le même beatboxer reste la
-                                                // même cible même si le classement affiché
-                                                // change d'ordre un jour.
                                                 <tr
                                                     key={r.contenderId}
                                                     data-anchor={`rank:${phase.id}:${r.contenderId}`}

@@ -7,6 +7,7 @@ import ArtistFigure from '../components/ArtistFigure.jsx';
 import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js';
 import { shrinkImage, humanSize } from '../lib/image.js';
 import MenuButton from '../components/MenuButton.jsx';
+import { seedFromContenders } from '../lib/bracket.js';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 import SeedingEditor from '../components/SeedingEditor.jsx';
@@ -438,6 +439,14 @@ function EventSettings({ event, onDone, run }) {
 
 function CategoryPanel({ category, onDone, run, askDelete }) {
   const [open, setOpen] = useState(false);
+  /**
+   * Le jury, saisi comme une liste separee par des virgules.
+   *
+   * Un champ unique plutot qu'une liste de champs a ajouter un par un : un
+   * panel se recopie depuis une affiche ou un communique, et le coller d'un
+   * bloc est le geste reel. Le decoupage se fait a l'enregistrement.
+   */
+  const [judges, setJudges] = useState((category.judges ?? []).join(', '));
   // Le tirage réglé, s'il y en a un d'ouvert. Un seul à la fois : deux tableaux
   // ouverts côte à côte n'aideraient personne à s'y retrouver.
   const [seeding, setSeeding] = useState(null);
@@ -475,6 +484,41 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
             ]}
           />
         </div>
+      </div>
+
+      {/* Le jury de la categorie. Par categorie et non par evenement : une meme
+          compete juge rarement le Solo et le Loopstation avec le meme panel. */}
+      <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
+        <div className="field" style={{ flex: '1 1 22rem', margin: 0 }}>
+          <label htmlFor={`judges-${category.id}`}>Jury (separe par des virgules)</label>
+          <input
+            id={`judges-${category.id}`}
+            value={judges}
+            placeholder="Alem, NaPoM, Kaila Mullady"
+            onChange={(e) => setJudges(e.target.value)}
+          />
+        </div>
+        <button
+          className="btn btn--small"
+          onClick={() =>
+            run(async () => {
+              // Decoupage a l'enregistrement : blancs retires et entrees vides
+              // ecartees, pour qu'une virgule en trop ne cree pas un juge sans
+              // nom.
+              const list = judges
+                .split(',')
+                .map((n) => n.trim())
+                .filter(Boolean);
+              await api.patch(`/admin/categories/${category.id}`, { judges: list });
+              await onDone();
+              return list.length
+                ? `Jury de ${category.name} : ${list.length} nom(s).`
+                : `Jury de ${category.name} efface.`;
+            })
+          }
+        >
+          Enregistrer le jury
+        </button>
       </div>
 
       <div className="row" style={{ gap: '0.35rem' }}>
@@ -1392,14 +1436,12 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
   /**
    * La phase de qualification qui alimente ce tableau, s'il en existe une.
    *
-   * Son EXISTENCE et son CONTENU répondent à deux questions différentes, et les
-   * confondre était le défaut. Qu'elle existe décide si le premier tour se
-   * déduit ou se compose à la main. Ce qu'elle contient décide de QUI y figure.
-   *
-   * Un classement vidé restait indiscernable d'une catégorie sans éliminations :
-   * l'écran retombait en mode manuel, redonnait autorité aux affiches
-   * enregistrées, et le tableau gardait les participants d'un classement
-   * effacé.
+   * Son EXISTENCE et son CONTENU repondent a deux questions differentes.
+   * Qu'elle existe decide si le premier tour se deduit ou se compose a la main ;
+   * ce qu'elle contient decide de QUI y figure. Les confondre rendait un
+   * classement vide indiscernable d'une categorie sans eliminations : l'ecran
+   * retombait en mode manuel et gardait les participants d'un classement
+   * efface.
    */
   const qualifying = useMemo(
     () =>
@@ -1410,16 +1452,18 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
     [category]
   );
 
-  // Publié ou non : côté organisateur, un classement enregistré en brouillon
-  // est déjà une décision, et l'arbre doit le refléter pour qu'on puisse
-  // préparer la suite avant de publier.
   const seedFromRanking = useMemo(() => {
-    if (!qualifying?.entries?.length) return [];
+    // Sans phase de qualification -- une Loopstation en tableau direct -- ce
+    // sont les seeds d'inscription qui composent le premier tour. Sans ce
+    // repli, rien ne l'alimentait et le tableau restait vide malgre des
+    // participants bien presents.
+    if (!qualifying) return seedFromContenders(category?.contenders ?? []);
+    if (!qualifying.entries?.length) return [];
     return [...qualifying.entries]
       .sort((a, b) => a.rank - b.rank)
       .filter((e) => (qualifying.qualifierCount ? e.qualified : true))
       .map((e) => e.contenderId);
-  }, [qualifying]);
+  }, [qualifying, category]);
 
   // L'état local reprend la forme attendue par BracketBoard.
   const [picks, setPicks] = useState(() =>
@@ -1442,19 +1486,15 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
   const [dirty, setDirty] = useState(false);
 
   /**
-   * Resynchronise l'éditeur quand le serveur a recomposé le tableau.
+   * Resynchronise l'editeur quand le serveur a recompose le tableau.
    *
-   * `picks` est initialisé une seule fois. Après un enregistrement du
-   * classement, le serveur redéduit le premier tour et le rechargement rapporte
-   * de nouvelles affiches — mais l'état local gardait les anciennes et les
+   * `picks` est initialise une seule fois. Apres un enregistrement du
+   * classement, le serveur rededuit le premier tour et le rechargement rapporte
+   * de nouvelles affiches -- mais l'etat local gardait les anciennes et les
    * repoussait au prochain envoi, annulant le recalcul en silence.
    *
-   * La signature compare le CONTENU, pas la référence : le rechargement crée de
-   * nouveaux objets à chaque fois, et se fier à l'identité relancerait la remise
-   * à zéro sans fin.
-   *
-   * Une saisie en cours n'est jamais écrasée : tant que `dirty` tient, ce que
-   * l'organisateur a sous les doigts prime.
+   * La signature compare le CONTENU, pas la reference : le rechargement cree de
+   * nouveaux objets a chaque fois. Une saisie en cours n'est jamais ecrasee.
    */
   const signature = useMemo(
     () =>
@@ -1551,7 +1591,7 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
         <p className="faint" style={{ fontSize: '0.86rem', margin: 0 }}>
           {qualifying
             ? `« ${qualifying.name} » ne contient aucun qualifié : le premier tour reste vide et se remplira dès que le classement sera saisi et enregistré.`
-            : 'Aucune phase de qualification dans cette catégorie : composez les affiches du premier tour à la main.'}
+            : 'Aucune phase de qualification, et aucun seed sur les participants : composez les affiches à la main, ou renseignez les seeds dans l’onglet Événements.'}
         </p>
       )}
 
@@ -1566,10 +1606,11 @@ function BracketResults({ phase, event, category, contenders, onDone, run }) {
         event={event}
         authoritative
         // Le premier tour se déduit dès qu'une PHASE de qualification existe,
-        // pleine ou vide. Se fier au nombre de qualifiés ramenait l'autorité
-        // aux affiches enregistrées sitôt le classement effacé, et le tableau
-        // ne se vidait jamais. Sans phase de qualification — une Loopstation
-        // sans éliminations — les affiches composées à la main tiennent.
+        // pleine ou vide. Se fier au nombre de qualifiés ramenait l'autorité aux
+        // affiches enregistrées sitôt le classement effacé, et le tableau ne se
+        // vidait jamais. Sans phase de qualification, les affiches déjà
+        // composées tiennent — mais une affiche vide se remplit depuis les
+        // seeds, via `seedFromRanking`.
         officialDraw={!qualifying}
       />
     </div>

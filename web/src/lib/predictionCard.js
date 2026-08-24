@@ -51,7 +51,7 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
  * tableau se lisait à l'envers. Elle est traitée en annexe, sous la finale,
  * exactement comme sur le site.
  */
-const MAIN_ROUNDS = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL', 'LEGACY'];
+const MAIN_ROUNDS = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL', 'LEGACY'];
 const ANNEX_ROUND = 'SMALL_FINAL';
 
 /** Les largeurs logiques essayées. La meilleure gagne, aucune n'est privilégiée. */
@@ -63,16 +63,11 @@ const MAX_SCALE = 1.35;
 /**
  * Le fichier exporté est rendu au double des dimensions nominales.
  *
- * Un pronostic complet est dense : à 1080 px de large, le nom d'un beatboxer
- * fait une quinzaine de pixels. Doubler la définition ne change rien à la
- * proportion — donc rien à la lisibilité en vignette — mais rend le texte net
- * quand quelqu'un zoome, ce qu'on fait toujours devant un tableau.
- *
  * L'APERÇU, lui, ne doit surtout pas utiliser cette valeur. Un canvas de
  * 2160 px réduit à 480 px par le navigateur perd ses traits d'un pixel et
  * empâte les lettres : l'aperçu paraissait flou alors que le fichier ne
- * l'était pas. On le dessine donc à la définition exacte de son affichage —
- * voir `previewScale` — ce qui supprime toute réduction.
+ * l'était pas. On le dessine à la définition exacte de son affichage — voir
+ * `previewScale` — ce qui supprime toute réduction.
  */
 export const EXPORT_PIXEL_SCALE = 2;
 
@@ -500,9 +495,6 @@ function buildLayout(ctx, model, LW) {
  * @param {object} model    issu de buildCardModel
  * @param {object} format   une entrée de FORMATS
  * @param {object} palette  issu de readPalette
- * @param {number} pixelScale  définition du rendu, en multiples du format
- *                             nominal. 2 pour le fichier, la densité réelle de
- *                             l'affichage pour l'aperçu.
  */
 export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_PIXEL_SCALE } = {}) {
     const w = Math.round(format.w * pixelScale);
@@ -613,8 +605,7 @@ export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_P
  *
  * Exactement la densité de l'écran, ni plus ni moins : dessiner plus grand
  * ferait réapparaître la réduction qu'on cherche à supprimer, dessiner plus
- * petit donnerait un agrandissement, tout aussi flou. Bornée en bas pour qu'un
- * conteneur pas encore mesuré ne produise pas un canvas de zéro pixel.
+ * petit donnerait un agrandissement, tout aussi flou.
  */
 export function previewScale(format, cssWidth, dpr = window.devicePixelRatio || 1) {
     return Math.max(0.05, (cssWidth * dpr) / format.w);

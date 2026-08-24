@@ -111,6 +111,7 @@ const DICT = {
     'ranking.reset': 'Clear all',
     'ranking.hint': 'Drag to reorder. Arrow keys work too.',
 
+    'bracket.round.ROUND_OF_32': 'Round of 32',
     'bracket.round.ROUND_OF_16': 'Round of 16',
     'bracket.round.QUARTER': 'Quarter-finals',
     'bracket.round.SEMI': 'Semi-finals',
@@ -225,7 +226,7 @@ const DICT = {
     'export.share': 'Share…',
     'export.share.unsupported': 'Your browser cannot share files. Download the image instead.',
     'export.hint':
-      'The card carries the whole prediction: every ranking phase and every bracket round, with the picked winners and scores. It scales itself down to fit the format.',
+      'The card carries the whole prediction: every ranking phase and every bracket round, with the picked winners and scores.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
@@ -352,6 +353,7 @@ const DICT = {
     'event.closed.live':
       'The event is underway — predictions are closed. You can still browse your picks, but no longer edit them.',
     'event.judges': '{n} judges',
+    'event.jury': 'Judges:',
     'event.saving': 'Saving…',
     'leave.title': 'You have unsaved changes',
     'leave.body': 'These categories were modified but not saved:',
@@ -594,6 +596,7 @@ const DICT = {
     'ranking.reset': 'Tout effacer',
     'ranking.hint': 'Glissez pour réordonner. Les flèches marchent aussi.',
 
+    'bracket.round.ROUND_OF_32': 'Seizièmes',
     'bracket.round.ROUND_OF_16': 'Huitièmes',
     'bracket.round.QUARTER': 'Quarts de finale',
     'bracket.round.SEMI': 'Demi-finales',
@@ -709,7 +712,7 @@ const DICT = {
     'export.share': 'Partager…',
     'export.share.unsupported': 'Votre navigateur ne sait pas partager de fichier. Téléchargez l’image à la place.',
     'export.hint':
-      'La carte porte le pronostic entier : toutes les phases de classement et tous les tours du tableau, avec les vainqueurs choisis et les scores. Elle se met à l’échelle du format demandé.',
+      'La carte porte le pronostic entier : toutes les phases de classement et tous les tours du tableau, avec les vainqueurs choisis et les scores.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',
@@ -836,6 +839,7 @@ const DICT = {
     'event.closed.live':
       'L’événement est en cours — les pronostics sont fermés. Vous pouvez encore consulter vos pronos, mais plus les modifier.',
     'event.judges': '{n} juges',
+    'event.jury': 'Jury :',
     'event.saving': 'Enregistrement…',
     'leave.title': 'Des modifications ne sont pas enregistrées',
     'leave.body': 'Ces catégories ont été modifiées sans être enregistrées :',

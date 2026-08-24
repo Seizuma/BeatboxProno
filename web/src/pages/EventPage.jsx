@@ -8,6 +8,7 @@ import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
 import PromptDialog from '../components/PromptDialog.jsx';
 import Modal from '../components/Modal.jsx';
+import { seedFromContenders } from '../lib/bracket.js';
 import useUnsavedGuard from '../lib/useUnsavedGuard.js';
 import BracketBoard from '../components/BracketBoard.jsx';
 
@@ -615,6 +616,10 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
   const { t } = useI18n();
   const contenders = category.contenders;
 
+  // Le jury de la catégorie. Vide tant que l'organisateur ne l'a pas saisi :
+  // annoncer un panel qu'on ne connaît pas serait pire que se taire.
+  const judges = category.judges ?? [];
+
   // Le classement de la dernière phase de qualification sert à composer l'arbre.
   const qualifyingPhase = [...category.phases]
     .filter((p) => RANKING_TYPES.includes(p.type))
@@ -631,7 +636,27 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
     .map((e) => e.contenderId);
 
   const mySeed = qualifyingPhase ? state.orders[qualifyingPhase.id] ?? [] : [];
-  const seedFromRanking = officialSeed.length ? officialSeed : mySeed;
+
+  /**
+   * Le tableau direct : une catégorie SANS phase de qualification.
+   *
+   * Une Loopstation se joue souvent ainsi — pas d'éliminations, les
+   * participants entrent sur leur seed d'inscription. Rien n'alimentait alors
+   * le premier tour : `seedFromRanking` restait vide, aucune règle de
+   * `resolveBracket` ne s'appliquait, et le tableau s'affichait vide alors que
+   * les participants étaient bien là.
+   *
+   * Le repli ne vaut QUE sans phase de qualification. Là où il en existe une,
+   * un tableau composé sur les seeds d'inscription serait un tableau que
+   * personne n'a pronostiqué : mieux vaut le laisser vide jusqu'au classement.
+   */
+  const directSeed = qualifyingPhase ? [] : seedFromContenders(contenders);
+
+  const seedFromRanking = officialSeed.length
+    ? officialSeed
+    : mySeed.length
+      ? mySeed
+      : directSeed;
 
   // Un tirage de premier tour ne peut exister qu'une fois la qualification
   // jouée et publiée. Avant cela, les appariements présents en base sont ceux
@@ -674,6 +699,15 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
 
   return (
     <div className="stack" style={{ gap: '1.5rem' }}>
+      {/* Le jury, une fois pour la catégorie et non sur chaque phase : c'est le
+          même panel du début à la fin, et le répéter à quatre reprises le
+          transformerait en bruit. */}
+      {judges.length > 0 && (
+        <p className="silkscreen" style={{ margin: 0 }}>
+          {t('event.jury')} <span className="data">{judges.join(' · ')}</span>
+        </p>
+      )}
+
       {category.phases.map((phase) => {
         const isLocked = locked || phaseLocked(phase);
 

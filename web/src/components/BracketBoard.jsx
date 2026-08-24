@@ -5,7 +5,7 @@ import { splitsForWinner, judgesFor } from '../lib/scores.js';
 import { resolveBracket, bracketKey as key, bracketSignature as stable } from '../lib/bracket.js';
 import ArtistFigure from './ArtistFigure.jsx';
 
-const DISPLAY_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+const DISPLAY_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
 
 /**
  * L'arbre. Chaque colonne occupe toute la hauteur et répartit ses affiches en
@@ -66,7 +66,7 @@ export default function BracketBoard({
   const columns = useMemo(() => {
     const present = new Set(rounds);
     const cols = [];
-    for (const r of ['ROUND_OF_16', 'QUARTER', 'SEMI']) {
+    for (const r of ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI']) {
       if (present.has(r)) cols.push({ key: r, main: r, extra: null });
     }
     if (present.has('FINAL') || present.has('SMALL_FINAL')) {
@@ -219,9 +219,7 @@ export default function BracketBoard({
                 </span>
                 {/* Plus de seed ici. Celui de l'inscription n'a plus cours une
                     fois le tableau tiré : à ce stade seul compte le rang de
-                    qualification, qui n'est pas le même chiffre. Affiché à côté
-                    du nom, il se lisait comme une place actuelle et induisait
-                    en erreur. */}
+                    qualification, qui n'est pas le même chiffre. */}
               </button>
             );
           })}
