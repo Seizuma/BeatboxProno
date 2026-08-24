@@ -217,6 +217,34 @@ const DICT = {
     'notif.COMMENT_REPLY': '{name} wrote in a thread you took part in, in {group}',
     'notif.someone': 'A former member',
 
+    'news.title': 'What’s new',
+    'news.close': 'Got it',
+    'news.new': 'new',
+    'news.unread': '{n} update(s) you have not read',
+    'news.reread': 'Read again any time',
+    'news.lede':
+      'Everything that changed for you, newest first. This page stays here — come back whenever you like.',
+
+    'news.r0.title': 'Private groups, image export and a reworked leaderboard',
+    'news.r0.groups':
+      'Private groups: create a circle, share its invite link, and get a leaderboard just between you — on the competitions the group owner picks.',
+    'news.r0.comments':
+      'Pin comments anywhere on someone’s prediction: on a ranking row, on a bracket matchup, or on a whole phase. Threads stay inside the group.',
+    'news.r0.bell':
+      'A bell in the header tells you when somebody joins your group or comments on your prediction.',
+    'news.r0.export':
+      'Export a prediction as an image — square post, story or wide — with the full bracket, the picked winners and the scores.',
+    'news.r0.precision':
+      'The leaderboard replaces battle accuracy with Precision: the points you scored over the points that were up for grabs, elimination rankings included. Expect lower numbers — the old measure rewarded predicting badly.',
+    'news.r0.search':
+      'Search the leaderboard by name, and click any player to open their profile and read what they filed.',
+    'news.r0.artists':
+      'Artist pages show what the crowd makes of them before a single battle is played: how often they are picked to win, how often they are seen through the cut, and the average rank they are given.',
+    'news.r0.jury': 'A competition category can now show its panel of judges.',
+    'news.r0.mobile':
+      'A full pass on phones: no more sideways scrolling, dialogs that reach the bottom of the screen, and bigger touch targets.',
+    'news.r0.logout': 'Signing out has moved to your profile page.',
+
     'export.open': 'Export',
     'export.title': 'Export this prediction',
     'export.format.square': 'Square post',
@@ -702,6 +730,34 @@ const DICT = {
     'notif.COMMENT_ON_MINE': '{name} a commenté votre pronostic dans {group}',
     'notif.COMMENT_REPLY': '{name} a écrit dans un fil où vous êtes intervenu, dans {group}',
     'notif.someone': 'Un ancien membre',
+
+    'news.title': 'Nouveautés',
+    'news.close': 'Compris',
+    'news.new': 'nouveau',
+    'news.unread': '{n} nouveauté(s) non lue(s)',
+    'news.reread': 'À relire quand vous voulez',
+    'news.lede':
+      'Tout ce qui a changé pour vous, du plus récent au plus ancien. Cette page reste là — revenez-y autant que vous voulez.',
+
+    'news.r0.title': 'Groupes privés, export en image et classement revu',
+    'news.r0.groups':
+      'Groupes privés : créez un cercle, partagez son lien d’invitation, et suivez un classement rien qu’entre vous — sur les compétitions que le propriétaire du groupe choisit.',
+    'news.r0.comments':
+      'Épinglez des commentaires où vous voulez sur le pronostic de quelqu’un : sur une ligne de classement, sur une affiche du tableau, ou sur une phase entière. Les fils restent dans le groupe.',
+    'news.r0.bell':
+      'Une cloche dans l’en-tête vous prévient quand quelqu’un rejoint votre groupe ou commente votre pronostic.',
+    'news.r0.export':
+      'Exportez un pronostic en image — post carré, story ou format large — avec le tableau complet, les vainqueurs choisis et les scores.',
+    'news.r0.precision':
+      'Le classement remplace la réussite en battle par la Précision : les points marqués rapportés aux points qui étaient en jeu, éliminations comprises. Attendez-vous à des chiffres plus bas — l’ancienne mesure récompensait ceux qui pronostiquaient mal.',
+    'news.r0.search':
+      'Cherchez un joueur par son pseudo dans le classement, et cliquez n’importe quel nom pour ouvrir son profil et lire ce qu’il a déposé.',
+    'news.r0.artists':
+      'Les fiches d’artiste montrent ce que la foule pense d’eux avant même la première battle : combien de fois ils sont donnés vainqueurs, la part de pronostiqueurs qui les voit passer la coupe, et le rang moyen qu’on leur donne.',
+    'news.r0.jury': 'Une catégorie peut désormais afficher son jury.',
+    'news.r0.mobile':
+      'Une passe complète sur téléphone : plus de défilement latéral, des fenêtres qui atteignent le bas de l’écran, et des zones tactiles plus grandes.',
+    'news.r0.logout': 'La déconnexion a déménagé dans votre page de profil.',
 
     'export.open': 'Exporter',
     'export.title': 'Exporter ce pronostic',

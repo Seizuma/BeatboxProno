@@ -29,6 +29,21 @@ model User {
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime @default(now())
 
+  // La dernière note de version lue, par son identifiant — « 2026-08-24 ».
+  //
+  // Une colonne plutôt qu'une table de lectures : il n'y a qu'une chose à
+  // retenir par personne, et les notes sont ordonnées. Tout ce qui est publié
+  // après cet identifiant est considéré non lu ; rien avant ne l'est.
+  //
+  // Vide pour un compte qui n'a jamais ouvert le journal — donc pour tous au
+  // moment du déploiement, ce qui est exactement voulu : la nouveauté doit
+  // s'annoncer une fois à chacun.
+  //
+  // Le CONTENU des notes n'est pas ici : il vit dans le code, versionné avec
+  // les changements qu'il décrit, et traduit comme le reste du site. La base ne
+  // retient que « jusqu'où j'ai lu ».
+  lastReadRelease String?
+
   predictions Prediction[]
   postbox     PostboxMessage[]
   visits      Visit[]
@@ -122,13 +137,9 @@ model Category {
   // Le jury de la catégorie, en clair.
   //
   // Des chaînes et non des relations vers Artist : un jury comprend
-  // régulièrement des gens qui ne concourent nulle part — des beatboxers
-  // retirés, des invités d'une autre discipline. Les faire entrer au
-  // référentiel des artistes pour les citer une fois polluerait la page
-  // Artistes et fausserait ses statistiques.
-  //
-  // Par catégorie et non par événement : une même compétition juge rarement le
-  // Solo et le Loopstation avec le même panel.
+  // régulièrement des gens qui ne concourent nulle part. Par catégorie et non
+  // par événement : une même compétition juge rarement le Solo et le
+  // Loopstation avec le même panel.
   judges    String[]     @default([])
 
   contenders  Contender[]

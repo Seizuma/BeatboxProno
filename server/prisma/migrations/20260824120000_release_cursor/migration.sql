@@ -1,0 +1,21 @@
+-- ---------------------------------------------------------------------------
+-- Le journal des nouveautés : jusqu'où chacun a lu.
+--
+-- Une colonne plutôt qu'une table de lectures. Il n'y a qu'une chose à retenir
+-- par personne — l'identifiant de la dernière note lue — et les notes sont
+-- ordonnées : tout ce qui est publié après est non lu, rien avant ne l'est.
+-- Une table aurait signifié une ligne par personne et par note, pour une
+-- information que ce seul champ porte entièrement.
+--
+-- Nullable, sans valeur par défaut, et c'est le point : un compte qui n'a
+-- jamais ouvert le journal voit TOUTES les notes comme neuves. Au déploiement,
+-- c'est le cas de tout le monde — la nouveauté s'annonce donc une fois à
+-- chacun, ce qui est exactement l'effet recherché.
+--
+-- Le contenu des notes n'est pas en base : il vit dans le code, versionné avec
+-- les changements qu'il décrit et traduit comme le reste du site. Une note
+-- stockée en base aurait demandé un écran d'administration, une gestion de
+-- traduction, et se serait désynchronisée du code au premier oubli.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE "User" ADD COLUMN "lastReadRelease" TEXT;

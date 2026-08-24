@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
+import { LATEST_RELEASE, unreadReleases } from '../lib/releases.js';
+import ReleaseNotes from './ReleaseNotes.jsx';
 
 /**
  * La cloche.
@@ -14,6 +16,17 @@ import { useI18n } from '../lib/i18n.jsx';
  * Le relevé s'interrompt quand l'onglet passe en arrière-plan. Sans ça, dix
  * onglets oubliés interrogent le serveur toute la journée pour un écran que
  * personne ne regarde.
+ *
+ * ─── Deux natures dans le même panneau ───────────────────────────────────────
+ *
+ * Les notifications sont des ÉVÉNEMENTS : elles s'accumulent, se marquent une
+ * par une, et n'ont plus d'intérêt une fois lues. Le journal des nouveautés est
+ * un DOCUMENT : il ne s'accumule pas, il s'allonge, et reste consultable
+ * indéfiniment.
+ *
+ * D'où son traitement à part — une entrée permanente en tête du panneau, qui ne
+ * disparaît jamais, et qui cesse simplement de compter dans la pastille une
+ * fois ouverte.
  */
 const POLL_MS = 90_000;
 
@@ -21,8 +34,9 @@ export default function NotificationBell() {
     const { t, date } = useI18n();
     const navigate = useNavigate();
 
-    const [data, setData] = useState({ unread: 0, notifications: [] });
+    const [data, setData] = useState({ unread: 0, notifications: [], lastReadRelease: null });
     const [open, setOpen] = useState(false);
+    const [news, setNews] = useState(false);
     const wrap = useRef(null);
 
     const load = useCallback(() => {
@@ -82,6 +96,7 @@ export default function NotificationBell() {
         setOpen(false);
         if (!n.read) {
             setData((d) => ({
+                ...d,
                 unread: Math.max(0, d.unread - 1),
                 notifications: d.notifications.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
             }));
@@ -89,6 +104,25 @@ export default function NotificationBell() {
         }
         if (n.group?.slug) navigate(`/groups/${n.group.slug}`);
     };
+
+    /**
+     * Ouvre le journal, et le marque lu jusqu'à la note la plus récente.
+     *
+     * Marqué à l'OUVERTURE et non à la fermeture : quelqu'un qui ferme l'onglet
+     * en cours de lecture a quand même vu l'annonce, et la lui remontrer au
+     * prochain passage serait insistant. Le document restant accessible en
+     * permanence, rien n'est perdu s'il n'a pas tout lu.
+     */
+    const openNews = () => {
+        setOpen(false);
+        setNews(true);
+        if (!LATEST_RELEASE) return;
+        setData((d) => ({ ...d, lastReadRelease: LATEST_RELEASE }));
+        api.post('/notifications/release', { id: LATEST_RELEASE }).catch(() => { });
+    };
+
+    const freshNews = unreadReleases(data.lastReadRelease);
+    const badge = data.unread + freshNews;
 
     return (
         <span className="bell" ref={wrap}>
@@ -103,7 +137,7 @@ export default function NotificationBell() {
             l'identité du site est typographique, et un SVG de plus alourdirait
             le paquet pour un glyphe de seize pixels. */}
                 <span aria-hidden="true">◉</span>
-                {data.unread > 0 && <span className="bell__dot">{data.unread > 9 ? '9+' : data.unread}</span>}
+                {badge > 0 && <span className="bell__dot">{badge > 9 ? '9+' : badge}</span>}
             </button>
 
             {open && (
@@ -117,8 +151,25 @@ export default function NotificationBell() {
                         )}
                     </div>
 
+                    {/* Le journal, toujours en tête et toujours présent. Contrairement aux
+              avis, il ne s'efface pas une fois lu : il perd seulement sa
+              marque. */}
+                    <button
+                        type="button"
+                        className={`notif${freshNews ? ' notif--new' : ''}`}
+                        onClick={openNews}
+                    >
+                        <span aria-hidden="true">★</span>
+                        <span className="notif__text">
+                            {t('news.title')}
+                            <span className="notif__when">
+                                {freshNews ? t('news.unread', { n: freshNews }) : t('news.reread')}
+                            </span>
+                        </span>
+                    </button>
+
                     {data.notifications.length === 0 ? (
-                        <p className="empty" style={{ margin: 0 }}>{t('notif.empty')}</p>
+                        <p className="empty" style={{ margin: '0.5rem 0 0' }}>{t('notif.empty')}</p>
                     ) : (
                         <ul className="notifs__list">
                             {data.notifications.map((n) => (
@@ -146,6 +197,10 @@ export default function NotificationBell() {
                         </ul>
                     )}
                 </div>
+            )}
+
+            {news && (
+                <ReleaseNotes lastReadRelease={data.lastReadRelease} onClose={() => setNews(false)} />
             )}
         </span>
     );
