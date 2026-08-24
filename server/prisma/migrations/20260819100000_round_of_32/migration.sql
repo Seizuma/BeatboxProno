@@ -1,0 +1,23 @@
+-- ---------------------------------------------------------------------------
+-- Le tour de 32.
+--
+-- Une compétition à venir demande un tableau solo à 32 entrants : il manquait
+-- un tour au type énuméré, et sans lui aucune affiche de seizièmes de finale
+-- ne pouvait exister en base.
+--
+-- Cette migration ne contient QUE l'ajout de la valeur, volontairement.
+-- PostgreSQL autorise `ALTER TYPE … ADD VALUE` dans une transaction depuis la
+-- version 12, mais interdit d'UTILISER la nouvelle valeur dans la même
+-- transaction. La garder seule évite d'avoir à raisonner sur ce que Prisma
+-- regroupe ou non : les migrations suivantes peuvent s'en servir sans risque.
+--
+-- `BEFORE 'ROUND_OF_16'` place la valeur au bon rang dans l'ordre du type, de
+-- sorte qu'un tri SQL sur la colonne suive l'ordre du tableau. Rien n'en dépend
+-- aujourd'hui — les listes sont triées en JavaScript — mais un ordre faux
+-- attendrait tranquillement le jour où quelqu'un s'y fiera.
+--
+-- `IF NOT EXISTS` rend la migration rejouable : sur une base où la valeur
+-- existe déjà — un environnement rattrapé à la main — elle ne bloque pas.
+-- ---------------------------------------------------------------------------
+
+ALTER TYPE "RoundType" ADD VALUE IF NOT EXISTS 'ROUND_OF_32' BEFORE 'ROUND_OF_16';
