@@ -5,6 +5,7 @@ import { requireRole } from '../lib/auth.js';
 import { contenderName, withName } from '../lib/naming.js';
 import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
+import { notifyEventOpen } from '../lib/notifications.js';
 import {
   validateSeedPairs,
   patternFor,
@@ -329,8 +330,36 @@ adminRouter.patch('/events/:id', async (req, res) => {
     })
     .parse(req.body);
 
+  /**
+   * L'annonce d'ouverture part sur la TRANSITION, pas sur l'état.
+   *
+   * Sans cette lecture préalable, chaque enregistrement d'un événement déjà
+   * ouvert — une correction de lieu, un ajustement de date butoir —
+   * renotifierait la totalité des comptes. Ce qui déclenche l'avis, c'est le
+   * passage VERS `OPEN` depuis autre chose.
+   *
+   * Une seconde garde vit dans `notifyEventOpen` : elle vérifie qu'aucun avis
+   * n'existe déjà pour cet événement. Les deux ne font pas double emploi — la
+   * première évite une requête inutile au cas courant, la seconde couvre les
+   * allers-retours de statut, qui arrivent dès qu'on corrige une manipulation.
+   */
+  const before = await prisma.event.findUnique({
+    where: { id: req.params.id },
+    select: { status: true },
+  });
+
   const event = await prisma.event.update({ where: { id: req.params.id }, data });
-  res.json({ event });
+
+  let announced = null;
+  if (data.status === 'OPEN' && before?.status !== 'OPEN') {
+    // Après la mise à jour, jamais avant : annoncer une ouverture qui aurait
+    // échoué serait pire que ne rien annoncer. La fonction avale ses propres
+    // erreurs — passer un événement en pronostics ouverts doit réussir même si
+    // la diffusion tombe.
+    announced = await notifyEventOpen(event.id);
+  }
+
+  res.json({ event, announced });
 });
 
 adminRouter.delete('/events/:id', onlyAdmin, async (req, res) => {
@@ -531,8 +560,7 @@ adminRouter.post('/phases/:phaseId/battles', async (req, res) => {
   const schema = z.object({
     // Les mêmes tours que le type énuméré de la base. Sans ROUND_OF_32, la
     // création d'une affiche de seizièmes est refusée alors que le format
-    // Top 32 existe au catalogue — l'organisateur peut monter le tableau mais
-    // pas le remplir.
+    // Top 32 existe au catalogue.
     round: z.enum([
       'ROUND_OF_32',
       'ROUND_OF_16',

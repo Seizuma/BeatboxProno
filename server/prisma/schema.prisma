@@ -30,18 +30,8 @@ model User {
   lastSeenAt  DateTime @default(now())
 
   // La dernière note de version lue, par son identifiant — « 2026-08-24 ».
-  //
   // Une colonne plutôt qu'une table de lectures : il n'y a qu'une chose à
-  // retenir par personne, et les notes sont ordonnées. Tout ce qui est publié
-  // après cet identifiant est considéré non lu ; rien avant ne l'est.
-  //
-  // Vide pour un compte qui n'a jamais ouvert le journal — donc pour tous au
-  // moment du déploiement, ce qui est exactement voulu : la nouveauté doit
-  // s'annoncer une fois à chacun.
-  //
-  // Le CONTENU des notes n'est pas ici : il vit dans le code, versionné avec
-  // les changements qu'il décrit, et traduit comme le reste du site. La base ne
-  // retient que « jusqu'où j'ai lu ».
+  // retenir par personne, et les notes sont ordonnées.
   lastReadRelease String?
 
   predictions Prediction[]
@@ -115,6 +105,7 @@ model Event {
   categories  Category[]
   predictions Prediction[]
   groups      GroupEvent[]
+  notifications Notification[]
 }
 
 enum CategoryKind {
@@ -134,12 +125,10 @@ model Category {
   slug      String
   position  Int          @default(0)
 
-  // Le jury de la catégorie, en clair.
-  //
-  // Des chaînes et non des relations vers Artist : un jury comprend
-  // régulièrement des gens qui ne concourent nulle part. Par catégorie et non
-  // par événement : une même compétition juge rarement le Solo et le
-  // Loopstation avec le même panel.
+  // Le jury de la catégorie, en clair. Des chaînes et non des relations vers
+  // Artist : un jury comprend régulièrement des gens qui ne concourent nulle
+  // part. Par catégorie et non par événement : une même compétition juge
+  // rarement le Solo et le Loopstation avec le même panel.
   judges    String[]     @default([])
 
   contenders  Contender[]
@@ -242,10 +231,10 @@ model PhaseEntry {
 
 enum RoundType {
   // Un tour de 32 n'existe que sur les très gros plateaux, mais il doit figurer
-  // ici pour que la base accepte les affiches correspondantes. Trois autres
+  // ici pour que la base accepte les affiches correspondantes. Quatre autres
   // endroits doivent rester d'accord avec cette liste : MAIN_LINE dans
-  // bracket.js, BRACKET_FORMATS dans routes/admin.js, et les listes
-  // d'affichage des écrans qui dessinent un arbre.
+  // bracket.js, BRACKET_FORMATS et le schéma Zod des affiches dans
+  // routes/admin.js, celui du dépôt dans routes/predictions.js.
   ROUND_OF_32
   ROUND_OF_16
   QUARTER
@@ -519,6 +508,10 @@ enum NotificationKind {
   GROUP_JOIN       // quelqu'un est entré dans un groupe que vous possédez
   COMMENT_ON_MINE  // quelqu'un a commenté votre pronostic
   COMMENT_REPLY    // quelqu'un a écrit dans un fil où vous étiez intervenu
+  // Les pronostics d'une compétition viennent d'ouvrir. Le seul avis que le
+  // SITE envoie, sans personne derrière : `actorId` reste vide, et la phrase
+  // ne cite aucun nom.
+  EVENT_OPEN
 }
 
 // Un avis destiné à une personne.
@@ -551,6 +544,11 @@ model Notification {
   group        Group?           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   predictionId String?
   prediction   Prediction?      @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  // L'événement dont il est question. Porte aussi la garde d'unicité : un avis
+  // d'ouverture existant POUR CET ÉVÉNEMENT est la preuve qu'il a été envoyé,
+  // là où un drapeau sur l'événement pourrait mentir si l'insertion a échoué.
+  eventId      String?
+  event        Event?           @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   readAt       DateTime?
   createdAt    DateTime         @default(now())
@@ -559,6 +557,9 @@ model Notification {
   // au plus ancien. `readAt` en deuxième position parce que le décompte des
   // non-lus tourne à chaque chargement de page.
   @@index([userId, readAt, createdAt])
+  // « Cet événement a-t-il déjà été annoncé ? » — une requête d'existence, qui
+  // tourne à chaque passage d'un événement en pronostics ouverts.
+  @@index([kind, eventId])
 }
 
 // --- Boîte à idées -------------------------------------------------------------
