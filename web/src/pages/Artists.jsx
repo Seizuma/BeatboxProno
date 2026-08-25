@@ -110,6 +110,32 @@ function Appearance({ a }) {
   const { t, number } = useI18n();
   const c = a.crowd;
 
+  /**
+   * Une carte n'apparaît que si la catégorie peut produire ce chiffre.
+   *
+   * Sans phase de classement — une Loopstation en tableau direct — personne n'a
+   * jamais placé cet artiste dans une liste : « donné qualifié par » et « rang
+   * moyen donné » n'ont rien derrière eux. Un tiret à leur place n'est pas une
+   * information, c'est une case qu'on remplit parce qu'elle existe.
+   *
+   * La décision se prend sur la STRUCTURE de la compétition, pas sur le nombre
+   * de votes : une catégorie avec éliminations où personne n'a encore
+   * pronostiqué doit afficher « 0 % », pas escamoter la carte comme si la
+   * question ne se posait pas.
+   */
+  const has = a.has ?? { ranking: true, cut: true, bracket: true };
+  const cards = [
+    has.bracket && { value: c.pickedToWin, label: t('artists.pickedToWin') },
+    has.cut && {
+      value: c.qualifiedShare == null ? '—' : `${c.qualifiedShare} %`,
+      label: t('artists.qualifiedShareCut', { n: c.cut }),
+    },
+    has.ranking && { value: c.averageRank ?? '—', label: t('artists.averageRank') },
+    // La fiabilité ne se pose qu'une fois des battles disputées : avant, elle
+    // n'a pas de dénominateur.
+    c.judged > 0 && { value: `${c.accuracy} %`, label: t('artists.accuracy') },
+  ].filter(Boolean);
+
   return (
     <article className="panel stack" style={{ gap: '0.8rem' }}>
       <header className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -134,18 +160,13 @@ function Appearance({ a }) {
         <p className="faint" style={{ margin: 0 }}>{t('artists.noData')}</p>
       ) : (
         <>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.6rem' }}>
-            <Small value={c.pickedToWin} label={t('artists.pickedToWin')} />
-            <Small
-              value={c.qualifiedShare == null ? '—' : `${c.qualifiedShare} %`}
-              label={c.cut ? t('artists.qualifiedShareCut', { n: c.cut }) : t('artists.qualifiedShare')}
-            />
-            <Small value={c.averageRank ?? '—'} label={t('artists.averageRank')} />
-            <Small
-              value={c.accuracy == null ? '—' : `${c.accuracy} %`}
-              label={t('artists.accuracy')}
-            />
-          </div>
+          {cards.length > 0 && (
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.6rem' }}>
+              {cards.map((card) => (
+                <Small key={card.label} value={card.value} label={card.label} />
+              ))}
+            </div>
+          )}
 
           {c.distribution.length > 0 && (
             <div>

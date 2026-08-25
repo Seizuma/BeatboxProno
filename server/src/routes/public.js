@@ -318,13 +318,32 @@ publicRouter.get('/artists/:slug', async (req, res) => {
       entries: {
         include: {
           contender: {
-            include: { category: { include: { event: true } } },
+            include: {
+              category: {
+                include: {
+                  event: true,
+                  // La STRUCTURE de la catégorie, pas seulement ses résultats :
+                  // c'est elle qui dit quels chiffres ont un sens ici. Une
+                  // Loopstation en tableau direct ne classe personne, donc
+                  // « donné qualifié par » et « rang moyen » n'y existent pas —
+                  // et un tiret à leur place n'est pas une information, c'est
+                  // une case remplie parce qu'elle existe.
+                  //
+                  // Déduit de la structure et non du nombre de votes : une
+                  // catégorie avec éliminations où personne n'a encore
+                  // pronostiqué doit afficher « 0 % », pas disparaître.
+                  phases: { select: { type: true, qualifierCount: true, position: true } },
+                },
+              },
+            },
           },
         },
       },
     },
   });
   if (!artist) return res.status(404).json({ error: 'Artiste introuvable.' });
+
+  const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
   const contenderIds = artist.entries.map((e) => e.contenderId);
   const categoryIds = [...new Set(artist.entries.map((e) => e.contender.categoryId))];
@@ -506,6 +525,18 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     const b = bucket(c.categoryId);
     const voters = b.ranks.length;
 
+    const phases = c.category.phases ?? [];
+    const ranking = [...phases]
+      .filter((p) => RANKING_TYPES.includes(p.type))
+      .sort((x, y) => (x.position ?? 0) - (y.position ?? 0))
+      .pop() ?? null;
+    const hasBracket = phases.some((p) => !RANKING_TYPES.includes(p.type));
+
+    // La coupe vient de la PHASE, pas des votes : elle existe même si personne
+    // n'a encore pronostiqué, et c'est ce qui permet d'afficher « 0 % » plutôt
+    // que de masquer la carte.
+    const cut = ranking?.qualifierCount ?? null;
+
     // La distribution des places : c'est elle qui se lit d'un coup d'œil.
     // « Rang moyen 10,3 » ne dit pas si tout le monde le voit dixième ou si la
     // moitié le voit premier et l'autre vingtième — deux situations opposées
@@ -526,13 +557,17 @@ publicRouter.get('/artists/:slug', async (req, res) => {
       contender: c.name,
       seed: c.seed,
       points: b.points,
+      // Ce que cette catégorie est capable de produire comme chiffres.
+      has: { ranking: Boolean(ranking), cut: Boolean(cut), bracket: hasBracket },
       crowd: {
         voters,
         averageRank: voters ? Math.round((b.ranks.reduce((n, r) => n + r, 0) / voters) * 10) / 10 : null,
         bestRank: voters ? Math.min(...b.ranks) : null,
         worstRank: voters ? Math.max(...b.ranks) : null,
-        cut: b.cut,
-        qualifiedShare: b.cutSeen ? Math.round((b.cutThrough / b.cutSeen) * 100) : null,
+        cut,
+        // Zéro et non `null` quand la coupe existe mais que personne n'a
+        // encore voté : « 0 % » se lit, un tiret laisse croire à une panne.
+        qualifiedShare: b.cutSeen ? Math.round((b.cutThrough / b.cutSeen) * 100) : cut ? 0 : null,
         distribution,
         pickedToWin: b.pickedToWin,
         byRound: [...b.byRound.entries()].map(([round, n]) => ({ round, n })),
