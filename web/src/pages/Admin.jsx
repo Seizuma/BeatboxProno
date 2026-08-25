@@ -1300,6 +1300,9 @@ function MaxScorePanel({ eventId }) {
 }
 
 const ROUND_LABELS = {
+  // Sans cette entrée, un tour de 32 s'affichait sans intitulé dans
+  // l'administration : la colonne existait, sa légende était vide.
+  ROUND_OF_32: 'Seizièmes',
   ROUND_OF_16: 'Huitièmes',
   QUARTER: 'Quarts',
   SEMI: 'Demi-finales',
@@ -1307,7 +1310,7 @@ const ROUND_LABELS = {
   FINAL: 'Finale',
   LEGACY: 'Legacy',
 };
-const ROUND_ORDER = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
+const ROUND_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
 
 function ResultsAdmin() {
   const [events, setEvents] = useState([]);

@@ -529,7 +529,19 @@ adminRouter.patch('/phases/:id', async (req, res) => {
 
 adminRouter.post('/phases/:phaseId/battles', async (req, res) => {
   const schema = z.object({
-    round: z.enum(['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY']),
+    // Les mêmes tours que le type énuméré de la base. Sans ROUND_OF_32, la
+    // création d'une affiche de seizièmes est refusée alors que le format
+    // Top 32 existe au catalogue — l'organisateur peut monter le tableau mais
+    // pas le remplir.
+    round: z.enum([
+      'ROUND_OF_32',
+      'ROUND_OF_16',
+      'QUARTER',
+      'SEMI',
+      'SMALL_FINAL',
+      'FINAL',
+      'LEGACY',
+    ]),
     slot: z.number().int().min(0),
     label: z.string().nullable().optional(),
     contenderAId: z.string().nullable().optional(),

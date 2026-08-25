@@ -23,7 +23,21 @@ const contentSchema = z.object({
     .array(
       z.object({
         phaseId: z.string(),
-        round: z.enum(['ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY']),
+        // Les mêmes tours que le type énuméré de la base, ROUND_OF_32 compris.
+        //
+        // Un oubli ici ne casse pas l'affichage : Zod rejette la requête
+        // ENTIÈRE dès qu'une seule affiche porte un tour inconnu. Le pronostic
+        // devient indéposable, et le message « Pronostic mal formé » ne dit pas
+        // lequel des deux cents champs pose problème.
+        round: z.enum([
+          'ROUND_OF_32',
+          'ROUND_OF_16',
+          'QUARTER',
+          'SEMI',
+          'SMALL_FINAL',
+          'FINAL',
+          'LEGACY',
+        ]),
         slot: z.number().int().min(0),
         contenderAId: z.string().nullable().optional(),
         contenderBId: z.string().nullable().optional(),

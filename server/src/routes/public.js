@@ -11,8 +11,15 @@ const visible = (user) =>
     ? {}
     : { status: { not: 'DRAFT' } };
 
-/** L'ordre des tours d'un tableau, pour retrouver celui qui ouvre la phase. */
-const MAIN_LINE = ['ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
+/**
+ * L'ordre des tours d'un tableau, pour retrouver celui qui ouvre la phase.
+ *
+ * Doit rester d'accord avec `MAIN_LINE` de `bracket.js` : c'est la même notion,
+ * dupliquée ici parce que cette route n'a pas besoin du reste du module. Sans
+ * ROUND_OF_32, un tableau à 32 voyait ses seizièmes ignorés et la censure
+ * s'appliquait au mauvais tour.
+ */
+const MAIN_LINE = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
 
 /**
  * Ce qu'une phase montre aux joueurs tant qu'elle n'est pas PUBLIÉE.
