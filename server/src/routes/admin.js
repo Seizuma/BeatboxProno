@@ -6,6 +6,7 @@ import { contenderName, withName } from '../lib/naming.js';
 import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
 import { notifyEventOpen } from '../lib/notifications.js';
+import { settleEvent } from '../lib/badges.js';
 import {
   validateSeedPairs,
   patternFor,
@@ -348,9 +349,22 @@ adminRouter.patch('/events/:id', async (req, res) => {
     announced = await notifyEventOpen(event.id);
   }
 
-  res.json({ event, announced });
-});
+  /**
+   * La clôture distribue badges et porte-monnaie — sur la TRANSITION vers
+   * FINISHED, comme l'annonce d'ouverture, et pour la même raison : un état
+   * se ré-enregistre, une transition n'arrive qu'à la bascule.
+   *
+   * L'opération est rejouable : re-basculer LIVE → FINISHED après un recalcul
+   * de points CORRIGE badges et crédits, sans jamais les dupliquer. C'est le
+   * geste à faire si un résultat change après coup.
+   */
+  let settled = null;
+  if (data.status === 'FINISHED' && before?.status !== 'FINISHED') {
+    settled = await settleEvent(event.id);
+  }
 
+  res.json({ event, announced, settled });
+});
 adminRouter.delete('/events/:id', onlyAdmin, async (req, res) => {
   const impact = await eventImpact(req.params.id);
   if (!impact) return res.status(404).json({ error: 'Événement introuvable.' });

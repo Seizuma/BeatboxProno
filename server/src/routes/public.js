@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { withName } from '../lib/naming.js';
+import { walletBalance } from '../lib/badges.js';
 
 export const publicRouter = Router();
 
@@ -256,7 +257,19 @@ publicRouter.get('/leaderboard', async (req, res) => {
 publicRouter.get('/users/:id', async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
-    select: { id: true, username: true, globalName: true, avatarUrl: true, createdAt: true, role: true },
+    select: {
+      id: true,
+      username: true,
+      globalName: true,
+      avatarUrl: true,
+      createdAt: true,
+      role: true,
+      // La tenue est publique par nature : un cosmétique qui ne se montre
+      // qu'à soi-même ne vaudrait pas un point.
+      equippedFrame: true,
+      equippedTitle: true,
+      equippedFlair: true,
+    },
   });
   if (!user) return res.status(404).json({ error: 'Profil introuvable.' });
 
@@ -299,7 +312,19 @@ publicRouter.get('/users/:id', async (req, res) => {
     { points: 0, submitted: 0, finished: 0, pending: 0, drafts: 0 }
   );
 
-  res.json({ user, predictions, totals });
+  // Le mur de badges, public lui aussi — c'est un palmarès, pas un secret.
+  // Trié en base par date, regroupé par compète côté client.
+  const badges = await prisma.badgeAward.findMany({
+    where: { userId: user.id },
+    include: { event: { select: { slug: true, name: true, year: true } } },
+    orderBy: { awardedAt: 'desc' },
+  });
+
+  // Le solde, en revanche, n'appartient qu'à soi : montrer le porte-monnaie
+  // des autres inviterait à comparer des dépenses, pas des pronostics.
+  const wallet = req.user?.id === user.id ? await walletBalance(user.id) : null;
+
+  res.json({ user, predictions, totals, badges, wallet });
 });
 
 /**

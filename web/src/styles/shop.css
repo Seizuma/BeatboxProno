@@ -1,0 +1,225 @@
+/* ===========================================================================
+   P470 — LA BOUTIQUE ET LES COSMÉTIQUES
+
+   Tout ici est préfixé `shop-` ou `cos-` : la collision de classes entre
+   board.css et groups.css a déjà coûté une soirée, on ne la rejoue pas.
+
+   Les règles du système s'appliquent sans exception : la palette P411, aucun
+   border-radius, aucune ombre, aucun dégradé. Un cadre d'avatar « tricolore »
+   se fabrique en empilant bordure, fond de padding et outline — trois blocs
+   pleins, comme un vrai décodeur l'aurait fait.
+   =========================================================================== */
+
+/* --- Les cadres d'avatar --------------------------------------------------- */
+
+.cos-frame {
+    display: inline-block;
+    line-height: 0;
+    flex-shrink: 0;
+}
+
+.cos-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Les tailles reprennent celles des avatars existants. */
+.cos-frame--sm {
+    width: 28px;
+    height: 28px;
+}
+
+.cos-frame--md {
+    width: 44px;
+    height: 44px;
+}
+
+.cos-frame--lg {
+    width: 72px;
+    height: 72px;
+}
+
+.cos-frame--frame-three-oh {
+    border: 3px solid var(--g);
+    padding: 2px;
+}
+
+.cos-frame--frame-wildcard {
+    border: 3px dashed var(--c);
+    padding: 2px;
+}
+
+/* Le double filet or : `double` exige au moins 3px, on lui en donne 6. */
+.cos-frame--frame-world-stage {
+    border: 6px double var(--y);
+    padding: 2px;
+}
+
+/* Bleu-blanc-rouge en trois blocs : bordure bleue, anneau blanc par le fond
+   du padding, liseré rouge par l'outline. Pas un dégradé en vue. */
+.cos-frame--frame-tricolore {
+    border: 3px solid var(--b);
+    outline: 2px solid var(--r);
+    background: var(--w);
+    padding: 3px;
+}
+
+.cos-frame--frame-cypher {
+    border: 3px solid var(--m);
+    padding: 2px;
+}
+
+/* --- Le pin et le titre ---------------------------------------------------- */
+
+.cos-flair {
+    display: inline-flex;
+    vertical-align: -2px;
+}
+
+.cos-title {
+    margin: 0.15rem 0 0;
+    color: var(--m);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* --- Les badges ------------------------------------------------------------ */
+
+.cos-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Le sigle de la compète sous le cartouche — magenta, la couleur des méta. */
+.cos-badge__tag {
+    color: var(--m);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+    max-width: 72px;
+}
+
+/* Le mur de badges d'un profil : une compète par ligne, ses badges à la file. */
+.cos-wall {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.cos-wall__row {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line);
+    padding-top: 0.8rem;
+}
+
+.cos-wall__row:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.cos-wall__event {
+    min-width: 160px;
+    flex: 1;
+}
+
+/* --- La page boutique ------------------------------------------------------ */
+
+.shop-balance {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+}
+
+.shop-balance__amount {
+    font-family: var(--font-display);
+    font-size: calc(3rem * var(--display-scale));
+    color: var(--g);
+    line-height: 1;
+}
+
+.shop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.8rem;
+}
+
+.shop-card {
+    border: var(--frame);
+    padding: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.shop-card--owned {
+    border-color: var(--g);
+}
+
+.shop-card__preview {
+    min-height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* L'aperçu d'un titre : la ligne magenta, en situation. */
+.shop-card__preview .cos-title {
+    font-size: 1rem;
+}
+
+.shop-card__name {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.shop-card__blurb {
+    margin: 0;
+    color: var(--ink-faint);
+    font-size: 0.85rem;
+    flex: 1;
+}
+
+.shop-card__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+/* Le prix en vert : la couleur de ce qui rapporte — et de ce que ça coûte. */
+.shop-price {
+    color: var(--g);
+    font-family: var(--font-data);
+    white-space: nowrap;
+}
+
+/* La légende des badges en bas de boutique : la carotte, affichée là où l'on
+   dépense. */
+.shop-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 0.8rem;
+}
+
+.shop-legend__item {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    border: 1px solid var(--line);
+    padding: 0.6rem;
+}
+
+.shop-legend__item p {
+    margin: 0;
+    font-size: 0.85rem;
+}

@@ -10,6 +10,7 @@ import Privacy from './pages/Privacy.jsx';
 import Groups from './pages/Groups.jsx';
 import GroupPage from './pages/GroupPage.jsx';
 import JoinGroup from './pages/JoinGroup.jsx';
+import Shop from './pages/Shop.jsx';
 import { useI18n } from './lib/i18n.jsx';
 
 export default function App() {
@@ -30,6 +31,9 @@ export default function App() {
         <Route path="groups" element={<Groups />} />
         <Route path="groups/join/:code" element={<JoinGroup />} />
         <Route path="groups/:slug" element={<GroupPage />} />
+        {/* La boutique : les points d'un porte-monnaie contre des cosmétiques.
+            La vitrine se visite déconnecté, seul l'achat demande une session. */}
+        <Route path="shop" element={<Shop />} />
         <Route path="me" element={<Profile />} />
         <Route path="players/:id" element={<Profile />} />
         <Route path="admin" element={<Admin />} />
@@ -40,6 +44,7 @@ export default function App() {
         <Route path="classement" element={<Navigate to="/leaderboard" replace />} />
         <Route path="artistes" element={<Navigate to="/artists" replace />} />
         <Route path="artistes/:slug" element={<Moved to="/artists" />} />
+        <Route path="boutique" element={<Navigate to="/shop" replace />} />
         <Route path="moi" element={<Navigate to="/me" replace />} />
         <Route path="profil/:id" element={<Moved to="/players" param="id" />} />
         <Route path="confidentialite" element={<Navigate to="/privacy" replace />} />

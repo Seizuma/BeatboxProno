@@ -14,6 +14,7 @@ import { postboxRouter } from './routes/postbox.js';
 import { accountRouter } from './routes/account.js';
 import { groupRouter } from './routes/groups.js';
 import { notificationRouter } from './routes/notifications.js';
+import { shopRouter } from './routes/shop.js';
 import { missingWebhooks } from './lib/discord.js';
 import { touch } from './lib/presence.js';
 import { scheduleDailyReport } from './jobs/daily-report.js';
@@ -96,6 +97,10 @@ app.use('/api', statsRouter);
 app.use('/api/predictions', predictionRouter);
 app.use('/api/groups', groupRouter);
 app.use('/api/notifications', notificationRouter);
+// La boutique cosmétique. Sous son propre préfixe, comme les groupes : elle a
+// son catalogue, son solde et ses gestes — rien à voir avec le public en
+// lecture seule ni avec les pronostics.
+app.use('/api/shop', shopRouter);
 app.use('/api/postbox', postboxRouter);
 app.use('/api/account', accountRouter);
 app.use('/api/admin/photos', photoRouter);

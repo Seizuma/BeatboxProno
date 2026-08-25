@@ -34,11 +34,23 @@ model User {
   // retenir par personne, et les notes sont ordonnées.
   lastReadRelease String?
 
+  // Ce que la personne PORTE, par emplacement. Des identifiants du catalogue
+  // cosmetics.js, jamais des lignes de base : le catalogue vit dans le code,
+  // comme la couleur d'un groupe se déduit de son slug. Trois colonnes et non
+  // un JSON : un emplacement est une notion fixe du produit, pas une donnée
+  // libre — et une colonne se requête, se migre et se documente.
+  // La possession, elle, se prouve par la ligne d'achat dans WalletEntry.
+  equippedFrame String?
+  equippedTitle String?
+  equippedFlair String?
+
   predictions Prediction[]
   postbox     PostboxMessage[]
   visits      Visit[]
   memberships GroupMember[]
   comments    GroupComment[]
+  wallet      WalletEntry[]
+  badges      BadgeAward[]
   // Les avis reçus, et ceux qu'on a déclenchés chez les autres. Deux relations
   // vers le même modèle : Prisma exige alors qu'on les nomme.
   notifications Notification[] @relation("Notified")
@@ -106,6 +118,8 @@ model Event {
   predictions Prediction[]
   groups      GroupEvent[]
   notifications Notification[]
+  wallet      WalletEntry[]
+  badges      BadgeAward[]
 }
 
 enum CategoryKind {
@@ -614,4 +628,91 @@ model Visit {
 
   @@id([userId, day])
   @@index([day])
+}
+
+// --- Cosmétique : badges et porte-monnaie --------------------------------------
+
+// Les sept badges d'événement. Une énumération et non une table : un badge n'a
+// pas d'état propre — son visuel, son libellé et sa condition vivent dans
+// cosmetics.js, la base ne retient que QUI l'a gagné et SUR QUELLE compète.
+enum BadgeCode {
+  PARTICIPANT // au moins un pronostic déposé sur la compète
+  BRONZE      // top 60 % du classement de la compète
+  SILVER      // top 30 %
+  GOLD        // top 5 %
+  PODIUM_3    // troisième pronostiqueur de la compète
+  PODIUM_2    // deuxième
+  PODIUM_1    // vainqueur
+}
+
+// Un badge gagné par une personne sur une compétition.
+//
+// L'attribution se rejoue intégralement à chaque passage de l'événement en
+// FINISHED : tout supprimer puis tout recréer rend l'opération idempotente —
+// re-clôturer après un recalcul de points CORRIGE le palmarès, il ne le
+// duplique jamais. L'unicité (personne, compète, badge) est la ceinture de
+// sécurité si deux clôtures se croisent.
+model BadgeAward {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  code      BadgeCode
+  awardedAt DateTime  @default(now())
+
+  @@unique([userId, eventId, code])
+  // Le mur de badges d'un profil interroge par personne ; la re-clôture d'une
+  // compète supprime par événement.
+  @@index([userId])
+  @@index([eventId])
+}
+
+enum WalletKind {
+  EVENT_POINTS // crédit : les points gagnés sur une compète terminée
+  PURCHASE     // débit : un achat en boutique
+}
+
+// Le porte-monnaie est un livre de comptes, jamais un compteur.
+//
+// Un solde stocké sur User dirait « 340 » sans dire d'où, et repartirait faux
+// au premier incident — exactement le travers que les notifications et le
+// quota de la boîte à idées évitent déjà. Ici le solde EST la somme des
+// lignes : impossible à désynchroniser, et l'historique des gains et des
+// achats vient gratuitement.
+//
+// Le score du classement, lui, ne bouge jamais : il reste la somme des
+// `Prediction.points`. Dépenser n'y touche pas — les deux compteurs demandés
+// sont ce score gravé d'un côté, et cette somme de lignes de l'autre.
+model WalletEntry {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      WalletKind
+  // Positif pour un crédit, négatif pour un achat. Un seul signe par ligne :
+  // le solde est un SUM sans condition.
+  amount    Int
+
+  // Pour un EVENT_POINTS : la compète créditrice. `SetNull` et non cascade —
+  // supprimer une vieille compète ne doit pas reprendre un argent peut-être
+  // déjà dépensé, ce qui rendrait des soldes négatifs.
+  eventId   String?
+  event     Event?     @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // Pour un PURCHASE : l'identifiant de l'objet dans cosmetics.js. C'est cette
+  // ligne qui PROUVE la possession — pas de table d'inventaire à part.
+  itemId    String?
+
+  createdAt DateTime   @default(now())
+
+  // Deux unicités qui cohabitent grâce aux NULL de PostgreSQL (des NULL ne
+  // sont jamais égaux entre eux) :
+  //  - un seul crédit par (personne, compète) : la re-clôture UPSERT le
+  //    montant au lieu d'empiler des lignes — les achats, sans eventId,
+  //    ne sont pas concernés ;
+  //  - un objet ne s'achète qu'une fois — les crédits, sans itemId,
+  //    ne sont pas concernés.
+  @@unique([userId, eventId])
+  @@unique([userId, itemId])
+  @@index([userId])
 }

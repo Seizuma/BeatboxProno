@@ -7,12 +7,14 @@ import App from './App.jsx';
 
 /* L'ordre compte : chaque feuille surcharge les précédentes à spécificité
    égale. app.css pose la base, board.css les plateaux, groups.css la coquille
-   des cercles privés, et mobile.css passe en dernier — c'est lui qui a le
-   dernier mot sur petit écran, sans quoi il faudrait le truffer de `!important`
-   pour reprendre la main sur des règles écrites pour le bureau. */
+   des cercles privés, shop.css la boutique et les cosmétiques, et mobile.css
+   passe en dernier — c'est lui qui a le dernier mot sur petit écran, sans quoi
+   il faudrait le truffer de `!important` pour reprendre la main sur des règles
+   écrites pour le bureau. */
 import './styles/app.css';
 import './styles/board.css';
 import './styles/groups.css';
+import './styles/shop.css';
 import './styles/mobile.css';
 
 createRoot(document.getElementById('root')).render(

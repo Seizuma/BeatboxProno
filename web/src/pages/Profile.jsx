@@ -6,11 +6,13 @@ import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
 import PredictionView from '../components/PredictionView.jsx';
 import DeleteAccount from '../components/DeleteAccount.jsx';
+import { BadgeMedal, Flair, FramedAvatar, Title } from '../components/Cosmetics.jsx';
+import { BADGES } from '../lib/cosmetics.js';
 
 export default function Profile() {
   const { id } = useParams();
   const { user, loading, refresh, logout } = useSession();
-  const { t, date } = useI18n();
+  const { t, date, lang } = useI18n();
   const targetId = id ?? user?.id;
 
   const [data, setData] = useState(null);
@@ -62,17 +64,45 @@ export default function Profile() {
     ['profile.bucket.drafts', data.predictions.filter((p) => !p.submitted)],
   ];
 
+  /**
+   * Le mur de badges, groupé par compète. L'ordre serveur est chronologique
+   * inversé ; à l'intérieur d'une compète, on range par prestige — l'ordre du
+   * catalogue, du vainqueur au ticket de participation.
+   */
+  const badgeOrder = new Map(BADGES.map((b, i) => [b.code, i]));
+  const wall = [];
+  {
+    const byEvent = new Map();
+    for (const b of data.badges ?? []) {
+      const key = b.event?.slug ?? b.eventId;
+      if (!byEvent.has(key)) {
+        byEvent.set(key, { event: b.event, codes: [] });
+        wall.push(byEvent.get(key));
+      }
+      byEvent.get(key).codes.push(b.code);
+    }
+    for (const row of wall) {
+      row.codes.sort((a, b) => (badgeOrder.get(a) ?? 99) - (badgeOrder.get(b) ?? 99));
+    }
+  }
+
   return (
     <div className="stack" style={{ paddingTop: '2.5rem' }}>
       <header className="row" style={{ gap: '1rem' }}>
-        {data.user.avatarUrl && <img className="avatar avatar--lg" src={data.user.avatarUrl} alt="" />}
+        {data.user.avatarUrl && (
+          <FramedAvatar url={data.user.avatarUrl} frameId={data.user.equippedFrame} size="lg" />
+        )}
         <div>
           <p className="eyebrow">
             {t('profile.member', {
               date: date(data.user.createdAt, { month: 'long', year: 'numeric' }),
             })}
           </p>
-          <h1>{data.user.globalName ?? data.user.username}</h1>
+          <h1 className="row" style={{ gap: '0.45rem', alignItems: 'center' }}>
+            {data.user.globalName ?? data.user.username}
+            <Flair itemId={data.user.equippedFlair} size={22} />
+          </h1>
+          <Title itemId={data.user.equippedTitle} lang={lang} />
         </div>
 
         {/* La déconnexion vit ici, avec le reste de ce qui touche au compte.
@@ -104,7 +134,44 @@ export default function Profile() {
         <Stat value={data.totals.submitted} label={t('profile.submitted')} />
         <Stat value={data.totals.pending} label={t('profile.pending')} />
         <Stat value={data.totals.drafts} label={t('profile.drafts')} />
+        {/* Le porte-monnaie n'apparaît que chez soi : les points dépensables
+            des autres ne regardent personne — leurs badges, si. */}
+        {own && data.wallet != null && (
+          <div className="panel">
+            <p
+              className="display"
+              style={{ fontSize: 'calc(2.6rem * var(--display-scale))', color: 'var(--g)' }}
+            >
+              {data.wallet}
+            </p>
+            <p className="eyebrow" style={{ margin: '0.4rem 0 0' }}>{t('profile.wallet')}</p>
+            <Link className="btn btn--small" style={{ marginTop: '0.6rem' }} to="/shop">
+              {t('profile.shop.cta')}
+            </Link>
+          </div>
+        )}
       </div>
+
+      {/* Le mur de badges — un palmarès, une ligne par compète. */}
+      <section className="stack">
+        <h2>{t('profile.badges')}</h2>
+        {wall.length === 0 ? (
+          <p className="empty">{t('profile.badges.empty')}</p>
+        ) : (
+          <div className="panel cos-wall">
+            {wall.map((row) => (
+              <div className="cos-wall__row" key={row.event?.slug ?? 'unknown'}>
+                <div className="cos-wall__event">
+                  {row.event ? `${row.event.name} ${row.event.year}` : '—'}
+                </div>
+                {row.codes.map((code) => (
+                  <BadgeMedal key={code} code={code} size={52} />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {buckets.map(([titleKey, rows]) => (
         <section className="stack" key={titleKey}>
