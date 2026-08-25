@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
 import { api } from '../lib/api.js';
-import { useI18n } from '../lib/i18n.jsx';
+import { LANGS, localeOf, translator, useI18n } from '../lib/i18n.jsx';
 import { EXPORT_PIXEL_SCALE, previewScale } from '../lib/predictionCard.js';
 import {
   FORMATS,
@@ -36,7 +36,19 @@ const ORDER = ['story', 'square'];
  * fichier est rendu à part, hors écran, au moment du clic.
  */
 export default function ExportEvent({ slug, onClose }) {
-  const { t, locale } = useI18n();
+  const { t, lang } = useI18n();
+
+  /**
+   * La langue de l'AFFICHE, distincte de celle de l'interface.
+   *
+   * Lier les deux serait un piège : on prépare une story pour une audience
+   * internationale tout en travaillant en français, et il faudrait basculer le
+   * site entier avant chaque export puis penser à revenir. La langue de
+   * l'interface sert de valeur de départ, rien de plus.
+   */
+  const [cardLang, setCardLang] = useState(lang);
+  const cardT = translator(cardLang);
+  const cardLocale = localeOf(cardLang);
 
   const canvas = useRef(null);
   const frame = useRef(null);
@@ -90,7 +102,7 @@ export default function ExportEvent({ slug, onClose }) {
         await ensureFonts();
         if (cancelled || !canvas.current) return;
 
-        const card = buildEventCard(event, { locale });
+        const card = buildEventCard(event, { locale: cardLocale, t: cardT });
         drawEventCard(canvas.current, card, spec, readPalette(), {
           pixelScale: previewScale(spec, cssW),
         });
@@ -106,11 +118,13 @@ export default function ExportEvent({ slug, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [event, format, cssW, cssH, boxW, locale, spec]);
+    // `cardLang` entre dans les dépendances : changer la langue de l'affiche
+    // doit la redessiner, pas seulement changer le nom du fichier.
+  }, [event, format, cssW, cssH, boxW, cardLang, spec]);
 
   const renderFile = async () => {
     await ensureFonts();
-    const card = buildEventCard(event, { locale });
+    const card = buildEventCard(event, { locale: cardLocale, t: cardT });
     const off = document.createElement('canvas');
     drawEventCard(off, card, spec, readPalette(), { pixelScale: EXPORT_PIXEL_SCALE });
     return new Promise((resolve, reject) => {
@@ -118,7 +132,7 @@ export default function ExportEvent({ slug, onClose }) {
     });
   };
 
-  const name = event ? eventFileName(buildEventCard(event, { locale }), spec) : 'annonce.png';
+  const name = event ? eventFileName(buildEventCard(event, { locale: cardLocale, t: cardT }), spec) : 'annonce.png';
 
   const download = async () => {
     try {
@@ -177,7 +191,7 @@ export default function ExportEvent({ slug, onClose }) {
         </>
       }
     >
-      <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+      <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {ORDER.map((id) => (
           <button
             key={id}
@@ -188,6 +202,23 @@ export default function ExportEvent({ slug, onClose }) {
             {t(`export.format.${id}`)}
           </button>
         ))}
+
+        {/* Le sélecteur de langue de l'affiche, séparé des formats par une
+            marge : ce n'est pas le même choix, et deux séries de boutons collées
+            se liraient comme une seule. */}
+        <span className="row" style={{ gap: '0.3rem', marginLeft: '1rem', alignItems: 'center' }}>
+          <span className="faint data" style={{ fontSize: '0.75rem' }}>{t('announce.lang')}</span>
+          {LANGS.map((l) => (
+            <button
+              key={l.id}
+              className={`btn btn--small${cardLang === l.id ? ' btn--primary' : ' btn--ghost'}`}
+              aria-pressed={cardLang === l.id}
+              onClick={() => setCardLang(l.id)}
+            >
+              {l.label}
+            </button>
+          ))}
+        </span>
       </div>
 
       {error && <p className="notice" style={{ marginTop: '0.8rem' }}>{error}</p>}

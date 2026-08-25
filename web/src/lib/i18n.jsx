@@ -219,6 +219,11 @@ const DICT = {
     'notif.someone': 'A former member',
 
     'announce.title': 'Opening poster',
+    'announce.lang': 'Poster language',
+    'announce.banner': 'PREDICTIONS OPEN',
+    'announce.categories': 'CATEGORIES',
+    'announce.entrants': '{n} entrants',
+    'announce.deadline': 'PREDICTIONS CLOSE',
     'announce.hint':
       'A story to publish when predictions open: the competition, its dates, the categories and how many are entered, and the deadline. Everything else is one tap away on the site.',
 
@@ -743,6 +748,11 @@ const DICT = {
     'notif.someone': 'Un ancien membre',
 
     'announce.title': 'Affiche d’annonce',
+    'announce.lang': 'Langue de l’affiche',
+    'announce.banner': 'PRONOSTICS OUVERTS',
+    'announce.categories': 'CATÉGORIES',
+    'announce.entrants': '{n} inscrits',
+    'announce.deadline': 'FERMETURE DES PRONOSTICS',
     'announce.hint':
       'Une story à publier à l’ouverture des pronostics : la compétition, ses dates, les catégories et leur plateau, et la date butoir. Tout le reste est à un clic sur le site.',
 
@@ -1114,6 +1124,31 @@ export function I18nProvider({ children }) {
   }, [lang, setLang]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+/**
+ * Un traducteur pour une langue donnée, utilisable HORS du contexte React.
+ *
+ * `useI18n` ne sert que dans un composant, et sa langue est celle de
+ * l'interface. Or l'affiche d'annonce se publie sur Instagram pour une audience
+ * internationale : on la veut en anglais tout en naviguant en français, sans
+ * avoir à basculer le site entier avant chaque export puis à penser à revenir.
+ *
+ * Même repli que `t` : une clé absente d'une langue retombe sur l'anglais,
+ * plutôt que d'afficher son identifiant au milieu d'une affiche.
+ */
+export function translator(lang) {
+  return (key, vars) => {
+    const raw = DICT[lang]?.[key] ?? DICT.en[key];
+    if (raw == null) return key;
+    if (!vars) return raw;
+    return raw.replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m));
+  };
+}
+
+/** Le format de date d'une langue, pour les mêmes usages hors composant. */
+export function localeOf(lang) {
+  return LANGS.find((l) => l.id === lang)?.locale ?? 'en-GB';
 }
 
 export function useI18n() {

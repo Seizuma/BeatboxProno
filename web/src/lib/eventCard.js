@@ -23,6 +23,17 @@ import { EXPORT_PIXEL_SCALE, ensureFonts, readPalette } from './predictionCard.j
  *
  * La date butoir est le seul élément mis en couleur d'alerte : c'est elle qui
  * transforme « intéressant » en « maintenant ».
+ *
+ * ─── Tous les intitulés viennent du dehors ───────────────────────────────────
+ *
+ * Une première version les écrivait en dur, en français. Les dates suivaient
+ * bien la langue, elles, ce qui donnait une affiche bâtarde — « PRONOSTICS
+ * OUVERTS » au-dessus de « September 24 ». Pire : elle était illisible pour
+ * l'audience à laquelle elle s'adresse, qui est internationale.
+ *
+ * Le module ne connaît donc plus aucune phrase. Il reçoit un traducteur et la
+ * langue à employer, ce qui permet aussi de composer une affiche en anglais
+ * tout en naviguant en français — le cas normal quand on publie sur Instagram.
  */
 
 export const FORMATS = {
@@ -44,7 +55,11 @@ export { ensureFonts, readPalette };
  * Les catégories portent leur nombre d'inscrits : « SOLO — 20 » dit plus que
  * « SOLO », et c'est l'information qui fait mesurer l'ampleur du plateau.
  */
-export function buildEventCard(event, { locale = 'fr-FR' } = {}) {
+export function buildEventCard(event, { locale = 'fr-FR', t } = {}) {
+  // Repli en clair si aucun traducteur n'est fourni : mieux vaut une affiche en
+  // anglais qu'une affiche portant « announce.banner ».
+  const label = t ?? ((key) => key);
+
   const day = (value, opts) =>
     value ? new Date(value).toLocaleDateString(locale, opts ?? { day: 'numeric', month: 'long' }) : null;
 
@@ -53,12 +68,23 @@ export function buildEventCard(event, { locale = 'fr-FR' } = {}) {
   const dates = start && end && start !== end ? `${start} — ${end}` : start;
 
   return {
+    // Les intitulés voyagent AVEC la carte plutôt que d'être relus au tracé :
+    // le module de dessin n'a alors rien à savoir des langues, et une affiche
+    // déjà construite ne peut plus changer de langue à mi-chemin.
+    labels: {
+      banner: label('announce.banner'),
+      categories: label('announce.categories'),
+      deadline: label('announce.deadline'),
+    },
     title: `${event.name} ${event.year}`,
     location: event.location ?? null,
     dates,
     categories: (event.categories ?? []).map((c) => ({
       name: c.name,
       contenders: c.contenders?.length ?? 0,
+      // Le décompte est une phrase, pas un nombre : « 20 entrants » et
+      // « 20 inscrits » ne s'assemblent pas de la même façon selon la langue.
+      entrants: label('announce.entrants', { n: c.contenders?.length ?? 0 }),
     })),
     // Sans date butoir déclarée, on n'invente rien : le cas « wildcards
     // ouvertes, date de la compète encore inconnue » est fréquent.
@@ -111,7 +137,7 @@ function buildLayout(ctx, card) {
 
   // --- Le bandeau d'annonce, en vidéo inverse : c'est ce qu'on lit en premier
   // et de loin, avant même le nom de la compétition.
-  const banner = 'PRONOSTICS OUVERTS';
+  const banner = card.labels.banner;
   font(ctx, 40, DATA);
   const bw = ctx.measureText(banner).width + 40;
   ops.push({ t: 'fill', x: 0, y, w: bw, h: 58, c: 'accent' });
@@ -141,7 +167,7 @@ function buildLayout(ctx, card) {
 
   // --- Les catégories ouvertes, avec leur plateau
   if (card.categories.length) {
-    ops.push({ t: 'text', x: 0, y, s: 26, f: DATA, c: 'dim', v: 'CATÉGORIES' });
+    ops.push({ t: 'text', x: 0, y, s: 26, f: DATA, c: 'dim', v: card.labels.categories });
     y += 44;
 
     for (const category of card.categories) {
@@ -149,7 +175,7 @@ function buildLayout(ctx, card) {
       if (category.contenders > 0) {
         ops.push({
           t: 'text', x: LW, y: y + 8, s: 28, f: DATA, c: 'dim', align: 'right',
-          v: `${category.contenders} inscrits`,
+          v: category.entrants,
         });
       }
       y += 58;
@@ -162,7 +188,7 @@ function buildLayout(ctx, card) {
   if (card.deadline) {
     ops.push({ t: 'rule', y });
     y += 36;
-    ops.push({ t: 'text', x: 0, y, s: 26, f: DATA, c: 'dim', v: 'FERMETURE DES PRONOSTICS' });
+    ops.push({ t: 'text', x: 0, y, s: 26, f: DATA, c: 'dim', v: card.labels.deadline });
     y += 40;
     ops.push({ t: 'text', x: 0, y, s: 52, f: DISPLAY, c: 'alert', v: card.deadline.toUpperCase() });
     y += 66;
@@ -264,7 +290,13 @@ export function drawEventCard(canvas, card, format, palette, { pixelScale = EXPO
   return canvas;
 }
 
-/** Le nom du fichier produit. Sans espaces : certains clients les mutilent. */
+/**
+ * Le nom du fichier produit.
+ *
+ * Le suffixe reste en anglais quelle que soit la langue de l'affiche : c'est un
+ * nom de fichier, pas un texte lu — et « ouverture » dans un dossier plein de
+ * fichiers anglais se retrouve moins bien.
+ */
 export function eventFileName(card, format) {
   const slug = card.title
     .normalize('NFD')
@@ -272,5 +304,5 @@ export function eventFileName(card, format) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return `${slug}-ouverture-${format.id}.png`;
+  return `${slug}-opening-${format.id}.png`;
 }
