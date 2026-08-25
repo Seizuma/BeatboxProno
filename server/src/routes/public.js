@@ -327,19 +327,35 @@ publicRouter.get('/artists/:slug', async (req, res) => {
   if (!artist) return res.status(404).json({ error: 'Artiste introuvable.' });
 
   const contenderIds = artist.entries.map((e) => e.contenderId);
-
   const categoryIds = [...new Set(artist.entries.map((e) => e.contender.categoryId))];
 
-  const [battles, picks, podiumSlots, scored] = await Promise.all([
-    // Les battles officielles JOUÉES où il apparaît. Elles servent au palmarès
-    // et au dénominateur de la fiabilité, pas au décompte des pronostics.
+  /**
+   * Tout ce qui suit est groupé PAR CATÉGORIE, et c'est le point de cette route.
+   *
+   * Les chiffres agrégés sur toute la carrière d'un artiste mélangeaient des
+   * compétitions qui n'ont rien à voir : « donné qualifié par 31 % » sur un
+   * beatboxer entré 20e à Varsovie et 1er à Beatland ne décrit aucune des deux
+   * situations. La moyenne de deux vérités contradictoires n'est pas une
+   * vérité, c'est une bouillie.
+   *
+   * Seuls les POINTS restent additionnés : eux se cumulent réellement, ils
+   * comptent ce que la foule a gagné grâce à lui, toutes compètes confondues.
+   */
+  const [battles, picks, placements, scored] = await Promise.all([
+    // Les battles officielles JOUÉES où il apparaît : elles servent au
+    // dénominateur de la fiabilité, jamais au décompte des pronostics.
     prisma.battle.findMany({
       where: {
         played: true,
         OR: [{ contenderAId: { in: contenderIds } }, { contenderBId: { in: contenderIds } }],
       },
       select: {
-        phaseId: true, round: true, contenderAId: true, contenderBId: true, winnerId: true,
+        phaseId: true,
+        round: true,
+        contenderAId: true,
+        contenderBId: true,
+        winnerId: true,
+        phase: { select: { categoryId: true } },
       },
     }),
 
@@ -353,24 +369,35 @@ publicRouter.get('/artists/:slug', async (req, res) => {
      * Ce qu'il ne faut SURTOUT pas exiger en plus, c'est que l'affiche existe
      * déjà officiellement. Une première version le faisait, et le compteur
      * tombait à zéro sur toute compétition à venir : avant le tirage, aucune
-     * battle n'est en base, donc aucun pronostic ne pouvait « correspondre ».
-     * Or c'est précisément avant la compète que la question intéresse — qui la
-     * foule voit-elle gagner ?
+     * battle n'est en base. Or c'est précisément avant la compète que la
+     * question intéresse.
      */
     prisma.predictedBattle.findMany({
       where: { winnerId: { in: contenderIds }, prediction: { submitted: true } },
-      select: { round: true, phaseId: true, contenderAId: true, contenderBId: true, winnerId: true },
+      select: {
+        round: true,
+        phaseId: true,
+        contenderAId: true,
+        contenderBId: true,
+        winnerId: true,
+        phase: { select: { categoryId: true } },
+      },
     }),
 
-    // Le palmarès réel de l'artiste — ses vrais podiums, pas un pari. Plus
-    // affiché sur la fiche, mais conservé : il alimente le décompte de
-    // participations et ne coûte qu'une requête sur une table minuscule.
-    prisma.podiumSlot.findMany({ where: { contenderId: { in: contenderIds } } }),
+    // Les places qu'on lui donne en classement. La coupe voyage avec, parce
+    // qu'elle change d'une compétition à l'autre : un top 8 et un top 16 ne
+    // racontent pas la même histoire pour un même rang.
+    prisma.predictedRank.findMany({
+      where: { contenderId: { in: contenderIds }, prediction: { submitted: true } },
+      select: {
+        rank: true,
+        phase: { select: { categoryId: true, qualifierCount: true } },
+      },
+    }),
 
     /**
      * Le détail de score des pronostics déjà confrontés aux résultats, dans les
-     * catégories où il concourt. C'est de là que sortent les points marqués
-     * grâce à lui.
+     * catégories où il concourt.
      *
      * Restreint à ses catégories : sans ce filtre, la requête ramènerait le
      * détail de tous les pronostics du site pour n'en garder qu'une poignée.
@@ -378,79 +405,58 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     categoryIds.length
       ? prisma.prediction.findMany({
         where: { categoryId: { in: categoryIds }, submitted: true, scoredAt: { not: null } },
-        select: { breakdown: true },
+        select: { breakdown: true, categoryId: true },
       })
       : [],
   ]);
 
-  const wins = battles.filter((b) => contenderIds.includes(b.winnerId)).length;
+  const owned = new Set(contenderIds);
 
-  /**
-   * La lecture que la foule fait de lui AVANT que rien ne soit joué.
-   *
-   * La fiabilité ne peut rien dire tant qu'aucune battle n'a été disputée : sur
-   * une compétition à venir, elle affichait un tiret et n'apprenait rien. Or
-   * c'est justement à ce moment-là qu'on vient voir une fiche d'artiste.
-   *
-   * Deux chiffres disponibles dès le premier pronostic déposé : la part des
-   * pronostiqueurs qui le voient passer la coupe, et le rang moyen qu'ils lui
-   * donnent. Le second départage les artistes que tout le monde qualifie —
-   * être qualifié par 95 % ne dit pas si on est vu premier ou huitième.
-   */
-  const placements = await prisma.predictedRank.findMany({
-    where: { contenderId: { in: contenderIds }, prediction: { submitted: true } },
-    select: { rank: true, phase: { select: { qualifierCount: true } } },
+  /** Un jeu de compteurs vierge, par catégorie. */
+  const blank = () => ({
+    ranks: [],
+    cut: null,
+    cutSeen: 0,
+    cutThrough: 0,
+    pickedToWin: 0,
+    byRound: new Map(),
+    judged: 0,
+    correct: 0,
+    points: 0,
   });
 
-  let cutSeen = 0;
-  let cutThrough = 0;
-  let rankSum = 0;
-  for (const placement of placements) {
-    rankSum += placement.rank;
-    // Sans coupe déclarée, la phase ne qualifie personne : la compter fausserait
-    // la part dans les deux sens selon les compétitions.
-    const cut = placement.phase?.qualifierCount;
+  const byCategory = new Map(categoryIds.map((id) => [id, blank()]));
+  const bucket = (categoryId) => {
+    if (!byCategory.has(categoryId)) byCategory.set(categoryId, blank());
+    return byCategory.get(categoryId);
+  };
+
+  // --- Les places données en classement
+  for (const p of placements) {
+    const categoryId = p.phase?.categoryId;
+    if (!categoryId) continue;
+    const b = bucket(categoryId);
+    b.ranks.push(p.rank);
+
+    // Sans coupe déclarée, la phase ne qualifie personne : la compter
+    // fausserait la part dans les deux sens selon les compétitions.
+    const cut = p.phase.qualifierCount;
     if (!cut) continue;
-    cutSeen += 1;
-    if (placement.rank <= cut) cutThrough += 1;
+    b.cut = cut;
+    b.cutSeen += 1;
+    if (p.rank <= cut) b.cutThrough += 1;
   }
 
-  /**
-   * Les points que les pronostiqueurs ont marqués sur des lignes où il figure.
-   *
-   * Le barème attribue ses points à des lignes : un placement en classement,
-   * une affiche de bracket. On additionne celles qui le mentionnent — le
-   * placement qu'on lui a donné, et les battles où il apparaît d'un côté ou de
-   * l'autre. C'est la lecture littérale de « points gagnés grâce à lui », et
-   * elle ne demande aucun recalcul : le détail est déjà en base.
-   *
-   * Les points d'une affiche sont comptés en entier, sans les répartir entre
-   * les deux adversaires : une battle bien lue l'est grâce aux deux, et couper
-   * en deux produirait des demi-points que personne ne saurait interpréter.
-   */
-  const owned = new Set(contenderIds);
-  let pointsFrom = 0;
-  for (const { breakdown } of scored) {
-    if (!Array.isArray(breakdown)) continue;
-    for (const section of breakdown) {
-      for (const line of section?.lines ?? []) {
-        const mentions =
-          owned.has(line.contenderId) ||
-          owned.has(line.contenderAId) ||
-          owned.has(line.contenderBId);
-        if (mentions) pointsFrom += line.points ?? 0;
-      }
-    }
+  // --- Les vainqueurs annoncés, et le tour où on les annonce
+  for (const pick of picks) {
+    const categoryId = pick.phase?.categoryId;
+    if (!categoryId) continue;
+    const b = bucket(categoryId);
+    b.pickedToWin += 1;
+    b.byRound.set(pick.round, (b.byRound.get(pick.round) ?? 0) + 1);
   }
 
-  /**
-   * Fiabilité : parmi les battles JOUÉES où quelqu'un l'a donné vainqueur,
-   * quelle proportion s'est réalisée ?
-   *
-   * Le dénominateur exclut les pronostics portant sur des affiches pas encore
-   * disputées — les compter ferait chuter le taux à chaque compète annoncée,
-   * alors que rien n'a encore été tranché.
-   */
+  // --- La fiabilité, sur les seules battles disputées
   const playedByKey = new Map(
     battles.map((b) => [
       `${b.phaseId}:${b.round}:${[b.contenderAId, b.contenderBId].sort().join('|')}`,
@@ -458,46 +464,96 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     ])
   );
 
-  let judged = 0;
-  let correct = 0;
   for (const pick of picks) {
     const hit = playedByKey.get(
       `${pick.phaseId}:${pick.round}:${[pick.contenderAId, pick.contenderBId].sort().join('|')}`
     );
     if (!hit) continue;
-    judged += 1;
-    if (hit.winnerId === pick.winnerId) correct += 1;
+    const b = bucket(pick.phase.categoryId);
+    b.judged += 1;
+    if (hit.winnerId === pick.winnerId) b.correct += 1;
   }
 
+  /**
+   * Les points marqués sur des lignes où il figure.
+   *
+   * Le barème attribue ses points à des lignes : un placement en classement,
+   * une affiche de bracket. On additionne celles qui le mentionnent. Les points
+   * d'une affiche sont comptés en entier, sans les répartir entre les deux
+   * adversaires : une battle bien lue l'est grâce aux deux, et couper en deux
+   * produirait des demi-points que personne ne saurait interpréter.
+   */
+  let pointsFrom = 0;
+  for (const { breakdown, categoryId } of scored) {
+    if (!Array.isArray(breakdown)) continue;
+    for (const section of breakdown) {
+      for (const line of section?.lines ?? []) {
+        const mentions =
+          owned.has(line.contenderId) ||
+          owned.has(line.contenderAId) ||
+          owned.has(line.contenderBId);
+        if (!mentions) continue;
+        const points = line.points ?? 0;
+        pointsFrom += points;
+        bucket(categoryId).points += points;
+      }
+    }
+  }
+
+  // --- Mise en forme, une entrée par participation
+  const appearances = artist.entries.map((e) => {
+    const c = e.contender;
+    const b = bucket(c.categoryId);
+    const voters = b.ranks.length;
+
+    // La distribution des places : c'est elle qui se lit d'un coup d'œil.
+    // « Rang moyen 10,3 » ne dit pas si tout le monde le voit dixième ou si la
+    // moitié le voit premier et l'autre vingtième — deux situations opposées
+    // derrière le même nombre.
+    const counts = new Map();
+    for (const rank of b.ranks) counts.set(rank, (counts.get(rank) ?? 0) + 1);
+    const distribution = [...counts.entries()]
+      .map(([rank, n]) => ({ rank, n }))
+      .sort((x, y) => x.rank - y.rank);
+
+    return {
+      contenderId: c.id,
+      event: c.category.event.name,
+      eventSlug: c.category.event.slug,
+      year: c.category.event.year,
+      status: c.category.event.status,
+      category: c.category.name,
+      contender: c.name,
+      seed: c.seed,
+      points: b.points,
+      crowd: {
+        voters,
+        averageRank: voters ? Math.round((b.ranks.reduce((n, r) => n + r, 0) / voters) * 10) / 10 : null,
+        bestRank: voters ? Math.min(...b.ranks) : null,
+        worstRank: voters ? Math.max(...b.ranks) : null,
+        cut: b.cut,
+        qualifiedShare: b.cutSeen ? Math.round((b.cutThrough / b.cutSeen) * 100) : null,
+        distribution,
+        pickedToWin: b.pickedToWin,
+        byRound: [...b.byRound.entries()].map(([round, n]) => ({ round, n })),
+        judged: b.judged,
+        correct: b.correct,
+        accuracy: b.judged ? Math.round((b.correct / b.judged) * 100) : null,
+      },
+    };
+  });
+
   res.json({
-    artist: { id: artist.id, slug: artist.slug, name: artist.name, country: artist.country, imageUrl: artist.imageUrl, bio: artist.bio },
-    appearances: artist.entries.map((e) => ({
-      event: e.contender.category.event.name,
-      eventSlug: e.contender.category.event.slug,
-      category: e.contender.category.name,
-      contender: e.contender.name,
-      seed: e.contender.seed,
-    })),
-    record: {
-      battlesPlayed: battles.length,
-      wins,
-      losses: battles.length - wins,
-      podiums: podiumSlots.length,
-      // Les points que la foule a marqués sur des lignes où il figure.
-      pointsFrom,
+    artist: {
+      id: artist.id,
+      slug: artist.slug,
+      name: artist.name,
+      country: artist.country,
+      imageUrl: artist.imageUrl,
+      bio: artist.bio,
     },
-    crowd: {
-      timesPickedToWinBattle: picks.length,
-      pickedAndRight: correct,
-      accuracy: judged ? Math.round((correct / judged) * 100) : null,
-      judged,
-      // Part des placements qui le mettent dans les qualifiés, et rang moyen
-      // qu'on lui donne. Disponibles dès le premier pronostic déposé.
-      qualifiedShare: cutSeen ? Math.round((cutThrough / cutSeen) * 100) : null,
-      averageRank: placements.length
-        ? Math.round((rankSum / placements.length) * 10) / 10
-        : null,
-      placements: placements.length,
-    },
+    // Le seul chiffre qui se cumule honnêtement d'une compétition à l'autre.
+    totals: { pointsFrom },
+    appearances,
   });
 });

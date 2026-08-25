@@ -224,25 +224,24 @@ const DICT = {
     'news.reread': 'Read again any time',
     'news.lede':
       'Everything that changed for you, newest first. This page stays here — come back whenever you like.',
-
     'news.r0.title': 'Private groups, image export and a reworked leaderboard',
     'news.r0.groups':
-      'Private groups: create a circle, share its invite link, and get a leaderboard just between you — on the competitions the group owner picks.',
+      'Private groups: create a circle, share its invite link, and get a leaderboard just between you.',
     'news.r0.comments':
-      'Pin comments anywhere on someone’s prediction: on a ranking row, on a bracket matchup, or on a whole phase. Threads stay inside the group.',
+      'Pin comments anywhere on someone’s prediction: on a ranking row, on a bracket matchup, or on a whole phase.',
     'news.r0.bell':
       'A bell in the header tells you when somebody joins your group or comments on your prediction.',
     'news.r0.export':
-      'Export a prediction as an image — square post, story or wide — with the full bracket, the picked winners and the scores.',
+      'Export a prediction as an image — square post, story or wide — with the full bracket and the scores.',
     'news.r0.precision':
-      'The leaderboard replaces battle accuracy with Precision: the points you scored over the points that were up for grabs, elimination rankings included. Expect lower numbers — the old measure rewarded predicting badly.',
+      'The leaderboard replaces battle accuracy with Precision: the points you scored over the points that were up for grabs. Expect lower numbers — the old measure rewarded predicting badly.',
     'news.r0.search':
-      'Search the leaderboard by name, and click any player to open their profile and read what they filed.',
+      'Search the leaderboard by name, and click any player to open their profile.',
     'news.r0.artists':
-      'Artist pages show what the crowd makes of them before a single battle is played: how often they are picked to win, how often they are seen through the cut, and the average rank they are given.',
+      'Artist pages now break their stats down competition by competition, with a chart of where the crowd places them.',
     'news.r0.jury': 'A competition category can now show its panel of judges.',
     'news.r0.mobile':
-      'A full pass on phones: no more sideways scrolling, dialogs that reach the bottom of the screen, and bigger touch targets.',
+      'A full pass on phones: no more sideways scrolling, dialogs that reach the bottom of the screen, bigger touch targets.',
     'news.r0.logout': 'Signing out has moved to your profile page.',
 
     'export.open': 'Export',
@@ -326,7 +325,13 @@ const DICT = {
     'artists.unknown': 'Origin unknown',
     'artists.pointsFrom': 'Points scored thanks to them',
     'artists.qualifiedShare': 'Seen through the cut by',
+    'artists.qualifiedShareCut': 'Seen in the top {n} by',
     'artists.averageRank': 'Average rank given',
+    'artists.spread': 'Where the crowd places them',
+    'artists.voters': '{n} filed predictions',
+    'artists.bestWorst': 'Best {best} · worst {worst}',
+    'artists.byRound': 'Picked to win, by round',
+    'artists.noData': 'No filed prediction on this competition yet.',
     'artists.podiums': 'Podiums',
     'artists.pickedToWin': 'Picked to win a battle',
     'artists.accuracy': 'Hit rate of those who picked them',
@@ -738,25 +743,24 @@ const DICT = {
     'news.reread': 'À relire quand vous voulez',
     'news.lede':
       'Tout ce qui a changé pour vous, du plus récent au plus ancien. Cette page reste là — revenez-y autant que vous voulez.',
-
     'news.r0.title': 'Groupes privés, export en image et classement revu',
     'news.r0.groups':
-      'Groupes privés : créez un cercle, partagez son lien d’invitation, et suivez un classement rien qu’entre vous — sur les compétitions que le propriétaire du groupe choisit.',
+      'Groupes privés : créez un cercle, partagez son lien d’invitation, et suivez un classement rien qu’entre vous.',
     'news.r0.comments':
-      'Épinglez des commentaires où vous voulez sur le pronostic de quelqu’un : sur une ligne de classement, sur une affiche du tableau, ou sur une phase entière. Les fils restent dans le groupe.',
+      'Épinglez des commentaires où vous voulez sur le pronostic de quelqu’un : sur une ligne de classement, sur une affiche, ou sur une phase entière.',
     'news.r0.bell':
       'Une cloche dans l’en-tête vous prévient quand quelqu’un rejoint votre groupe ou commente votre pronostic.',
     'news.r0.export':
-      'Exportez un pronostic en image — post carré, story ou format large — avec le tableau complet, les vainqueurs choisis et les scores.',
+      'Exportez un pronostic en image — post carré, story ou format large — avec le tableau complet et les scores.',
     'news.r0.precision':
-      'Le classement remplace la réussite en battle par la Précision : les points marqués rapportés aux points qui étaient en jeu, éliminations comprises. Attendez-vous à des chiffres plus bas — l’ancienne mesure récompensait ceux qui pronostiquaient mal.',
+      'Le classement remplace la réussite en battle par la Précision : les points marqués rapportés aux points qui étaient en jeu. Attendez-vous à des chiffres plus bas — l’ancienne mesure récompensait ceux qui pronostiquaient mal.',
     'news.r0.search':
-      'Cherchez un joueur par son pseudo dans le classement, et cliquez n’importe quel nom pour ouvrir son profil et lire ce qu’il a déposé.',
+      'Cherchez un joueur par son pseudo dans le classement, et cliquez n’importe quel nom pour ouvrir son profil.',
     'news.r0.artists':
-      'Les fiches d’artiste montrent ce que la foule pense d’eux avant même la première battle : combien de fois ils sont donnés vainqueurs, la part de pronostiqueurs qui les voit passer la coupe, et le rang moyen qu’on leur donne.',
+      'Les fiches d’artiste détaillent désormais leurs statistiques compétition par compétition, avec un graphique des places qu’on leur donne.',
     'news.r0.jury': 'Une catégorie peut désormais afficher son jury.',
     'news.r0.mobile':
-      'Une passe complète sur téléphone : plus de défilement latéral, des fenêtres qui atteignent le bas de l’écran, et des zones tactiles plus grandes.',
+      'Une passe complète sur téléphone : plus de défilement latéral, des fenêtres qui atteignent le bas de l’écran, des zones tactiles plus grandes.',
     'news.r0.logout': 'La déconnexion a déménagé dans votre page de profil.',
 
     'export.open': 'Exporter',
@@ -840,7 +844,13 @@ const DICT = {
     'artists.unknown': 'Origine inconnue',
     'artists.pointsFrom': 'Points marqués grâce à lui',
     'artists.qualifiedShare': 'Donné qualifié par',
+    'artists.qualifiedShareCut': 'Vu dans le top {n} par',
     'artists.averageRank': 'Rang moyen donné',
+    'artists.spread': 'Où la foule le place',
+    'artists.voters': '{n} pronostics déposés',
+    'artists.bestWorst': 'Meilleur {best} · pire {worst}',
+    'artists.byRound': 'Donné vainqueur, par tour',
+    'artists.noData': 'Aucun pronostic déposé sur cette compétition.',
     'artists.podiums': 'Podiums',
     'artists.pickedToWin': 'Donné vainqueur d’une battle',
     'artists.accuracy': 'Réussite de ceux qui l’ont pris',
