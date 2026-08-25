@@ -8,8 +8,16 @@ import {
   clearSession,
 } from '../lib/auth.js';
 import { touch } from '../lib/presence.js';
+import { prisma } from '../lib/prisma.js';
 
 export const authRouter = Router();
+
+/**
+ * Express 4 avale les rejets d'un handler asynchrone : la requête reste
+ * suspendue jusqu'au délai d'expiration, sans une ligne de log. Toute route
+ * `async` de ce fichier passe par ici.
+ */
+const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /**
  * La destination à rejoindre une fois la connexion faite.
@@ -99,8 +107,37 @@ authRouter.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.get('/me', (req, res) => {
+/**
+ * La session courante.
+ *
+ * Les trois cosmétiques portés sont relus en base plutôt que pris sur
+ * `req.user` : ce que le middleware attache dépend de son propre `select`, et
+ * s'y fier ici ferait dépendre l'affichage du cadre d'un fichier qui n'a rien
+ * demandé — le jour où quelqu'un resserre ce select, le cadre disparaîtrait de
+ * l'en-tête sans erreur ni trace, ce qui est la pire façon de casser.
+ *
+ * La requête est un findUnique sur la clé primaire, et `/me` n'est appelé
+ * qu'une fois par chargement d'application : le coût est nul à côté du risque.
+ */
+authRouter.get('/me', guard(async (req, res) => {
   if (!req.user) return res.json({ user: null });
   const { id, username, globalName, avatarUrl, role } = req.user;
-  res.json({ user: { id, username, globalName, avatarUrl, role } });
-});
+
+  const worn = await prisma.user.findUnique({
+    where: { id },
+    select: { equippedFrame: true, equippedTitle: true, equippedFlair: true },
+  });
+
+  res.json({
+    user: {
+      id,
+      username,
+      globalName,
+      avatarUrl,
+      role,
+      equippedFrame: worn?.equippedFrame ?? null,
+      equippedTitle: worn?.equippedTitle ?? null,
+      equippedFlair: worn?.equippedFlair ?? null,
+    },
+  });
+}));

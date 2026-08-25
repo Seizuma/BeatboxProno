@@ -239,9 +239,21 @@ export async function buildScoreboard({
     const scored = new Set(grouped.map((g) => g.userId));
     const idle = pad && userIds ? userIds.filter((id) => !scored.has(id)) : [];
 
+    // Les trois colonnes `equipped*` voyagent avec le pseudo. C'est la seule
+    // requête à traverser : le classement général et celui de chaque groupe
+    // passent tous deux par ici, les élargir séparément aurait fait deux
+    // tableaux où l'un porte les cadres et l'autre non.
     const users = await prisma.user.findMany({
         where: { id: { in: [...scored, ...idle] } },
-        select: { id: true, username: true, globalName: true, avatarUrl: true },
+        select: {
+            id: true,
+            username: true,
+            globalName: true,
+            avatarUrl: true,
+            equippedFrame: true,
+            equippedTitle: true,
+            equippedFlair: true,
+        },
     });
     const byId = new Map(users.map((u) => [u.id, u]));
 

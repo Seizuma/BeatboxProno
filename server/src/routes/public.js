@@ -176,7 +176,17 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
   const prediction = await prisma.prediction.findUnique({
     where: { id: req.params.predictionId },
     include: {
-      user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+      user: {
+        select: {
+          id: true,
+          username: true,
+          globalName: true,
+          avatarUrl: true,
+          equippedFrame: true,
+          equippedTitle: true,
+          equippedFlair: true,
+        }
+      },
       event: { select: { slug: true, name: true, year: true, status: true, judgeCount: true } },
       category: {
         select: {
@@ -238,7 +248,15 @@ publicRouter.get('/leaderboard', async (req, res) => {
 
   const users = await prisma.user.findMany({
     where: { id: { in: rows.map((r) => r.userId) } },
-    select: { id: true, username: true, globalName: true, avatarUrl: true },
+    select: {
+      id: true,
+      username: true,
+      globalName: true,
+      avatarUrl: true,
+      equippedFrame: true,
+      equippedTitle: true,
+      equippedFlair: true,
+    },
   });
   const byId = new Map(users.map((u) => [u.id, u]));
 

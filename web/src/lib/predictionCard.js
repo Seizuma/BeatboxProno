@@ -33,6 +33,8 @@
  * les deux.
  */
 
+import { itemById } from './cosmetics.js';
+
 export const FORMATS = {
     square: { id: 'square', w: 1080, h: 1080 },
     story: { id: 'story', w: 1080, h: 1920 },
@@ -82,12 +84,12 @@ const DATA = '"IBM Plex Mono", monospace';
  * déjà là.
  */
 export async function ensureFonts() {
-    if (!null) return;
+    if (!document.fonts) return;
     await Promise.all([
-        null.load('400 120px VT323'),
-        null.load('400 32px "IBM Plex Mono"'),
+        document.fonts.load('400 120px VT323'),
+        document.fonts.load('400 32px "IBM Plex Mono"'),
     ]);
-    await null.ready;
+    await document.fonts.ready;
 }
 
 /**
@@ -122,7 +124,7 @@ export function readPalette(root = document.documentElement) {
  * affiches. Rien n'est écarté ici : c'est la mise en page qui se débrouille
  * pour tout faire tenir.
  */
-export function buildCardModel(prediction, { t } = {}) {
+export function buildCardModel(prediction, { t, lang = 'en' } = {}) {
     const label = (key, fallback) => (t ? t(key) : fallback);
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
     const nameOf = (id) => byId.get(id)?.name ?? '—';
@@ -189,7 +191,13 @@ export function buildCardModel(prediction, { t } = {}) {
     return {
         title: `${prediction.event.name} ${prediction.event.year}`,
         subtitle: prediction.category.name,
-        author: prediction.user?.globalName ?? prediction.user?.username ?? '',
+        // Le titre porté, s'il y en a un. Le nom vient du catalogue et non du
+        // dictionnaire : d'où `lang` passé en paramètre plutôt qu'un `t`.
+        authorTitle: (() => {
+            const item = itemById(prediction.user?.equippedTitle);
+            if (!item || item.slot !== 'title') return null;
+            return (item.name[lang] ?? item.name.en).toUpperCase();
+        })(),
         // Les points ne s'affichent qu'une fois le pronostic scoré : une carte
         // annonçant « 0 point » avant la compète se lirait comme un échec.
         points: prediction.scoredAt ? prediction.points : null,
@@ -463,16 +471,38 @@ function buildLayout(ctx, model, LW) {
     ops.push({ t: 'rule', y });
     y += 24;
     ops.push({ t: 'text', x: 0, y, s: 30, f: DATA, c: 'ink', v: model.author });
+
+    // Ce que la droite du pied occupe déjà. Le titre s'insère entre les deux et
+    // ne doit jamais mordre dessus : on mesure d'abord, on écrit ensuite — et
+    // s'il ne reste pas de quoi lire trois lettres, on n'écrit rien du tout.
+    // Une carte est une image qu'on ne peut plus corriger une fois partagée.
+    let reserved;
     if (model.points != null) {
+        reserved = measure(ctx, `${model.points} PTS`, 46, DISPLAY);
         ops.push({
             t: 'text', x: LW, y: y - 8, s: 46, f: DISPLAY, c: 'ok', align: 'right',
             v: `${model.points} PTS`,
         });
     } else {
+        reserved = measure(ctx, 'beatboxpredictions.com', 26, DATA);
         ops.push({
             t: 'text', x: LW, y, s: 26, f: DATA, c: 'dim', align: 'right',
             v: 'beatboxpredictions.com',
         });
+    }
+
+    if (model.authorTitle) {
+        const left = measure(ctx, model.author, 30, DATA) + 18;
+        const room = LW - left - reserved - 24;
+        if (room > 110) {
+            // Magenta : la couleur des méta-informations partout ailleurs sur le
+            // site, et celle du titre sur le profil. La carte ne s'invente pas
+            // une grammaire à elle.
+            ops.push({
+                t: 'text', x: left, y: y + 3, s: 24, f: DATA, c: 'magenta',
+                v: fit(ctx, model.authorTitle, 24, DATA, room),
+            });
+        }
     }
     y += 44;
 

@@ -68,7 +68,7 @@ const ICONS = {
 /* ---------------------------------------------------------------------------
    Le pin : la petite icône à côté d'un nom.
    --------------------------------------------------------------------------- */
-export function Flair({ itemId, size = 16 }) {
+export function Flair({ itemId, size = 16, lang = 'en' }) {
     const item = _i(itemId);
     if (!item || item.slot !== 'flair') return null;
     const Icon = ICONS[item.icon];
@@ -77,7 +77,7 @@ export function Flair({ itemId, size = 16 }) {
         <span
             className="cos-flair"
             style={{ color: item.color === 'b' ? COLOR.c : COLOR[item.color] }}
-            title={item.name.en}
+            title={item.name[lang] ?? item.name.en}
         >
             <Icon size={size} stroke={2} />
         </span>
@@ -87,22 +87,31 @@ export function Flair({ itemId, size = 16 }) {
 /* ---------------------------------------------------------------------------
    Le titre : la ligne magenta sous le pseudo — la couleur des méta-infos.
    --------------------------------------------------------------------------- */
-export function Title({ itemId, lang = 'en' }) {
+export function Title({ itemId, lang = 'en', inline = false }) {
     const item = _i(itemId);
     if (!item || item.slot !== 'title') return null;
-    return <p className="cos-title data">{item.name[lang] ?? item.name.en}</p>;
+    const text = item.name[lang] ?? item.name.en;
+    // Dans un tableau, un <p> casse la ligne et gonfle la hauteur de rangée même
+    // vide de marge : la variante en ligne est un <span> plus petit, posé sous le
+    // pseudo comme le sont déjà les sous-lignes du site.
+    if (inline) return <span className="cos-title cos-title--inline data">{text}</span>;
+    return <p className="cos-title data">{text}</p>;
 }
 
 /* ---------------------------------------------------------------------------
    Le cadre : autour de l'avatar. Le style visuel vit dans shop.css sous
    `cos-frame--<id>` — ici on ne fait qu'accrocher la bonne classe.
    --------------------------------------------------------------------------- */
-export function FramedAvatar({ url, frameId, size = 'md', alt = '' }) {
+export function FramedAvatar({ url, frameId, size = 'md', alt = '', className = '' }) {
     const item = _i(frameId);
     const frameClass = item && item.slot === 'frame' ? ` cos-frame--${item.id}` : '';
     if (!url) return null;
+    // `className` laisse passer les règles déjà écrites pour l'ancienne balise —
+    // `avatar--link` par exemple, que mobile.css agrandit nommément dans la ligne
+    // de service. Sans elle, encadrer l'avatar de l'en-tête le rapetissait sur
+    // téléphone.
     return (
-        <span className={`cos-frame cos-frame--${size}${frameClass}`}>
+        <span className={`cos-frame cos-frame--${size}${frameClass}${className ? ` ${className}` : ''}`}>
             <img src={url} alt={alt} />
         </span>
     );

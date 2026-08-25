@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
 import ArtistFigure from '../components/ArtistFigure.jsx';
+import { Flair, FramedAvatar, Title } from '../components/Cosmetics.jsx';
 
 /**
  * Le classement. Anciennement deux pages — « Classement » et « Statistiques » —
@@ -17,7 +18,9 @@ export default function Leaderboard() {
   const [query, setQuery] = useState('');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const { t, number } = useI18n();
+  // `lang` sert aux cosmétiques : les noms d'objets vivent dans le catalogue,
+  // pas dans le dictionnaire, et se choisissent donc à la main.
+  const { t, number, lang } = useI18n();
 
   // Les périmètres disponibles viennent du serveur : tous les formats ayant
   // déjà existé, y compris ceux d'événements passés.
@@ -146,12 +149,29 @@ export default function Leaderboard() {
                   {shown.map(({ p, rank }) => (
                     <tr key={p.user?.id ?? rank}>
                       <td className="rank-cell">{rank}</td>
+                      {/* Cadre, pin et titre. C'est ici qu'ils prennent leur
+                          valeur : un cosmétique visible du seul propriétaire ne
+                          se vend pas. Chacun ne rend rien quand rien n'est
+                          porté — la ligne d'un joueur sans achat est
+                          exactement celle d'avant. */}
                       <td>
                         <span className="stat-row">
-                          {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
-                          <Link to={`/players/${p.user?.id}`}>
-                            {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
-                          </Link>
+                          {p.user?.avatarUrl && (
+                            <FramedAvatar
+                              url={p.user.avatarUrl}
+                              frameId={p.user.equippedFrame}
+                              size="xs"
+                            />
+                          )}
+                          <span style={{ minWidth: 0 }}>
+                            <span className="row" style={{ gap: '0.35rem', alignItems: 'center' }}>
+                              <Link to={`/players/${p.user?.id}`}>
+                                {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                              </Link>
+                              <Flair itemId={p.user?.equippedFlair} size={15} lang={lang} />
+                            </span>
+                            <Title itemId={p.user?.equippedTitle} lang={lang} inline />
+                          </span>
                         </span>
                       </td>
                       <td className="num muted col-opt">{p.predictions}</td>

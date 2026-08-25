@@ -41,7 +41,7 @@ const ORDER = ['square', 'story', 'wide'];
  * `navigator.share` accepte les fichiers, c'est-à-dire sur mobile.
  */
 export default function ExportPrediction({ prediction, onClose }) {
-    const { t } = useI18n();
+    const { t, lang } = useI18n();
 
     const canvas = useRef(null);
     const frame = useRef(null);
@@ -53,7 +53,7 @@ export default function ExportPrediction({ prediction, onClose }) {
     const [shared, setShared] = useState(null);
 
     const spec = FORMATS[format];
-    const model = buildCardModel(prediction, { t });
+    const model = buildCardModel(prediction, { t, lang })
     const name = fileNameFor(model, spec);
 
     /**

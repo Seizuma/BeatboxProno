@@ -12,10 +12,22 @@
 
 /* --- Les cadres d'avatar --------------------------------------------------- */
 
+/* Sans cosmétique acheté, un avatar encadré doit être INDISCERNABLE de
+   l'ancienne balise `.avatar` : le filet cyan, le rendu pixelisé et le même
+   contraste. C'est ce qui permet de remplacer les images partout d'un coup
+   sans que le site change d'aspect pour ceux qui n'ont rien acheté. Les
+   variantes ci-dessous ne font que reprendre bordure et remplissage.
+
+   `box-sizing: border-box` est global : le cadre mange l'image plutôt que
+   d'élargir la boîte, donc aucune ligne de tableau ne bouge d'un pixel selon
+   ce que porte le joueur. */
 .cos-frame {
     display: inline-block;
     line-height: 0;
     flex-shrink: 0;
+    border: 2px solid var(--c);
+    image-rendering: pixelated;
+    filter: contrast(1.15) saturate(1.3);
 }
 
 .cos-frame img {
@@ -25,7 +37,13 @@
     object-fit: cover;
 }
 
-/* Les tailles reprennent celles des avatars existants. */
+/* Les tailles reprennent celles des avatars existants : `xs` vaut exactement
+   `.avatar` (1.6rem) et `lg` la version agrandie du profil. */
+.cos-frame--xs {
+    width: 1.6rem;
+    height: 1.6rem;
+}
+
 .cos-frame--sm {
     width: 28px;
     height: 28px;
@@ -84,6 +102,16 @@
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+}
+
+/* Sous un pseudo de tableau : la taille des sous-lignes déjà en place (0,78 rem
+   dans le classement et les vignettes), pour que le titre s'y range au lieu de
+   s'y ajouter. */
+.cos-title--inline {
+    display: block;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.2;
 }
 
 /* --- Les badges ------------------------------------------------------------ */

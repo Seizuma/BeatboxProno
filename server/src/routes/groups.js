@@ -173,7 +173,17 @@ groupRouter.post('/', guard(async (req, res) => {
         include: {
             members: {
                 include: {
-                    user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+                    user: {
+                        select: {
+                            id: true,
+                            username: true,
+                            globalName: true,
+                            avatarUrl: true,
+                            equippedFrame: true,
+                            equippedTitle: true,
+                            equippedFlair: true,
+                        }
+                    },
                 },
             },
             events: { include: { event: { select: { id: true, slug: true, name: true, year: true, status: true } } } },
@@ -206,7 +216,17 @@ groupRouter.patch('/:slug', loadGroup, requireGroupOwner, guard(async (req, res)
             members: {
                 orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
                 include: {
-                    user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+                    user: {
+                        select: {
+                            id: true,
+                            username: true,
+                            globalName: true,
+                            avatarUrl: true,
+                            equippedFrame: true,
+                            equippedTitle: true,
+                            equippedFlair: true,
+                        }
+                    },
                 },
             },
             events: {
@@ -268,7 +288,17 @@ groupRouter.put('/:slug/events', loadGroup, requireGroupOwner, guard(async (req,
             members: {
                 orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
                 include: {
-                    user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+                    user: {
+                        select: {
+                            id: true,
+                            username: true,
+                            globalName: true,
+                            avatarUrl: true,
+                            equippedFrame: true,
+                            equippedTitle: true,
+                            equippedFlair: true,
+                        }
+                    },
                 },
             },
             events: {
@@ -345,7 +375,17 @@ groupRouter.get('/:slug/predictions', loadGroup, guard(async (req, res) => {
             points: true,
             scoredAt: true,
             updatedAt: true,
-            user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+            user: {
+                select: {
+                    id: true,
+                    username: true,
+                    globalName: true,
+                    avatarUrl: true,
+                    equippedFrame: true,
+                    equippedTitle: true,
+                    equippedFlair: true,
+                }
+            },
             event: { select: { slug: true, name: true, year: true, status: true } },
             category: { select: { name: true, kind: true } },
         },
@@ -570,7 +610,17 @@ groupRouter.get('/:slug/predictions/:predictionId/comments', loadGroup, guard(as
         where: { groupId: req.group.id, predictionId: prediction.id },
         orderBy: { createdAt: 'asc' },
         include: {
-            author: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+            author: {
+                select: {
+                    id: true,
+                    username: true,
+                    globalName: true,
+                    avatarUrl: true,
+                    equippedFrame: true,
+                    equippedTitle: true,
+                    equippedFlair: true,
+                }
+            },
         },
     });
 
@@ -608,7 +658,17 @@ groupRouter.post('/:slug/predictions/:predictionId/comments', loadGroup, guard(a
             anchorY: anchorKey ? anchorY ?? 0.5 : null,
         },
         include: {
-            author: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+            author: {
+                select: {
+                    id: true,
+                    username: true,
+                    globalName: true,
+                    avatarUrl: true,
+                    equippedFrame: true,
+                    equippedTitle: true,
+                    equippedFlair: true,
+                }
+            },
         },
     });
 
