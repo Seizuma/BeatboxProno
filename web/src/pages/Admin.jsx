@@ -17,6 +17,7 @@ import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
 import AdminSearch from '../components/AdminSearch.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
+import CategoryFormat from '../components/CategoryFormat.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -481,6 +482,9 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
   // Le tirage réglé, s'il y en a un d'ouvert. Un seul à la fois : deux tableaux
   // ouverts côte à côte n'aideraient personne à s'y retrouver.
   const [seeding, setSeeding] = useState(null);
+  // Le format se replie par défaut : on ne retouche pas la forme d'un tableau
+  // tous les jours, et déplié en permanence il noierait le jury et le tirage.
+  const [format, setFormat] = useState(false);
 
   // Un tirage ne concerne qu'un tableau, et seulement une fois ses affiches
   // créées : sans elles, il n'y a rien à apparier.
@@ -499,6 +503,12 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           <span className="tag">{category.contenders.length} participants</span>
           <button className="btn btn--small" onClick={() => setOpen(!open)}>
             {open ? 'Réduire' : 'Participants'}
+          </button>
+          <button
+            className={`btn btn--small${format ? ' btn--primary' : ''}`}
+            onClick={() => setFormat(!format)}
+          >
+            Format
           </button>
           <MenuButton
             label={`Actions pour ${category.name}`}
@@ -587,6 +597,8 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           run={run}
         />
       )}
+
+      {format && <CategoryFormat category={category} onDone={onDone} run={run} />}
 
       {open && <ContenderManager category={category} onDone={onDone} run={run} askDelete={askDelete} />}
     </div>

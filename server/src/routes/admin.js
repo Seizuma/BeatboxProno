@@ -762,6 +762,287 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
   res.status(201).json({ categories: created });
 });
 
+/**
+ * Retoucher le format d'une catégorie DÉJÀ montée.
+ *
+ * `POST /events/:eventId/format` compose un événement vierge : il crée. Ce qu'il
+ * ne sait pas faire, c'est revenir sur une catégorie existante — et l'oubli le
+ * plus courant est la petite finale, qu'on ne découvre manquante qu'en voulant
+ * saisir son résultat. Jusqu'ici la seule issue était de tout remplacer, ce qui
+ * emporte les pronostics déjà déposés.
+ *
+ * Cette route RÉCONCILIE : elle compare la forme voulue à celle en place et ne
+ * touche qu'à la différence. Ajouter une petite finale à un Top 32 crée une
+ * affiche et n'en déplace aucune autre.
+ *
+ * Tout ce qui détruit est compté d'abord et renvoyé en 409 : l'organisateur voit
+ * ce qu'il s'apprête à perdre — des affiches jouées, des pronostics déposés —
+ * avant de confirmer avec `force`. C'est la même prudence que le mode
+ * « replace », appliquée au grain de l'affiche.
+ */
+adminRouter.put('/categories/:id/format', async (req, res) => {
+  const schema = z.object({
+    format: z.enum(['TOP_32', 'TOP_16', 'TOP_8', 'TOP_4', 'TOP_2']),
+    smallFinal: z.boolean().default(false),
+    wildcard: z.boolean().default(false),
+    wildcardCount: z.number().int().min(2).max(200).nullable().optional(),
+    elimination: z.boolean().default(false),
+    eliminationCount: z.number().int().min(2).max(200).nullable().optional(),
+    force: z.boolean().default(false),
+  });
+  const spec = schema.parse(req.body);
+
+  const category = await prisma.category.findUnique({
+    where: { id: req.params.id },
+    include: {
+      phases: {
+        orderBy: { position: 'asc' },
+        include: {
+          battles: true,
+          _count: { select: { predictedRanks: true, entries: true } },
+        },
+      },
+    },
+  });
+  if (!category) return res.status(404).json({ error: 'Catégorie introuvable.' });
+
+  // Une catégorie Legacy n'a pas de forme à déduire : ses affiches sont
+  // composées une par une, et c'est l'écran des affiches qui les gère.
+  if (category.kind === 'LEGACY') {
+    return res.status(400).json({
+      error: "Une catégorie Legacy se compose affiche par affiche, pas par format.",
+    });
+  }
+
+  const bracket = category.phases.find((p) => p.type === 'BRACKET');
+  if (!bracket) {
+    return res.status(400).json({
+      error: "Cette catégorie n'a pas de tableau. Passez par « Paramétrer le format ».",
+    });
+  }
+
+  const shape = BRACKET_FORMATS[spec.format];
+
+  // La forme voulue, dans l'ordre de RESOLVE_ORDER : la petite finale s'intercale
+  // avant la finale, et seulement si le format a des demies — sans demies, il n'y
+  // a pas de perdants à opposer.
+  const targetRounds = [
+    ...shape.rounds.filter(([r]) => r !== 'FINAL'),
+    ...(spec.smallFinal && shape.rounds.some(([r]) => r === 'SEMI') ? [['SMALL_FINAL', 1]] : []),
+    ['FINAL', 1],
+  ];
+  const targetKeys = new Set(
+    targetRounds.flatMap(([round, count]) =>
+      Array.from({ length: count }, (_, slot) => `${round}:${slot}`)
+    )
+  );
+
+  const current = new Map(bracket.battles.map((b) => [`${b.round}:${b.slot}`, b]));
+  const toCreate = [...targetKeys]
+    .filter((k) => !current.has(k))
+    .map((k) => {
+      const [round, slot] = k.split(':');
+      return { phaseId: bracket.id, round, slot: Number(slot) };
+    });
+  const toDelete = [...current.entries()].filter(([k]) => !targetKeys.has(k)).map(([, b]) => b);
+
+  // Les phases de qualification : présentes ou non, c'est un booléen de part et
+  // d'autre. Le nombre de qualifiés, lui, se met à jour sur place.
+  const wildcardPhase = category.phases.find((p) => p.type === 'WILDCARD');
+  const eliminationPhase = category.phases.find((p) => p.type === 'ELIMINATION');
+  const phasesToDelete = [
+    ...(!spec.wildcard && wildcardPhase ? [wildcardPhase] : []),
+    ...(!spec.elimination && eliminationPhase ? [eliminationPhase] : []),
+  ];
+
+  // Ce que la manœuvre coûterait. Les pronostics déposés sur une affiche qui
+  // disparaît sont comptés séparément des résultats officiels : perdre le
+  // travail d'un joueur et perdre une saisie d'organisateur ne se pèsent pas
+  // pareil.
+  const predictedOnDeleted = toDelete.length
+    ? await prisma.predictedBattle.count({
+      where: {
+        phaseId: bracket.id,
+        OR: toDelete.map((b) => ({ round: b.round, slot: b.slot })),
+      },
+    })
+    : 0;
+
+  const impact = {
+    battlesAdded: toCreate.length,
+    battlesRemoved: toDelete.length,
+    playedRemoved: toDelete.filter((b) => b.played).length,
+    predictedBattlesLost: predictedOnDeleted,
+    phasesRemoved: phasesToDelete.map((p) => ({
+      id: p.id,
+      name: p.name,
+      predictedRanks: p._count.predictedRanks,
+      results: p._count.entries,
+    })),
+  };
+
+  const destroys =
+    impact.playedRemoved > 0 ||
+    impact.predictedBattlesLost > 0 ||
+    phasesToDelete.some((p) => p._count.predictedRanks > 0 || p._count.entries > 0);
+
+  if (destroys && !spec.force) {
+    return res.status(409).json({
+      error:
+        `Ce changement supprimerait ${impact.battlesRemoved} affiche(s) — dont ` +
+        `${impact.playedRemoved} déjà jouée(s) — et ${impact.predictedBattlesLost} ` +
+        `choix de pronostiqueurs. Confirmez pour continuer.`,
+      impact,
+    });
+  }
+
+  // Le tirage est exprimé en RANGS pour une taille de tableau donnée : changer
+  // de taille le rend illisible. Mieux vaut le vider que le laisser désigner des
+  // rangs qui n'existent plus.
+  const MAIN = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
+  const currentFirst = MAIN.find((r) => bracket.battles.some((b) => b.round === r));
+  const currentSize = currentFirst
+    ? bracket.battles.filter((b) => b.round === currentFirst).length * 2
+    : 0;
+  const sizeChanged = currentSize !== shape.size;
+
+  await prisma.$transaction(async (tx) => {
+    if (toDelete.length) {
+      await tx.battle.deleteMany({ where: { id: { in: toDelete.map((b) => b.id) } } });
+      // Les pronostics d'affiche ne pointent pas la Battle mais son couple
+      // (tour, slot) : rien ne les emporte en cascade, il faut les balayer à la
+      // main sous peine de laisser des choix sur des affiches inexistantes.
+      await tx.predictedBattle.deleteMany({
+        where: {
+          phaseId: bracket.id,
+          OR: toDelete.map((b) => ({ round: b.round, slot: b.slot })),
+        },
+      });
+    }
+
+    if (toCreate.length) await tx.battle.createMany({ data: toCreate });
+
+    if (phasesToDelete.length) {
+      await tx.phase.deleteMany({ where: { id: { in: phasesToDelete.map((p) => p.id) } } });
+    }
+
+    // Les paliers de qualification, dans l'ordre : wildcards puis éliminations.
+    let position = 0;
+    if (spec.wildcard) {
+      const count = spec.wildcardCount ?? shape.size * 2;
+      if (wildcardPhase) {
+        await tx.phase.update({
+          where: { id: wildcardPhase.id },
+          data: { qualifierCount: count, position: position++ },
+        });
+      } else {
+        await tx.phase.create({
+          data: {
+            categoryId: category.id,
+            name: 'Wildcards',
+            type: 'WILDCARD',
+            position: position++,
+            qualifierCount: count,
+          },
+        });
+      }
+    }
+    if (spec.elimination) {
+      const count = spec.eliminationCount ?? shape.size;
+      if (eliminationPhase) {
+        await tx.phase.update({
+          where: { id: eliminationPhase.id },
+          data: { qualifierCount: count, position: position++ },
+        });
+      } else {
+        await tx.phase.create({
+          data: {
+            categoryId: category.id,
+            name: 'Éliminations',
+            type: 'ELIMINATION',
+            position: position++,
+            qualifierCount: count,
+          },
+        });
+      }
+    }
+
+    await tx.phase.update({
+      where: { id: bracket.id },
+      data: {
+        name: `Tableau — ${shape.label}`,
+        position: position++,
+        ...(sizeChanged ? { seedPairs: null } : {}),
+      },
+    });
+  });
+
+  // Une petite finale ajoutée après coup : les joueurs ont déposé un tableau qui
+  // n'en avait pas, et beaucoup ne repasseront jamais. Leur affiche se DÉDUIT
+  // pourtant de leurs propres demies — ce sont les perdants, personne n'invente
+  // rien à leur place. On la compose donc, sans désigner de vainqueur : ce
+  // choix-là leur appartient, et reste à faire tant que la phase est ouverte.
+  const addedSmallFinal = toCreate.some((b) => b.round === 'SMALL_FINAL');
+  const backfilled = addedSmallFinal ? await composeSmallFinals(bracket.id) : 0;
+
+  const rescored = await rescoreCategory(category.id);
+
+  res.json({ ok: true, impact, backfilled, rescored });
+});
+
+/**
+ * Compose la petite finale de chaque pronostic à partir de ses demi-finales.
+ *
+ * Le vainqueur et le score sont remis à zéro : une affiche qui vient de changer
+ * de composition ne peut pas garder un vainqueur désigné contre une autre.
+ */
+async function composeSmallFinals(phaseId) {
+  const semis = await prisma.predictedBattle.findMany({
+    where: { phaseId, round: 'SEMI' },
+    orderBy: { slot: 'asc' },
+  });
+
+  const losers = new Map();
+  for (const s of semis) {
+    if (!s.winnerId || !s.contenderAId || !s.contenderBId) continue;
+    const loser = s.winnerId === s.contenderAId ? s.contenderBId : s.contenderAId;
+    if (!losers.has(s.predictionId)) losers.set(s.predictionId, []);
+    losers.get(s.predictionId).push(loser);
+  }
+
+  let done = 0;
+  for (const [predictionId, pair] of losers) {
+    if (pair.length < 2) continue; // une seule demie tranchée : rien à opposer
+    await prisma.predictedBattle.upsert({
+      where: {
+        predictionId_phaseId_round_slot: {
+          predictionId,
+          phaseId,
+          round: 'SMALL_FINAL',
+          slot: 0,
+        },
+      },
+      update: {
+        contenderAId: pair[0],
+        contenderBId: pair[1],
+        winnerId: null,
+        scoreA: null,
+        scoreB: null,
+      },
+      create: {
+        predictionId,
+        phaseId,
+        round: 'SMALL_FINAL',
+        slot: 0,
+        contenderAId: pair[0],
+        contenderBId: pair[1],
+      },
+    });
+    done++;
+  }
+  return done;
+}
+
 adminRouter.patch('/categories/:id', async (req, res) => {
   const schema = z.object({
     name: z.string().min(1).optional(),

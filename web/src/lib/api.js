@@ -45,6 +45,11 @@ async function request(method, path, body) {
     const err = new Error(data.error ?? "La requête n'a pas abouti.");
     err.status = res.status;
     err.details = data.details;
+    // Le corps complet, pour les refus qui portent une information exploitable
+    // plutôt qu'une simple phrase : un 409 qui chiffre ce qu'une manœuvre
+    // détruirait n'est utile que si l'appelant peut lire ce compte. Sans lui,
+    // il fallait recopier chaque champ dans `details` au cas par cas.
+    err.body = data;
     throw err;
   }
   return data;
