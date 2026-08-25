@@ -45,15 +45,39 @@ export function scoreRankingPhase(type, predicted, official, qualifierCount = nu
   let total = 0;
 
   const officialById = new Map(official.map((e) => [e.contenderId, e]));
-  const countsQualification = type === 'WILDCARD' || type === 'ELIMINATION';
+
+  /**
+   * Le point de qualification ne récompense que ce qui pouvait être manqué.
+   *
+   * Trois conditions, et elles sont exactement celles de `maxScoreForCategory`
+   * et de `maxOnResolved` — c'est la seule façon d'obtenir une précision qui
+   * reste sous les 100 % :
+   *   — le barème réserve ces points aux types WILDCARD et ELIMINATION ;
+   *   — la coupe doit exister ;
+   *   — et surtout, elle doit être STRICTEMENT plus petite que le nombre de
+   *     classés. Une finale à quatre crews où les quatre passent n'élimine
+   *     personne : « prédire » leur qualification, c'est cocher une case sans
+   *     enjeu. Le maximum ne comptait déjà pas ces points ; le score, si, et un
+   *     pronostic parfait sortait à 36 sur 32 — 113 % de réussite.
+   *
+   * Le nombre de classés, et non celui des inscrits : un participant sans rang
+   * officiel n'a pas été départagé, il ne compte d'aucun côté du rapport.
+   */
+  const ranked = official.filter((e) => e.rank != null).length;
+  // La coupe vient du réglage de la phase, et de lui seul. Elle se déduisait
+  // auparavant du nombre de contenders marqués qualifiés quand le réglage était
+  // vide — mais les deux calculs de maximum, eux, lisent `qualifierCount ?? 0`.
+  // Une phase sans coupe renseignée distribuait donc des points que le maximum
+  // ne prévoyait pas : le même dépassement, par une autre porte.
+  const cut = Number.isInteger(qualifierCount) ? qualifierCount : 0;
+  const countsQualification =
+    (type === 'WILDCARD' || type === 'ELIMINATION') && cut > 0 && cut < ranked;
 
   // Les qualifiés prédits = les N premiers du classement pronostiqué.
-  const cutoff =
-    qualifierCount ?? official.filter((e) => e.qualified).length ?? 0;
   const predictedQualified = new Set(
     [...predicted]
       .sort((a, b) => a.rank - b.rank)
-      .slice(0, cutoff)
+      .slice(0, cut)
       .map((p) => p.contenderId)
   );
 

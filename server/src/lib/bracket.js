@@ -221,17 +221,73 @@ export function resolveBracket({
 
     const pairOf = (round, slot) => out.get(key(round, slot)) ?? null;
 
+    /**
+     * L'appariement d'un tour qui DÉCOULE d'un tour amont du même arbre.
+     *
+     * Renvoie `null` quand le tour ne découle de rien : premier tour, affiche
+     * Legacy composée à la main, ou format où le tour amont n'existe pas.
+     *
+     * ─── Pourquoi cette déduction PRIME sur ce qui est enregistré ────────────
+     *
+     * Une demi-finale n'est pas une donnée : c'est une conséquence. Tant qu'elle
+     * était traitée comme une donnée, la ligne enregistrée survivait à la
+     * correction du quart qui l'alimente — l'organisateur désignait LENNARD
+     * vainqueur de son quart et la demie gardait MAHIRO, indéfiniment, parce que
+     * `trustsOfficial` la déclarait officielle. Le tableau publié devenait
+     * incohérent avec lui-même : un joueur ayant tout deviné juste perdait les
+     * points de la demie ET de la petite finale, sans que rien ne le signale.
+     *
+     * Un nom déduit ne s'efface toutefois JAMAIS un nom enregistré : la
+     * déduction se fait côté par côté, et un amont encore sans vainqueur laisse
+     * la place à ce qui était là. C'est ce qui permet de saisir une demie avant
+     * son quart sans la voir se vider.
+     */
+    const derivedPair = (round, slot) => {
+        if (round === 'SMALL_FINAL' && hasSemi) {
+            // La petite finale : les perdants des demies.
+            return [0, 1].map((semiSlot) => {
+                const semi = pairOf('SEMI', semiSlot);
+                if (!semi?.winnerId) return null;
+                return semi.winnerId === semi.a ? semi.b : semi.a;
+            });
+        }
+
+        const index = MAIN_LINE.indexOf(round);
+        if (index < 1) return null; // premier tour, SMALL_FINAL sans demies, LEGACY
+        const prev = MAIN_LINE[index - 1];
+        // Un tour amont absent du format — une finale directe, par exemple — ne
+        // déduit rien : on s'en remet à ce qui est enregistré.
+        if (!prev || !rounds.includes(prev)) return null;
+
+        return [
+            pairOf(prev, slot * 2)?.winnerId ?? null,
+            pairOf(prev, slot * 2 + 1)?.winnerId ?? null,
+        ];
+    };
+
     for (const round of RESOLVE_ORDER) {
         for (const battle of battlesOf[round] ?? []) {
             let a = null;
             let b = null;
 
-            if ((battle.contenderAId || battle.contenderBId) && trustsOfficial(battle)) {
-                // 1. L'organisateur a publié l'affiche : elle fait foi.
-                a = battle.contenderAId ?? null;
-                b = battle.contenderBId ?? null;
+            // L'affiche enregistrée, quand elle fait foi. Elle sert de socle : la
+            // déduction ne la remplace que là où elle a quelque chose à dire.
+            const stored =
+                (battle.contenderAId || battle.contenderBId) && trustsOfficial(battle)
+                    ? [battle.contenderAId ?? null, battle.contenderBId ?? null]
+                    : null;
+
+            const derived = derivedPair(round, battle.slot);
+
+            if (derived) {
+                // 1. Tour déduit de l'amont : l'arbre commande, côté par côté.
+                a = derived[0] ?? stored?.[0] ?? null;
+                b = derived[1] ?? stored?.[1] ?? null;
+            } else if (stored) {
+                // 2. Rien à déduire, et l'affiche est officielle : elle fait foi.
+                [a, b] = stored;
             } else if (round === firstMainRound && seedFromRanking.length) {
-                // 2a. Premier tour : on apparie selon le tirage configuré, à défaut
+                // 3a. Premier tour : on apparie selon le tirage configuré, à défaut
                 // 1-8, 2-7, 3-6, 4-5. Les rangs sont donnés à partir de 1 — c'est ce
                 // qu'on lit sur un tableau — d'où le décalage à l'indexation.
                 const size = (battlesOf[round]?.length ?? 0) * 2;
@@ -239,27 +295,13 @@ export function resolveBracket({
                 const [seedA, seedB] = firstRoundPair(seedPairs, battle.slot, size);
                 a = seedA ? pool[seedA - 1] ?? null : null;
                 b = seedB ? pool[seedB - 1] ?? null : null;
-            } else if (round === 'SMALL_FINAL' && hasSemi) {
-                // 2b. Petite finale : les perdants des demies.
-                [a, b] = [0, 1].map((slot) => {
-                    const semi = pairOf('SEMI', slot);
-                    if (!semi?.winnerId) return null;
-                    return semi.winnerId === semi.a ? semi.b : semi.a;
-                });
             } else if (round === 'SMALL_FINAL' && seedFromRanking.length) {
-                // 2c. Format sans demies : les places 3 et 4 du classement.
+                // 3b. Format sans demies : les places 3 et 4 du classement.
                 a = seedFromRanking[2] ?? null;
                 b = seedFromRanking[3] ?? null;
             } else if (round === 'FINAL' && !hasSemi && seedFromRanking.length) {
                 a = seedFromRanking[0] ?? null;
                 b = seedFromRanking[1] ?? null;
-            } else {
-                // 2d. Tour suivant : les vainqueurs pronostiqués du tour précédent.
-                const prev = MAIN_LINE[MAIN_LINE.indexOf(round) - 1];
-                if (prev) {
-                    a = pairOf(prev, battle.slot * 2)?.winnerId ?? null;
-                    b = pairOf(prev, battle.slot * 2 + 1)?.winnerId ?? null;
-                }
             }
 
             // 3. Le choix enregistré ne survit que s'il porte sur cette affiche.
