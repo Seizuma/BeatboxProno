@@ -222,7 +222,7 @@ const DICT = {
     'announce.lang': 'Poster language',
     'announce.banner': 'PREDICTIONS OPEN',
     'announce.categories': 'CATEGORIES',
-    'announce.entrants': '{n} entrants',
+    'announce.entrants': '{n} participants',
     'announce.deadline': 'PREDICTIONS CLOSE',
     'announce.hint':
       'A story to publish when predictions open: the competition, its dates, the categories and how many are entered, and the deadline. Everything else is one tap away on the site.',
