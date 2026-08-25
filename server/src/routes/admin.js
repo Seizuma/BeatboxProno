@@ -334,14 +334,7 @@ adminRouter.patch('/events/:id', async (req, res) => {
    * L'annonce d'ouverture part sur la TRANSITION, pas sur l'état.
    *
    * Sans cette lecture préalable, chaque enregistrement d'un événement déjà
-   * ouvert — une correction de lieu, un ajustement de date butoir —
-   * renotifierait la totalité des comptes. Ce qui déclenche l'avis, c'est le
-   * passage VERS `OPEN` depuis autre chose.
-   *
-   * Une seconde garde vit dans `notifyEventOpen` : elle vérifie qu'aucun avis
-   * n'existe déjà pour cet événement. Les deux ne font pas double emploi — la
-   * première évite une requête inutile au cas courant, la seconde couvre les
-   * allers-retours de statut, qui arrivent dès qu'on corrige une manipulation.
+   * ouvert renotifierait la totalité des comptes.
    */
   const before = await prisma.event.findUnique({
     where: { id: req.params.id },
@@ -352,10 +345,6 @@ adminRouter.patch('/events/:id', async (req, res) => {
 
   let announced = null;
   if (data.status === 'OPEN' && before?.status !== 'OPEN') {
-    // Après la mise à jour, jamais avant : annoncer une ouverture qui aurait
-    // échoué serait pire que ne rien annoncer. La fonction avale ses propres
-    // erreurs — passer un événement en pronostics ouverts doit réussir même si
-    // la diffusion tombe.
     announced = await notifyEventOpen(event.id);
   }
 
@@ -1095,6 +1084,282 @@ adminRouter.post('/events/:eventId/rescore', async (req, res) => {
 });
 
 // --- Rôles --------------------------------------------------------------------
+
+// ===========================================================================
+//  RECHERCHE
+// ===========================================================================
+
+/**
+ * Retrouver un pronostic à partir de ce qu'on en sait.
+ *
+ * ─── À quoi ça sert ──────────────────────────────────────────────────────────
+ *
+ * Un joueur signale un incident, conteste un score, demande pourquoi tel
+ * pronostic vaut tant. Répondre demandait jusqu'ici d'ouvrir une console psql
+ * et d'écrire une jointure à cinq tables. Cet écran pose les mêmes questions
+ * avec des filtres qui se cumulent.
+ *
+ * ─── Les brouillons ne sortent pas par défaut ────────────────────────────────
+ *
+ * Chacun peut garder dix brouillons par catégorie. Ils ne sont publics nulle
+ * part, et leurs auteurs ne s'attendent pas à ce qu'on les lise — c'est une
+ * différence de nature avec un pronostic déposé, public par construction. Les
+ * inclure reste possible, mais demande un geste explicite : `drafts=1`. Le
+ * défaut protège, l'option permet.
+ *
+ * ─── Pourquoi une seule requête ──────────────────────────────────────────────
+ *
+ * Tous les filtres se ramènent à des conditions sur `Prediction`, y compris
+ * ceux qui portent sur son contenu : Prisma exprime « ce pronostic contient au
+ * moins une ligne qui… » par un `some`, et ces `some` se cumulent naturellement
+ * en ET. Aucun SQL à assembler à la main, donc aucune injection possible et
+ * aucun cas particulier à maintenir quand on ajoute un filtre.
+ */
+adminRouter.get('/search/predictions', async (req, res, next) => {
+  try {
+    const q = req.query;
+    const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    const int = (v) => {
+      const n = Number(v);
+      return Number.isInteger(n) ? n : null;
+    };
+
+    const eventSlug = str(q.event);
+    const categoryId = str(q.categoryId);
+    const phaseId = str(q.phaseId);
+    const subject = str(q.subject);      // fragment de nom : duo ou artiste
+    const opponent = str(q.opponent);    // l'autre camp d'une affiche
+    const player = str(q.player);
+    const round = str(q.round);
+    const rankMin = int(q.rankMin);
+    const rankMax = int(q.rankMax);
+    const wantsWinner = q.winner === '1';
+    const drafts = q.drafts === '1';
+
+    /**
+     * Un fragment de nom vers des contenders.
+     *
+     * On cherche des deux côtés : le nom porté par le duo lui-même, et celui
+     * des artistes qui lui sont rattachés. Un Tag Team peut n'avoir aucun nom
+     * propre — la colonne est nullable exprès — et se désigner uniquement par
+     * ses membres.
+     */
+    const contendersNamed = async (fragment) => {
+      if (!fragment) return null;
+      const found = await prisma.contender.findMany({
+        where: {
+          OR: [
+            { name: { contains: fragment, mode: 'insensitive' } },
+            { artists: { some: { artist: { name: { contains: fragment, mode: 'insensitive' } } } } },
+          ],
+          ...(categoryId ? { categoryId } : {}),
+        },
+        select: { id: true },
+      });
+      return found.map((c) => c.id);
+    };
+
+    const [subjectIds, opponentIds] = await Promise.all([
+      contendersNamed(subject),
+      contendersNamed(opponent),
+    ]);
+
+    // Un nom qui ne correspond à personne doit rendre zéro résultat, pas tous :
+    // sans ce garde, une faute de frappe renverrait la base entière.
+    if ((subject && subjectIds.length === 0) || (opponent && opponentIds.length === 0)) {
+      return res.json({ rows: [], total: 0, capped: false });
+    }
+
+    // --- Les conditions sur le CONTENU du pronostic
+    const conditions = [];
+
+    if (subjectIds && (rankMin != null || rankMax != null || (!wantsWinner && !opponent))) {
+      // Un nom sans autre précision se cherche d'abord dans les classements :
+      // c'est la question la plus fréquente — « où l'a-t-on placé ? ».
+      conditions.push({
+        ranks: {
+          some: {
+            contenderId: { in: subjectIds },
+            ...(phaseId ? { phaseId } : {}),
+            ...(rankMin != null || rankMax != null
+              ? {
+                rank: {
+                  ...(rankMin != null ? { gte: rankMin } : {}),
+                  ...(rankMax != null ? { lte: rankMax } : {}),
+                },
+              }
+              : {}),
+          },
+        },
+      });
+    }
+
+    if (wantsWinner && subjectIds) {
+      conditions.push({
+        battles: {
+          some: {
+            winnerId: { in: subjectIds },
+            ...(round ? { round } : {}),
+            ...(phaseId ? { phaseId } : {}),
+          },
+        },
+      });
+    }
+
+    if (opponentIds) {
+      /**
+       * L'affiche, cherchée sans tenir compte du côté.
+       *
+       * Qui a pronostiqué « A contre B » ? Le pronostiqueur a pu poser A en
+       * haut ou en bas : exiger un ordre précis raterait la moitié des
+       * réponses. On accepte donc les deux dispositions.
+       */
+      conditions.push({
+        battles: {
+          some: {
+            OR: [
+              { contenderAId: { in: subjectIds }, contenderBId: { in: opponentIds } },
+              { contenderAId: { in: opponentIds }, contenderBId: { in: subjectIds } },
+            ],
+            ...(round ? { round } : {}),
+            ...(phaseId ? { phaseId } : {}),
+          },
+        },
+      });
+    }
+
+    // Un tour demandé sans autre critère de bracket : on cherche les pronostics
+    // qui ont rempli ce tour, quel qu'en soit le contenu.
+    if (round && !wantsWinner && !opponent) {
+      conditions.push({ battles: { some: { round, ...(phaseId ? { phaseId } : {}) } } });
+    }
+
+    const where = {
+      // Voir l'en-tête : les brouillons demandent un geste explicite.
+      ...(drafts ? {} : { submitted: true }),
+      ...(eventSlug ? { event: { slug: eventSlug } } : {}),
+      ...(categoryId ? { categoryId } : {}),
+      ...(player
+        ? {
+          user: {
+            OR: [
+              { username: { contains: player, mode: 'insensitive' } },
+              { globalName: { contains: player, mode: 'insensitive' } },
+            ],
+          },
+        }
+        : {}),
+      ...(conditions.length ? { AND: conditions } : {}),
+    };
+
+    const TAKE = 200;
+
+    const [total, predictions] = await Promise.all([
+      prisma.prediction.count({ where }),
+      prisma.prediction.findMany({
+        where,
+        orderBy: [{ submitted: 'desc' }, { updatedAt: 'desc' }],
+        take: TAKE,
+        select: {
+          id: true,
+          label: true,
+          submitted: true,
+          points: true,
+          scoredAt: true,
+          updatedAt: true,
+          user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+          event: { select: { slug: true, name: true, year: true } },
+          category: { select: { name: true, kind: true } },
+          // Les lignes qui ont DÉCLENCHÉ la correspondance, pour que chaque
+          // résultat montre pourquoi il est là. Une liste de pseudos sans
+          // justification obligerait à ouvrir chaque fiche pour comprendre.
+          ranks: subjectIds
+            ? {
+              where: { contenderId: { in: subjectIds } },
+              select: { rank: true, contenderId: true, phase: { select: { name: true } } },
+              orderBy: { rank: 'asc' },
+            }
+            : false,
+          battles: subjectIds && (wantsWinner || opponent)
+            ? {
+              where: {
+                OR: [
+                  { contenderAId: { in: subjectIds } },
+                  { contenderBId: { in: subjectIds } },
+                ],
+                ...(round ? { round } : {}),
+              },
+              select: {
+                round: true,
+                contenderAId: true,
+                contenderBId: true,
+                winnerId: true,
+                scoreA: true,
+                scoreB: true,
+              },
+            }
+            : false,
+        },
+      }),
+    ]);
+
+    // Les noms des contenders cités, pour que l'écran affiche « D-low » plutôt
+    // qu'un identifiant. Une seule requête pour tous les résultats.
+    const cited = new Set();
+    for (const p of predictions) {
+      for (const b of p.battles ?? []) {
+        if (b.contenderAId) cited.add(b.contenderAId);
+        if (b.contenderBId) cited.add(b.contenderBId);
+      }
+      for (const r of p.ranks ?? []) cited.add(r.contenderId);
+    }
+
+    const names = cited.size
+      ? await prisma.contender.findMany({
+        where: { id: { in: [...cited] } },
+        select: {
+          id: true,
+          name: true,
+          artists: { select: { artist: { select: { name: true } } } },
+        },
+      })
+      : [];
+
+    const nameOf = new Map(
+      names.map((c) => [c.id, c.name ?? c.artists.map((a) => a.artist.name).join(' + ')])
+    );
+
+    res.json({
+      total,
+      capped: total > predictions.length,
+      rows: predictions.map((p) => ({
+        id: p.id,
+        label: p.label,
+        submitted: p.submitted,
+        points: p.points,
+        scored: Boolean(p.scoredAt),
+        updatedAt: p.updatedAt,
+        user: p.user,
+        event: p.event,
+        category: p.category,
+        ranks: (p.ranks || []).map((r) => ({
+          rank: r.rank,
+          phase: r.phase?.name ?? null,
+          name: nameOf.get(r.contenderId) ?? '—',
+        })),
+        battles: (p.battles || []).map((b) => ({
+          round: b.round,
+          a: nameOf.get(b.contenderAId) ?? '—',
+          b: nameOf.get(b.contenderBId) ?? '—',
+          winner: b.winnerId ? nameOf.get(b.winnerId) ?? '—' : null,
+          score: b.scoreA == null ? null : `${b.scoreA}\u2013${b.scoreB}`,
+        })),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 adminRouter.get('/users', async (req, res) => {
   const q = String(req.query.q ?? '').trim();

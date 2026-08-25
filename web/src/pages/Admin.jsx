@@ -15,12 +15,16 @@ import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
+import AdminSearch from '../components/AdminSearch.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
   ['artists', 'Artistes'],
   ['results', 'Résultats'],
+  // Un outil de support : retrouver qui a pronostiqué quoi quand quelqu'un
+  // signale un incident ou conteste un score.
+  ['search', 'Recherche'],
   ['people', 'Comptes'],
 ];
 
@@ -55,6 +59,7 @@ export default function Admin() {
       {tab === 'structure' && <StructureAdmin />}
       {tab === 'artists' && <ArtistsAdmin />}
       {tab === 'results' && <ResultsAdmin />}
+      {tab === 'search' && <AdminSearch />}
       {tab === 'people' && <AdminPeople currentUser={user} useFlash={useFlash} />}
     </div>
   );
@@ -234,10 +239,8 @@ function StructureAdmin() {
                           });
                           await reload();
 
-                          // Le nombre de comptes prévenus fait partie du
-                          // retour : une diffusion à tout le site ne doit pas
-                          // se produire en silence, et savoir qu'elle a été
-                          // sautée évite de croire à une panne.
+                          // Une diffusion à tout le site ne doit pas se
+                          // produire en silence.
                           if (announced?.sent) {
                             return `Statut mis à jour. Ouverture annoncée à ${announced.sent} compte(s).`;
                           }
@@ -260,10 +263,7 @@ function StructureAdmin() {
                       label={`Actions pour ${ev.name}`}
                       items={[
                         // L'affiche d'annonce n'a de sens qu'une fois les
-                        // pronostics ouverts : sur un brouillon elle
-                        // annoncerait une ouverture qui n'a pas eu lieu, sur un
-                        // événement terminé elle inviterait à pronostiquer une
-                        // compète déjà jouée.
+                        // pronostics ouverts.
                         ev.status === 'OPEN' && {
                           label: "Affiche d'annonce",
                           onClick: () => setAnnouncing(ev.slug),
@@ -1331,8 +1331,7 @@ function MaxScorePanel({ eventId }) {
 }
 
 const ROUND_LABELS = {
-  // Sans cette entrée, un tour de 32 s'affichait sans intitulé dans
-  // l'administration : la colonne existait, sa légende était vide.
+  // Sans cette entrée, un tour de 32 s'affichait sans intitulé.
   ROUND_OF_32: 'Seizièmes',
   ROUND_OF_16: 'Huitièmes',
   QUARTER: 'Quarts',
