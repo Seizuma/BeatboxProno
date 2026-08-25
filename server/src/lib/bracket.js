@@ -1,26 +1,13 @@
 /**
  * Un score est-il cohérent avec le camp désigné vainqueur ?
  *
- * Définie ICI plutôt qu'importée de `scores.js`, et c'est délibéré.
+ * Définie ICI plutôt qu'importée de `scores.js`, et c'est délibéré : ce fichier
+ * existe en deux exemplaires — serveur et client — parce que les deux
+ * construisent des images Docker séparées. `scores.js` n'a de sens que côté
+ * client, l'importer rendait les deux copies impossibles à garder identiques.
  *
- * Ce fichier existe en deux exemplaires — `server/src/lib/` et `web/src/lib/` —
- * parce que le serveur et le client construisent des images Docker séparées :
- * aucun des deux ne peut lire dans le dossier de l'autre. Un test de parité
- * rejoue des milliers de configurations contre les deux copies pour qu'elles ne
- * divergent jamais.
- *
- * Or `scores.js` n'a de sens que côté client : il alimente les listes
- * déroulantes de score de l'administration. L'importer ici rendait les deux
- * copies impossibles à garder identiques — le serveur aurait eu besoin d'un
- * fichier dont il n'a que faire, et sans lui l'import échouait au démarrage.
- *
- * Cinq lignes recopiées valent mieux qu'une dépendance qui ne peut pas exister
- * des deux côtés. Et le bénéfice va plus loin : les deux fichiers étant
- * désormais identiques au caractère près, la parité peut se vérifier par une
- * simple comparaison d'octets, bien plus sûre qu'un tirage aléatoire.
- *
- * La règle elle-même : « sans avis » reste valide — un score absent n'est pas
- * une contradiction, c'est une abstention.
+ * « Sans avis » reste valide : un score absent n'est pas une contradiction,
+ * c'est une abstention.
  */
 function scoreMatchesWinner(scoreA, scoreB, side) {
     if (scoreA == null || scoreB == null) return true;
@@ -33,9 +20,9 @@ function scoreMatchesWinner(scoreA, scoreB, side) {
  * La ligne principale du tableau : chaque tour alimente le suivant.
  *
  * Ajouter un tour ici ne suffit pas à faire exister un format. Il faut aussi
- * qu'il figure dans le type énuméré `RoundType` de la base, dans le catalogue
- * `BRACKET_FORMATS` de l'administration, et dans les listes d'affichage des
- * trois écrans qui dessinent un arbre. Les quatre doivent rester d'accord.
+ * qu'il figure dans `RoundType` en base, dans `BRACKET_FORMATS` et le schéma des
+ * affiches de `routes/admin.js`, dans celui du dépôt de `routes/predictions.js`,
+ * et dans les listes d'affichage des écrans qui dessinent un arbre.
  */
 export const MAIN_LINE = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL'];
 
@@ -64,8 +51,46 @@ const key = bracketKey;
  *
  * @param {number} size  le nombre de places du premier tour (8, 16…)
  */
+/**
+ * L'ordre des rangs dans un tableau classique.
+ *
+ * ─── La règle ────────────────────────────────────────────────────────────────
+ *
+ * À chaque doublement de taille, chaque rang déjà placé s'apparie à son
+ * complément : [1] devient [1, 2], qui devient [1, 4, 2, 3], puis
+ * [1, 8, 4, 5, 2, 7, 3, 6]. C'est ce qui garantit la propriété qu'on attend
+ * d'un tableau — le premier et le deuxième ne peuvent se rencontrer qu'en
+ * finale, le premier et le troisième pas avant les demies, et ainsi de suite.
+ *
+ * ─── Ce que faisait la version précédente ────────────────────────────────────
+ *
+ * Elle produisait (1,8) (2,7) (3,6) (4,5), c'est-à-dire les rangs pris deux à
+ * deux depuis les extrémités. Le premier affrontement était juste, mais la
+ * suite ne l'était pas : les têtes de série 1 et 2 se retrouvaient dans la même
+ * moitié et se seraient croisées en demi-finale. Ce n'est pas un tableau
+ * classique, c'est un appariement symétrique — ce qui n'est pas la même chose.
+ *
+ * Le motif « moitiés » ci-dessous, lui, est bien un appariement délibéré : il
+ * oppose la première moitié du classement à la seconde, ce que GBB a déjà fait.
+ */
+function classicOrder(size) {
+    let order = [1];
+    for (let n = 2; n <= size; n *= 2) {
+        const next = [];
+        for (const seed of order) {
+            next.push(seed);
+            next.push(n + 1 - seed);
+        }
+        order = next;
+    }
+    return order;
+}
+
 export const SEED_PATTERNS = {
-    standard: (size) => Array.from({ length: size / 2 }, (_, i) => [i + 1, size - i]),
+    standard: (size) => {
+        const order = classicOrder(size);
+        return Array.from({ length: size / 2 }, (_, i) => [order[2 * i], order[2 * i + 1]]);
+    },
     halves: (size) => Array.from({ length: size / 2 }, (_, i) => [i + 1, size / 2 + i + 1]),
     adjacent: (size) => Array.from({ length: size / 2 }, (_, i) => [2 * i + 1, 2 * i + 2]),
 };
@@ -80,7 +105,12 @@ export const SEED_PATTERNS = {
 export function firstRoundPair(seedPairs, slot, size) {
     const pair = Array.isArray(seedPairs) ? seedPairs[slot] : null;
     if (Array.isArray(pair)) return [pair[0] ?? null, pair[1] ?? null];
-    return [slot + 1, size - slot];
+
+    // Le repli suit le motif classique, comme le préréglage du même nom : sans
+    // cela, « aucun tirage configuré » et « tirage classique » donneraient deux
+    // tableaux différents, ce qui est indéfendable.
+    const fallback = SEED_PATTERNS.standard(size)[slot];
+    return fallback ? [fallback[0] ?? null, fallback[1] ?? null] : [null, null];
 }
 
 /**
@@ -88,16 +118,12 @@ export function firstRoundPair(seedPairs, slot, size) {
  *
  * Une Loopstation se joue souvent en tableau direct : pas d'éliminations, les
  * participants entrent sur leur seed d'inscription. Sans cette fonction, rien
- * n'alimentait le premier tour — `seedFromRanking` restait vide, aucune règle
- * de `resolveBracket` ne s'appliquait, et le tableau s'affichait désespérément
- * vide alors que les participants étaient bien là.
+ * n'alimentait le premier tour et le tableau s'affichait vide alors que les
+ * participants étaient bien là.
  *
- * Deux seeds au minimum : un seul ne compose aucune affiche, et prendre l'ordre
- * d'inscription à défaut produirait un tirage que personne n'a décidé.
- *
- * Les participants sans seed sont écartés plutôt que rangés en fin de liste :
- * un tableau à moitié seedé n'est pas un tableau, et mieux vaut le laisser vide
- * pour que l'organisateur s'en aperçoive.
+ * Deux seeds au minimum, et les participants sans seed sont écartés plutôt que
+ * rangés en fin de liste : un tableau à moitié seedé n'est pas un tableau, et
+ * mieux vaut le laisser vide pour que l'organisateur s'en aperçoive.
  */
 export function seedFromContenders(contenders = []) {
     const seeded = contenders.filter((c) => Number.isFinite(c?.seed));

@@ -4,10 +4,12 @@ import { api } from '../lib/api.js';
 /**
  * Le tirage du premier tour d'un tableau.
  *
- * 1-8, 2-7, 3-6, 4-5 est le tableau classique, mais rien n'oblige une compète à
- * le suivre : GBB a déjà opposé les moitiés, et une catégorie Crew peut faire
- * autrement. Cet écran laisse choisir un modèle courant ou composer affiche par
- * affiche.
+ * Le tableau classique apparie chaque rang à son complément par doublements
+ * successifs — 1-8, 4-5, 2-7, 3-6 sur huit qualifiés — de sorte que les deux
+ * têtes de série ne puissent se croiser qu'en finale. Mais rien n'oblige une
+ * compète à le suivre : GBB a déjà opposé les moitiés, et une catégorie Crew
+ * peut faire autrement. Cet écran laisse choisir un modèle courant ou composer
+ * affiche par affiche.
  *
  * Les rangs sont ceux de la qualification, pas des identifiants : « 3 » veut
  * dire « le troisième du classement d'éliminations », qui que ce soit. Le
@@ -73,9 +75,18 @@ export default function SeedingEditor({ phase, onDone, run }) {
                     </p>
                 </div>
                 <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {/* Les intitulés se déduisent de la TAILLE du tableau.
+                        Écrits en dur, ils annonçaient « Classique 1-8 » sur un
+                        tableau à 32, où le premier affrontement est 1 contre
+                        32 — l'organisateur choisissait donc un motif sur la foi
+                        d'un exemple faux.
+
+                        Chaque libellé montre la PREMIÈRE affiche du motif, qui
+                        suffit à le reconnaître : 1-32 pour le classique, 1-17
+                        pour les moitiés, 1-2 pour les voisins. */}
                     {[
-                        ['standard', 'Classique 1-8'],
-                        ['halves', 'Moitiés 1-5'],
+                        ['standard', `Classique 1-${size}`],
+                        ['halves', `Moitiés 1-${size / 2 + 1}`],
                         ['adjacent', 'Voisins 1-2'],
                     ].map(([name, label]) => (
                         <button
