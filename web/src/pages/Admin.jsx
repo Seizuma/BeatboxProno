@@ -15,6 +15,7 @@ import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
+import ExportEvent from '../components/ExportEvent.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -124,6 +125,10 @@ function Progress({ done, total }) {
 function StructureAdmin() {
   const [events, setEvents] = useState([]);
   const [selected, setSelected] = useState('');
+  // L'événement dont on prépare l'affiche d'annonce. Un état distinct de la
+  // sélection de composition : on peut vouloir l'affiche sans ouvrir la
+  // structure.
+  const [announcing, setAnnouncing] = useState(null);
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState({ name: '', year: new Date().getFullYear(), location: '' });
   const [flash, run] = useFlash();
@@ -224,8 +229,21 @@ function StructureAdmin() {
                           return;
                         }
                         run(async () => {
-                          await api.patch(`/admin/events/${ev.id}`, { status: next });
+                          const { announced } = await api.patch(`/admin/events/${ev.id}`, {
+                            status: next,
+                          });
                           await reload();
+
+                          // Le nombre de comptes prévenus fait partie du
+                          // retour : une diffusion à tout le site ne doit pas
+                          // se produire en silence, et savoir qu'elle a été
+                          // sautée évite de croire à une panne.
+                          if (announced?.sent) {
+                            return `Statut mis à jour. Ouverture annoncée à ${announced.sent} compte(s).`;
+                          }
+                          if (announced?.skipped) {
+                            return 'Statut mis à jour. Ouverture déjà annoncée : rien renvoyé.';
+                          }
                           return 'Statut mis à jour.';
                         });
                       }}
@@ -241,6 +259,15 @@ function StructureAdmin() {
                     <MenuButton
                       label={`Actions pour ${ev.name}`}
                       items={[
+                        // L'affiche d'annonce n'a de sens qu'une fois les
+                        // pronostics ouverts : sur un brouillon elle
+                        // annoncerait une ouverture qui n'a pas eu lieu, sur un
+                        // événement terminé elle inviterait à pronostiquer une
+                        // compète déjà jouée.
+                        ev.status === 'OPEN' && {
+                          label: "Affiche d'annonce",
+                          onClick: () => setAnnouncing(ev.slug),
+                        },
                         {
                           label: "Supprimer l'événement",
                           danger: true,
@@ -260,6 +287,10 @@ function StructureAdmin() {
           </table>
         </div>
       </section>
+
+      {announcing && (
+        <ExportEvent slug={announcing} onClose={() => setAnnouncing(null)} />
+      )}
 
       {selected && !detail && <p className="faint">Chargement de la structure…</p>}
       {selected && detail && (

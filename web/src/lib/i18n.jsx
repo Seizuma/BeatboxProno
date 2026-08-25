@@ -215,7 +215,12 @@ const DICT = {
     'notif.GROUP_JOIN': '{name} joined {group}',
     'notif.COMMENT_ON_MINE': '{name} commented on your prediction in {group}',
     'notif.COMMENT_REPLY': '{name} wrote in a thread you took part in, in {group}',
+    'notif.EVENT_OPEN': 'Predictions are open for {event}',
     'notif.someone': 'A former member',
+
+    'announce.title': 'Opening poster',
+    'announce.hint':
+      'A story to publish when predictions open: the competition, its dates, the categories and how many are entered, and the deadline. Everything else is one tap away on the site.',
 
     'news.title': 'What’s new',
     'news.close': 'Got it',
@@ -230,7 +235,7 @@ const DICT = {
     'news.r0.comments':
       'Pin comments anywhere on someone’s prediction: on a ranking row, on a bracket matchup, or on a whole phase.',
     'news.r0.bell':
-      'A bell in the header tells you when somebody joins your group or comments on your prediction.',
+      'A bell in the header tells you when somebody joins your group, comments on your prediction, or when a competition opens.',
     'news.r0.export':
       'Export a prediction as an image — square post, story or wide — with the full bracket and the scores.',
     'news.r0.precision':
@@ -734,7 +739,12 @@ const DICT = {
     'notif.GROUP_JOIN': '{name} a rejoint {group}',
     'notif.COMMENT_ON_MINE': '{name} a commenté votre pronostic dans {group}',
     'notif.COMMENT_REPLY': '{name} a écrit dans un fil où vous êtes intervenu, dans {group}',
+    'notif.EVENT_OPEN': 'Les pronostics sont ouverts pour {event}',
     'notif.someone': 'Un ancien membre',
+
+    'announce.title': 'Affiche d’annonce',
+    'announce.hint':
+      'Une story à publier à l’ouverture des pronostics : la compétition, ses dates, les catégories et leur plateau, et la date butoir. Tout le reste est à un clic sur le site.',
 
     'news.title': 'Nouveautés',
     'news.close': 'Compris',
@@ -749,7 +759,7 @@ const DICT = {
     'news.r0.comments':
       'Épinglez des commentaires où vous voulez sur le pronostic de quelqu’un : sur une ligne de classement, sur une affiche, ou sur une phase entière.',
     'news.r0.bell':
-      'Une cloche dans l’en-tête vous prévient quand quelqu’un rejoint votre groupe ou commente votre pronostic.',
+      'Une cloche dans l’en-tête vous prévient quand quelqu’un rejoint votre groupe, commente votre pronostic, ou quand une compétition ouvre.',
     'news.r0.export':
       'Exportez un pronostic en image — post carré, story ou format large — avec le tableau complet et les scores.',
     'news.r0.precision':
