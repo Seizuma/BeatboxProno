@@ -83,6 +83,82 @@ export async function postToDiscord(kind, { title, description, fields, imageUrl
 }
 
 /**
+ * Poste PLUSIEURS encarts d'un coup, en respectant les limites de Discord.
+ *
+ * Un consensus de catégorie tient mal en un seul encart : le classement des
+ * éliminations, chaque tour du tableau et le vainqueur sont des tableaux
+ * distincts, qu'un lecteur veut pouvoir parcourir séparément. Discord accepte
+ * dix encarts par message et six mille caractères en tout, toutes parties
+ * confondues — au-delà il refuse le message ENTIER, pas seulement le surplus.
+ * D'où le découpage ici plutôt qu'une confiance dans la brièveté de l'appelant.
+ *
+ * Le 429 est traité et non signalé : un webhook qui reçoit quarante messages
+ * d'affilée en prend un, et abandonner à ce moment-là perdrait la moitié du
+ * rapport. Discord dit combien de temps attendre, on l'écoute.
+ */
+export async function postEmbeds(kind, embeds, { color } = {}) {
+    const url = WEBHOOKS[kind]?.();
+    if (!url) return { ok: false, error: `Aucun webhook configuré pour ${kind}.` };
+
+    const groups = [];
+    let group = [];
+    let size = 0;
+    for (const embed of embeds) {
+        const weight = JSON.stringify(embed).length;
+        // 5500 et non 6000 : la marge couvre le nom d'utilisateur et l'enrobage
+        // du message, que la limite compte aussi.
+        if (group.length >= 10 || (group.length && size + weight > 5500)) {
+            groups.push(group);
+            group = [];
+            size = 0;
+        }
+        group.push(embed);
+        size += weight;
+    }
+    if (group.length) groups.push(group);
+
+    for (const [index, chunk] of groups.entries()) {
+        const payload = {
+            username: 'BeatboxPredictions',
+            allowed_mentions: { parse: [] },
+            embeds: chunk.map((e) => ({ color: color ?? COLORS[kind], ...e })),
+        };
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            let res;
+            try {
+                res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(10_000),
+                });
+            } catch (err) {
+                return { ok: false, error: err?.message ?? 'Envoi impossible.', sent: index };
+            }
+
+            if (res.status === 429) {
+                const body = await res.json().catch(() => ({}));
+                const wait = Math.min(30, Number(body.retry_after ?? 1)) * 1000;
+                await new Promise((r) => setTimeout(r, wait + 250));
+                continue;
+            }
+            if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                return { ok: false, error: `Discord ${res.status} ${text.slice(0, 200)}`, sent: index };
+            }
+            break;
+        }
+
+        // Un webhook encaisse cinq messages par cinq secondes. Une pause franche
+        // entre les envois vaut mieux qu'une rafale suivie d'attentes forcées.
+        if (index < groups.length - 1) await new Promise((r) => setTimeout(r, 1200));
+    }
+
+    return { ok: true, messages: groups.length };
+}
+
+/**
  * Relaie un message dans le salon de sa catégorie.
  *
  * Ne lève jamais : un salon injoignable ne doit pas faire échouer la requête du

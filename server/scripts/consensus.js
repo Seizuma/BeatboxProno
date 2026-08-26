@@ -1,38 +1,41 @@
 import { PrismaClient } from '@prisma/client';
-import { postToDiscord } from '../src/lib/discord.js';
+import { postEmbeds } from '../src/lib/discord.js';
 
 /**
- * Le « top N moyen » d'une catégorie, posté dans le salon des rapports.
+ * Le consensus des pronostiqueurs, palier par palier, posté dans le salon.
  *
- * ─── Ce que la moyenne veut dire ─────────────────────────────────────────────
+ * ─── Ce qu'on appelle « le top 8 moyen » ─────────────────────────────────────
  *
- * Deux structures, deux lectures, et le script choisit celle qui a du sens pour
- * la catégorie qu'on lui donne :
+ * Il n'y a pas UNE moyenne mais une par palier, et chacune répond à une question
+ * différente :
  *
- *   — TABLEAU. Un Solo GBB en Top 32 n'a aucun classement pronostiqué : il n'y
- *     a rien à moyenner au sens propre. Le consensus se lit alors dans les
- *     affiches — un tour gagné est un tour de plus, et la moyenne des tours
- *     gagnés classe du plus attendu au moins attendu.
+ *   — un CLASSEMENT pronostiqué (wildcards, éliminations) se moyenne rang par
+ *     rang. Le top N est celui de la coupe de la phase : vingt qualifiés, top 20.
  *
- *   — CLASSEMENT. Dès qu'une phase de wildcards ou d'éliminations existe, le
- *     rang moyen est la lecture littérale, et la meilleure.
+ *   — un TABLEAU ne se moyenne pas, il se compte. « Le top 8 moyen du bracket »,
+ *     ce sont les huit que les pronostiqueurs envoient le plus souvent EN
+ *     QUARTS — donc les huit qui apparaissent le plus dans une affiche de ce
+ *     tour. Même chose pour le top 4 en demies, les deux de la petite finale,
+ *     les deux de la finale.
  *
- * Dans les deux cas l'écart compte autant que la moyenne : deux favoris à trois
- * centièmes l'un de l'autre ne sont pas le même favori si l'un est sacré par un
- * tiers des pronostiqueurs et l'autre par trois pour cent. D'où les colonnes de
- * répartition à côté du chiffre.
+ *   — le VAINQUEUR est encore autre chose : ce n'est pas qui atteint la finale,
+ *     c'est qui la gagne. Deux classements distincts, et ils diffèrent souvent —
+ *     un favori unanime jusqu'en finale peut n'être sacré par personne.
  *
- * ─── Pourquoi l'agrégation est en SQL ────────────────────────────────────────
+ * ─── Un palier n'est publié que s'il apprend quelque chose ───────────────────
  *
- * Même raison que le rapport de fréquentation : ramener quarante mille lignes
- * de pronostics pour les compter en JavaScript coûterait de plus en plus cher à
- * chaque compétition, pour un résultat identique.
+ * Sur un tableau au tirage figé, chaque participant du premier tour y figure
+ * dans cent pour cent des pronostics : le classement serait une liste
+ * d'ex æquo. Ce tour-là est écarté — mais seulement dans ce cas précis, parce
+ * qu'il redevient très informatif dès que le tirage découle du classement que
+ * chacun a pronostiqué.
  *
- *   node scripts/consensus.js --dry-run
- *   node scripts/consensus.js                          # dernier événement, Solo
- *   node scripts/consensus.js --category=loopstation
- *   node scripts/consensus.js --event=grand-beatbox-battle-2026 --top=16
- *   node scripts/consensus.js --drafts                 # inclure les brouillons
+ *   node scripts/consensus.js --dry-run            # tout, sans rien poster
+ *   node scripts/consensus.js                      # tous les événements publiés
+ *   node scripts/consensus.js --event=gbb-2026
+ *   node scripts/consensus.js --category=solo
+ *   node scripts/consensus.js --latest             # le dernier événement seul
+ *   node scripts/consensus.js --drafts             # brouillons compris
  */
 
 const prisma = new PrismaClient();
@@ -41,60 +44,45 @@ const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
 const value = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
 
-const TOP = Number(value('top') ?? 8);
-const CATEGORY = value('category') ?? 'solo';
-// Un brouillon n'est pas un pronostic : par défaut on ne compte que ce qui a
-// été déposé. `--drafts` sert à jauger l'engouement avant la fermeture.
+const DRY = flag('dry-run');
+// Un brouillon n'est pas un pronostic : par défaut on ne compte que le déposé.
 const SUBMITTED_ONLY = !flag('drafts');
+const ONLY_EVENT = value('event') ?? null;
+const ONLY_CATEGORY = value('category')?.toLowerCase() ?? null;
+// Un classement de plus d'une trentaine de lignes ne se lit plus dans un salon.
+const RANK_CAP = Number(value('cap') ?? 32);
+// Sous ce seuil, une « moyenne » n'est que l'avis de deux personnes présenté
+// comme une tendance.
+const MIN_PRONOS = Number(value('min') ?? 5);
 
 /* ---------------------------------------------------------------------------
-   Choisir de quoi on parle
+   Le vocabulaire des tours
    --------------------------------------------------------------------------- */
 
-async function resolveCategory() {
-    const slug = value('event');
-
-    const event = slug
-        ? await prisma.event.findUnique({ where: { slug } })
-        // Sans précision : la compète la plus récente qui ne soit pas un
-        // brouillon. C'est celle dont on veut voir le consensus.
-        : await prisma.event.findFirst({
-            where: { status: { not: 'DRAFT' } },
-            orderBy: [{ year: 'desc' }, { startsAt: 'desc' }],
-        });
-
-    if (!event) throw new Error(slug ? `Aucun événement « ${slug} ».` : 'Aucun événement publié.');
-
-    const wanted = CATEGORY.toLowerCase();
-    const categories = await prisma.category.findMany({
-        where: { eventId: event.id },
-        include: { phases: { orderBy: { position: 'asc' } } },
-        orderBy: { position: 'asc' },
-    });
-
-    const category =
-        categories.find((c) => c.slug.toLowerCase() === wanted) ??
-        categories.find((c) => c.kind.toLowerCase() === wanted) ??
-        categories.find((c) => c.name.toLowerCase() === wanted);
-
-    if (!category) {
-        throw new Error(
-            `Aucune catégorie « ${CATEGORY} » sur ${event.name} ${event.year}. ` +
-            `Disponibles : ${categories.map((c) => c.slug).join(', ') || 'aucune'}.`
-        );
-    }
-
-    return { event, category };
-}
+const ROUNDS = [
+    ['ROUND_OF_32', 'Seizièmes'],
+    ['ROUND_OF_16', 'Huitièmes'],
+    ['QUARTER', 'Quarts'],
+    ['SEMI', 'Demi-finales'],
+    ['SMALL_FINAL', 'Petite finale'],
+    ['FINAL', 'Finale'],
+    ['LEGACY', 'Affiches'],
+];
+const ROUND_ORDER = new Map(ROUNDS.map(([r], i) => [r, i]));
+const ROUND_LABEL = new Map(ROUNDS);
 
 /* ---------------------------------------------------------------------------
-   Les deux agrégations
+   Les requêtes.
+
+   L'agrégation reste en base, comme pour le rapport de fréquentation : ramener
+   toutes les lignes de pronostics pour les compter en JavaScript coûterait de
+   plus en plus cher à chaque compétition, pour un résultat identique.
    --------------------------------------------------------------------------- */
 
 /**
  * Le nom affiché d'un contender : le sien, sinon celui du ou des artistes
- * rattachés. C'est la règle de `naming.js`, réécrite en SQL parce que la
- * jointure se fait ici.
+ * rattachés — la règle de `naming.js`, réécrite ici parce que la jointure se
+ * fait en SQL.
  */
 const NAMES = `
     SELECT ct.id,
@@ -106,51 +94,21 @@ const NAMES = `
     GROUP BY ct.id, ct.name
 `;
 
-/** Le consensus lu dans les affiches : moyenne des tours gagnés. */
-async function fromBracket(categoryId) {
-    return prisma.$queryRawUnsafe(
-        `
-        WITH pronos AS (
-            SELECT p.id FROM "Prediction" p
-            WHERE p."categoryId" = $1 ${SUBMITTED_ONLY ? 'AND p.submitted = true' : ''}
-        ),
-        total AS (SELECT GREATEST(COUNT(*), 1)::numeric AS n FROM pronos),
-        noms AS (${NAMES}),
-        victoires AS (
-            SELECT pb."winnerId" AS cid,
-                   COUNT(*)::int                                        AS gagnees,
-                   COUNT(*) FILTER (WHERE pb.round = 'FINAL')::int      AS titres,
-                   COUNT(*) FILTER (WHERE pb.round = 'SEMI')::int       AS finales,
-                   COUNT(*) FILTER (WHERE pb.round = 'QUARTER')::int    AS demies
-            FROM "PredictedBattle" pb
-            JOIN pronos ON pronos.id = pb."predictionId"
-            WHERE pb."winnerId" IS NOT NULL
-            GROUP BY pb."winnerId"
-        )
-        SELECT n.nom,
-               (COALESCE(v.gagnees, 0) / t.n)::float8         AS valeur,
-               (100 * COALESCE(v.titres, 0)  / t.n)::float8   AS pct_titre,
-               (100 * COALESCE(v.finales, 0) / t.n)::float8   AS pct_finale,
-               (100 * COALESCE(v.demies, 0)  / t.n)::float8   AS pct_demies
-        FROM noms n
-        CROSS JOIN total t
-        LEFT JOIN victoires v ON v.cid = n.id
-        ORDER BY valeur DESC, pct_titre DESC, n.nom
-        `,
-        categoryId
-    );
-}
+const PRONOS = `
+    SELECT p.id FROM "Prediction" p
+    WHERE p."categoryId" = $1 ${SUBMITTED_ONLY ? 'AND p.submitted = true' : ''}
+`;
 
-/** Le consensus lu dans un classement pronostiqué : rang moyen. */
-async function fromRanks(categoryId, phaseId) {
+/** Le rang moyen de chaque participant sur une phase de classement. */
+function rankingRows(categoryId, phaseId) {
     return prisma.$queryRawUnsafe(
         `
         WITH noms AS (${NAMES})
         SELECT n.nom,
-               AVG(pr.rank)::float8                                       AS valeur,
-               COALESCE(STDDEV_SAMP(pr.rank), 0)::float8                  AS ecart,
+               AVG(pr.rank)::float8                                         AS valeur,
+               COALESCE(STDDEV_SAMP(pr.rank), 0)::float8                    AS ecart,
                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY pr.rank)::float8 AS mediane,
-               COUNT(*)::int                                              AS pronos
+               COUNT(*)::int                                                AS pronos
         FROM "PredictedRank" pr
         JOIN "Prediction" p ON p.id = pr."predictionId"
             ${SUBMITTED_ONLY ? 'AND p.submitted = true' : ''}
@@ -164,197 +122,278 @@ async function fromRanks(categoryId, phaseId) {
     );
 }
 
+/**
+ * Combien de fois chacun est envoyé dans chaque tour.
+ *
+ * Le `LATERAL VALUES` déplie les deux colonnes de l'affiche en deux lignes :
+ * être le camp A ou le camp B, c'est être là. Sans ce dépliage il faudrait deux
+ * requêtes et une union pour dire la même chose.
+ */
+function reachRows(categoryId, phaseId) {
+    return prisma.$queryRawUnsafe(
+        `
+        WITH pronos AS (${PRONOS}),
+        total AS (SELECT GREATEST(COUNT(*), 1)::numeric AS n FROM pronos),
+        noms AS (${NAMES}),
+        presence AS (
+            SELECT pb.round AS round, v.cid AS cid, COUNT(*)::int AS n
+            FROM "PredictedBattle" pb
+            JOIN pronos ON pronos.id = pb."predictionId"
+            CROSS JOIN LATERAL (VALUES (pb."contenderAId"), (pb."contenderBId")) AS v(cid)
+            WHERE pb."phaseId" = $2 AND v.cid IS NOT NULL
+            GROUP BY 1, 2
+        )
+        SELECT pr.round, n.nom, pr.n, (100 * pr.n / t.n)::float8 AS pct
+        FROM presence pr
+        JOIN noms n ON n.id = pr.cid
+        CROSS JOIN total t
+        ORDER BY pr.round, pr.n DESC, n.nom
+        `,
+        categoryId,
+        phaseId
+    );
+}
+
+/** Combien de fois chacun GAGNE la finale et la petite finale. */
+function winnerRows(categoryId, phaseId) {
+    return prisma.$queryRawUnsafe(
+        `
+        WITH pronos AS (${PRONOS}),
+        total AS (SELECT GREATEST(COUNT(*), 1)::numeric AS n FROM pronos),
+        noms AS (${NAMES})
+        SELECT pb.round,
+               n.nom,
+               COUNT(*)::int                              AS n,
+               (100 * COUNT(*) / MIN(t.n))::float8        AS pct
+        FROM "PredictedBattle" pb
+        JOIN pronos ON pronos.id = pb."predictionId"
+        JOIN noms n ON n.id = pb."winnerId"
+        CROSS JOIN total t
+        WHERE pb."phaseId" = $2
+          AND pb.round IN ('FINAL', 'SMALL_FINAL')
+          AND pb."winnerId" IS NOT NULL
+        GROUP BY pb.round, n.nom
+        ORDER BY pb.round, n DESC, n.nom
+        `,
+        categoryId,
+        phaseId
+    );
+}
+
 /* ---------------------------------------------------------------------------
    La mise en forme
    --------------------------------------------------------------------------- */
 
 const BAR = 10;
-
-/** Une jauge en blocs pleins, largeur fixe : les lignes restent alignées. */
-function bar(part) {
+const bar = (part) => {
     const filled = Math.max(0, Math.min(BAR, Math.round(part * BAR)));
     return '█'.repeat(filled) + '·'.repeat(BAR - filled);
-}
+};
 
-const pct = (n) => `${Math.round(n)}%`.padStart(4);
+/** Largeur de la colonne des noms : jamais plus étroite que son intitulé. */
+const nameWidth = (rows) => Math.min(20, Math.max(11, ...rows.map((r) => r.nom.length)));
 
-export function renderBracket(rows, top) {
-    const best = Math.max(...rows.map((r) => r.valeur), 1);
-    // Jamais plus étroit que l'intitulé de colonne, sinon l'en-tête déborde et
-    // toutes les colonnes suivantes glissent d'un cran.
-    const width = Math.min(18, Math.max(11, ...rows.slice(0, top).map((r) => r.nom.length)));
+const cut = (nom, width) => (nom.length > width ? `${nom.slice(0, width - 1)}…` : nom.padEnd(width));
 
-    const head = `    ${'PARTICIPANT'.padEnd(width)}  TOURS  RÉPARTITION   TITRE FIN. 1/2`;
-    const lines = rows.slice(0, top).map((r, i) => {
-        const nom = r.nom.length > width ? `${r.nom.slice(0, width - 1)}…` : r.nom.padEnd(width);
-        return (
-            `${String(i + 1).padStart(2)}. ${nom}  ` +
-            `${r.valeur.toFixed(2).padStart(5)}  ${bar(r.valeur / best)}  ` +
-            `${pct(r.pct_titre)} ${pct(r.pct_finale)} ${pct(r.pct_demies)}`
-        );
-    });
-
-    return ['```', head, '─'.repeat(head.length), ...lines, '```'].join('\n');
-}
-
-export function renderRanks(rows, top) {
-    // Jamais plus étroit que l'intitulé de colonne, sinon l'en-tête déborde et
-    // toutes les colonnes suivantes glissent d'un cran.
-    const width = Math.min(18, Math.max(11, ...rows.slice(0, top).map((r) => r.nom.length)));
-
+export function renderRanking(rows) {
+    const width = nameWidth(rows);
     const head = `    ${'PARTICIPANT'.padEnd(width)}   RANG  MÉDIANE  ÉCART`;
-    const lines = rows.slice(0, top).map((r, i) => {
-        const nom = r.nom.length > width ? `${r.nom.slice(0, width - 1)}…` : r.nom.padEnd(width);
-        return (
-            `${String(i + 1).padStart(2)}. ${nom}  ` +
+    const lines = rows.map(
+        (r, i) =>
+            `${String(i + 1).padStart(2)}. ${cut(r.nom, width)}  ` +
             `${r.valeur.toFixed(2).padStart(5)}  ${r.mediane.toFixed(1).padStart(7)}  ` +
             `${r.ecart.toFixed(2).padStart(5)}`
-        );
-    });
-
+    );
     return ['```', head, '─'.repeat(head.length), ...lines, '```'].join('\n');
 }
 
-/**
- * Le commentaire.
- *
- * Ce que le tableau ne dit pas : si le premier fait l'unanimité ou s'il ne doit
- * sa place qu'à l'absence de concurrent, et si le consensus s'effondre après
- * quelques noms. Sur un tableau, l'écart entre le favori et le suivant se lit
- * en tours ; sur un classement, c'est l'écart-type qui parle.
- */
-export function prose(rows, top, method) {
-    const head = rows.slice(0, top);
-    if (head.length < 2) return 'Trop peu de données pour dégager un consensus.';
-    const lines = [];
-
-    if (method === 'bracket') {
-        const [first, second] = head;
-        lines.push(
-            `**${first.nom}** mène avec ${first.valeur.toFixed(2)} tour(s) gagné(s) en moyenne, ` +
-            `devant ${second.nom} (${second.valeur.toFixed(2)}).`
-        );
-
-        // Le favori du classement n'est pas toujours le champion annoncé : c'est
-        // exactement ce qu'une moyenne aplatit, et ça mérite d'être dit.
-        const champion = [...rows].sort((a, b) => b.pct_titre - a.pct_titre)[0];
-        if (champion && champion.nom !== first.nom) {
-            lines.push(
-                `Le titre, lui, va le plus souvent à **${champion.nom}** ` +
-                `(${Math.round(champion.pct_titre)} % des pronostics).`
-            );
-        } else if (champion) {
-            lines.push(`Sacré par ${Math.round(champion.pct_titre)} % des pronostiqueurs.`);
-        }
-    } else {
-        const [first] = head;
-        lines.push(
-            `**${first.nom}** en tête avec un rang moyen de ${first.valeur.toFixed(2)} ` +
-            `(écart-type ${first.ecart.toFixed(2)}).`
-        );
-        // Un écart-type élevé sur un rang moyen bas veut dire que le milieu
-        // n'est le choix de personne — deux camps qui se moyennent.
-        const flou = head.filter((r) => r.ecart > 4);
-        if (flou.length) {
-            lines.push(
-                `${flou.length} nom(s) du top ${top} font l'objet d'un désaccord marqué : ` +
-                `${flou.slice(0, 3).map((r) => r.nom).join(', ')}.`
-            );
-        }
-    }
-
-    return lines.join('\n');
+export function renderShare(rows) {
+    const width = nameWidth(rows);
+    const head = `    ${'PARTICIPANT'.padEnd(width)}  PART  RÉPARTITION`;
+    const lines = rows.map(
+        (r, i) =>
+            `${String(i + 1).padStart(2)}. ${cut(r.nom, width)}  ` +
+            `${`${Math.round(r.pct)}%`.padStart(4)}  ${bar(r.pct / 100)}`
+    );
+    return ['```', head, '─'.repeat(head.length), ...lines, '```'].join('\n');
 }
 
 /* ---------------------------------------------------------------------------
-   L'assemblage
+   Les paliers d'une catégorie
    --------------------------------------------------------------------------- */
 
-export async function buildConsensus() {
-    const { event, category } = await resolveCategory();
+/**
+ * Un tour dont tout le monde est certain n'a rien à dire : autant de lignes à
+ * cent pour cent qu'il y a de places. C'est le cas d'un premier tour au tirage
+ * figé, et de lui seul.
+ */
+const unanimous = (rows, slots) =>
+    rows.length === slots && rows.every((r) => Math.round(r.pct) >= 100);
 
-    const ranking = category.phases.find((p) =>
-        ['WILDCARD', 'ELIMINATION', 'SEEDING'].includes(p.type)
-    );
+export async function stagesFor(category) {
+    const stages = [];
 
-    const count = await prisma.prediction.count({
-        where: { categoryId: category.id, ...(SUBMITTED_ONLY ? { submitted: true } : {}) },
-    });
+    // 1. Les classements pronostiqués, dans l'ordre des phases.
+    for (const phase of category.phases) {
+        if (!['WILDCARD', 'ELIMINATION', 'SEEDING'].includes(phase.type)) continue;
 
-    let rows = [];
-    let method = 'bracket';
+        const rows = await rankingRows(category.id, phase.id);
+        if (!rows.length) continue;
 
-    if (ranking) {
-        rows = await fromRanks(category.id, ranking.id);
-        method = 'ranks';
+        const cutoff = Math.min(phase.qualifierCount ?? rows.length, rows.length, RANK_CAP);
+        stages.push({
+            title: `Top ${cutoff} moyen — ${phase.name}`,
+            body: renderRanking(rows.slice(0, cutoff)),
+            note:
+                "L'écart-type dit si c'est un consensus ou deux camps qui se moyennent.",
+        });
     }
-    // Une phase de classement qui existe mais que personne n'a remplie ne dit
-    // rien : on retombe alors sur le tableau plutôt que de rendre une page vide.
-    if (!rows.length) {
-        rows = await fromBracket(category.id);
-        method = 'bracket';
+
+    // 2. Le tableau, tour par tour.
+    for (const phase of category.phases) {
+        if (!['BRACKET', 'LEGACY'].includes(phase.type)) continue;
+
+        const slotsOf = new Map();
+        for (const b of phase.battles ?? []) slotsOf.set(b.round, (slotsOf.get(b.round) ?? 0) + 2);
+
+        const byRound = new Map();
+        for (const r of await reachRows(category.id, phase.id)) {
+            if (!byRound.has(r.round)) byRound.set(r.round, []);
+            byRound.get(r.round).push(r);
+        }
+
+        const rounds = [...byRound.keys()].sort(
+            (a, b) => (ROUND_ORDER.get(a) ?? 99) - (ROUND_ORDER.get(b) ?? 99)
+        );
+
+        for (const round of rounds) {
+            const slots = slotsOf.get(round) ?? 2;
+            const rows = byRound.get(round).slice(0, Math.max(slots, 2));
+            if (unanimous(rows, slots)) continue;
+
+            const label = ROUND_LABEL.get(round) ?? round;
+            stages.push({
+                title: `Top ${slots} moyen — ${label}`,
+                body: renderShare(rows),
+                note: `Part des pronostics qui envoient chacun en ${label.toLowerCase()}.`,
+            });
+        }
+
+        // 3. Atteindre la finale et la gagner sont deux choses différentes.
+        const winners = await winnerRows(category.id, phase.id);
+        for (const [round, title] of [
+            ['SMALL_FINAL', 'Troisième place moyenne'],
+            ['FINAL', 'Vainqueur moyen'],
+        ]) {
+            const rows = winners.filter((w) => w.round === round).slice(0, 5);
+            if (!rows.length) continue;
+            stages.push({
+                title,
+                body: renderShare(rows),
+                note: 'Part des pronostics qui le désignent vainqueur de cette affiche.',
+            });
+        }
     }
 
-    const useful = rows.filter((r) => (method === 'bracket' ? r.valeur > 0 : true));
+    return stages;
+}
 
-    const title = `Top ${TOP} moyen — ${category.name} · ${event.name} ${event.year}`;
-    const description = useful.length
-        ? [
-            prose(useful, TOP, method),
-            method === 'bracket' ? renderBracket(useful, TOP) : renderRanks(useful, TOP),
-        ].join('\n')
-        : 'Aucun pronostic exploitable sur cette catégorie.';
+/* ---------------------------------------------------------------------------
+   Le parcours
+   --------------------------------------------------------------------------- */
 
-    return {
-        title,
-        description,
-        method,
-        count,
-        rows: useful,
-        fields: [
-            {
-                name: 'Pronostics comptés',
-                value: `**${count}**${SUBMITTED_ONLY ? '' : ' (brouillons inclus)'}`,
-                inline: true,
-            },
-            {
-                name: 'Lecture',
-                value: method === 'bracket' ? 'Tours gagnés dans le tableau' : 'Rang moyen pronostiqué',
-                inline: true,
-            },
-            { name: 'Participants', value: `**${rows.length}**`, inline: true },
-        ],
-        footer: `${event.slug} · ${category.slug} · consensus sur ${count} pronostic(s)`,
-    };
+async function targets() {
+    const events = ONLY_EVENT
+        ? await prisma.event.findMany({ where: { slug: ONLY_EVENT } })
+        : await prisma.event.findMany({
+            // Un brouillon est invisible du public : son consensus n'existe pas.
+            where: { status: { not: 'DRAFT' } },
+            orderBy: [{ year: 'desc' }, { startsAt: 'desc' }],
+            ...(flag('latest') ? { take: 1 } : {}),
+        });
+
+    if (!events.length) {
+        throw new Error(ONLY_EVENT ? `Aucun événement « ${ONLY_EVENT} ».` : 'Aucun événement publié.');
+    }
+
+    const out = [];
+    for (const event of events) {
+        const categories = await prisma.category.findMany({
+            where: { eventId: event.id },
+            include: { phases: { orderBy: { position: 'asc' }, include: { battles: true } } },
+            orderBy: { position: 'asc' },
+        });
+        for (const category of categories) {
+            const matches =
+                !ONLY_CATEGORY ||
+                [category.slug, category.kind, category.name].some(
+                    (v) => String(v).toLowerCase() === ONLY_CATEGORY
+                );
+            if (matches) out.push({ event, category });
+        }
+    }
+    return out;
 }
 
 async function main() {
-    const built = await buildConsensus();
+    const list = await targets();
+    let posted = 0;
+    let skipped = 0;
 
-    if (flag('dry-run')) {
-        console.log(`— ${built.title} —\n`);
-        console.log(built.description.replace(/```/g, '').replace(/\*\*/g, ''));
-        console.log(`\n${built.footer}`);
-        return;
+    for (const { event, category } of list) {
+        const count = await prisma.prediction.count({
+            where: { categoryId: category.id, ...(SUBMITTED_ONLY ? { submitted: true } : {}) },
+        });
+
+        if (count < MIN_PRONOS) {
+            skipped += 1;
+            if (DRY) console.log(`— ${event.slug} · ${category.slug} : ${count} pronostic(s), ignoré.\n`);
+            continue;
+        }
+
+        const stages = await stagesFor(category);
+        if (!stages.length) {
+            skipped += 1;
+            continue;
+        }
+
+        const header = `${category.name} — ${event.name} ${event.year}`;
+        const footer = `${count} pronostic(s)${SUBMITTED_ONLY ? ' déposé(s)' : ', brouillons compris'}`;
+
+        // Un encart par palier : le lecteur parcourt les paliers séparément au
+        // lieu de dérouler un pavé, et Discord les sépare d'un filet.
+        const embeds = stages.map((s, i) => ({
+            title: i === 0 ? `${header} · ${s.title}` : s.title,
+            description: `${s.body}\n${s.note}`,
+            ...(i === stages.length - 1 ? { footer: { text: footer } } : {}),
+        }));
+
+        if (DRY) {
+            console.log(`══ ${header} — ${footer} ══\n`);
+            for (const s of stages) {
+                console.log(`▸ ${s.title}`);
+                console.log(s.body.replace(/```/g, ''));
+                console.log(`  ${s.note}\n`);
+            }
+            posted += 1;
+            continue;
+        }
+
+        const sent = await postEmbeds('REPORT', embeds);
+        if (!sent.ok) {
+            console.error(`[consensus] ${event.slug}/${category.slug} :`, sent.error);
+            process.exitCode = 1;
+            continue;
+        }
+        console.log(`[consensus] ${header} — ${stages.length} palier(s) postés.`);
+        posted += 1;
     }
 
-    const sent = await postToDiscord('REPORT', {
-        title: built.title,
-        description: built.description,
-        fields: built.fields,
-        footer: built.footer,
-    });
-
-    if (!sent.ok) {
-        console.error('[consensus] envoi échoué :', sent.error);
-        process.exitCode = 1;
-        return;
-    }
-    console.log(`[consensus] ${built.title} posté.`);
+    console.log(
+        `[consensus] ${posted} catégorie(s) ${DRY ? 'préparée(s)' : 'postée(s)'}, ${skipped} ignorée(s).`
+    );
 }
 
-// Exécution directe seulement : le module reste importable pour ses fonctions de
-// mise en forme, qui n'ont besoin d'aucune base.
 if (process.argv[1] && process.argv[1].endsWith('consensus.js')) {
     main()
         .catch((err) => {
