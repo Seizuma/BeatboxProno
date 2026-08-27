@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { requireUser } from '../lib/auth.js';
+import { requireAuth } from '../lib/auth.js';
 import { ITEMS, SLOTS, itemById, slotById } from '../lib/cosmetics.js';
 import { walletBalance } from '../lib/badges.js';
 
@@ -57,7 +57,7 @@ shopRouter.get('/', guard(async (req, res) => {
  * même boutique, et un porte-monnaie de cent points paie deux objets à cent.
  * L'unicité (userId, itemId) attrape le doublon même si la vérification passe.
  */
-shopRouter.post('/buy', requireUser, guard(async (req, res) => {
+shopRouter.post('/buy', requireAuth, guard(async (req, res) => {
     const { itemId } = z.object({ itemId: z.string() }).parse(req.body);
     const item = itemById(itemId);
     if (!item) return res.status(404).json({ error: 'Objet inconnu.' });
@@ -106,7 +106,7 @@ shopRouter.post('/buy', requireUser, guard(async (req, res) => {
  * légitime, pas une erreur — et c'est la seule façon de revenir en arrière sans
  * racheter quoi que ce soit.
  */
-shopRouter.post('/equip', requireUser, guard(async (req, res) => {
+shopRouter.post('/equip', requireAuth, guard(async (req, res) => {
     const body = z.object({
         slot: z.string(),
         itemId: z.string().nullable(),
