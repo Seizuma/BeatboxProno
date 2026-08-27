@@ -675,8 +675,9 @@ model BadgeAward {
 }
 
 enum WalletKind {
-  EVENT_POINTS // crédit : les points gagnés sur une compète terminée
-  PURCHASE     // débit : un achat en boutique
+  EVENT_POINTS // crédit à la clôture d'une compète
+  PURCHASE     // débit à l'achat d'un cosmétique
+  GRANT        // crédit ou retrait décidé par un organisateur
 }
 
 // Le porte-monnaie est un livre de comptes, jamais un compteur.
@@ -708,6 +709,16 @@ model WalletEntry {
   // Pour un PURCHASE : l'identifiant de l'objet dans cosmetics.js. C'est cette
   // ligne qui PROUVE la possession — pas de table d'inventaire à part.
   itemId    String?
+
+  /// Le motif d'un crédit manuel. Obligatoire côté route, nullable en base :
+  /// les écritures d'avant cette migration n'en ont pas, et rien ne sert de
+  /// leur en inventer un.
+  note        String?
+
+  /// Qui a passé l'écriture. Sans relation Prisma : la ligne doit survivre à
+  /// la suppression du compte de l'organisateur qui l'a créée, et on
+  /// n'interroge jamais dans l'autre sens.
+  grantedById String?
 
   createdAt DateTime   @default(now())
 

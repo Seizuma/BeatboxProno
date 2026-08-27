@@ -11,13 +11,13 @@ import { seedFromContenders } from '../lib/bracket.js';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 import SeedingEditor from '../components/SeedingEditor.jsx';
+import CategoryFormat from '../components/CategoryFormat.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
 import AdminSearch from '../components/AdminSearch.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
-import CategoryFormat from '../components/CategoryFormat.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -506,6 +506,7 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           </button>
           <button
             className={`btn btn--small${format ? ' btn--primary' : ''}`}
+            aria-expanded={format}
             onClick={() => setFormat(!format)}
           >
             Format
