@@ -34,15 +34,16 @@ model User {
   // retenir par personne, et les notes sont ordonnées.
   lastReadRelease String?
 
-  // Ce que la personne PORTE, par emplacement. Des identifiants du catalogue
-  // cosmetics.js, jamais des lignes de base : le catalogue vit dans le code,
-  // comme la couleur d'un groupe se déduit de son slug. Trois colonnes et non
-  // un JSON : un emplacement est une notion fixe du produit, pas une donnée
-  // libre — et une colonne se requête, se migre et se documente.
-  // La possession, elle, se prouve par la ligne d'achat dans WalletEntry.
-  equippedFrame String?
-  equippedTitle String?
-  equippedFlair String?
+  // Cinq emplacements, cinq colonnes. Le nom de l'objet porté et rien d'autre :
+  // le catalogue vit dans le code, la base ne retient que la tenue. Aucune
+  // contrainte de clé étrangère — un objet retiré du catalogue doit pouvoir
+  // disparaître sans qu'une migration soit nécessaire, et la migration de
+  // remboursement délie les colonnes devenues orphelines.
+  equippedFrame    String?
+  equippedNameFx   String?
+  equippedBand     String?
+  equippedCardSkin String?
+  equippedStamp    String?
 
   predictions Prediction[]
   postbox     PostboxMessage[]

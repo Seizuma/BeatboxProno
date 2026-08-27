@@ -271,6 +271,16 @@ img {
   filter: contrast(1.15) saturate(1.3);
 }
 
+/* Le cran intermédiaire, pour les lignes de classement. 1,6 rem convenait à
+   une ligne de commentaire ; dans un tableau où l'avatar est le seul élément
+   visuel de la rangée, il disparaissait — et c'est justement là que les cadres
+   achetés doivent se voir. Jumeau de `.cos-frame--sm`, au pixel près : sinon
+   une rangée changerait de hauteur selon qu'un joueur porte un cadre ou non. */
+.avatar--md {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
 .avatar--lg {
   width: 4rem;
   height: 4rem;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
-import { Flair, FramedAvatar } from './Cosmetics.jsx';
+import { FramedAvatar, Name } from './Cosmetics.jsx';
 
 /** Le serveur tranche ; ce chiffre ne sert qu'à arrêter la frappe au bon endroit. */
 const MAX = 2000;
@@ -230,8 +230,11 @@ export default function PredictionComments({
                         size="xs"
                     />
                 )}
-                <strong>{c.author.globalName ?? c.author.username}</strong>
-                <Flair itemId={c.author.equippedFlair} size={14} lang={lang} />
+                <strong>
+                    <Name fxId={c.author.equippedNameFx}>
+                        {c.author.globalName ?? c.author.username}
+                    </Name>
+                </strong>
                 <span className="note__when">
                     {date(c.createdAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     {c.editedAt && ` · ${t('thread.edited')}`}

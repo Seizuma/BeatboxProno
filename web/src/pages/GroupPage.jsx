@@ -8,7 +8,7 @@ import Modal from '../components/Modal.jsx';
 import PromptDialog from '../components/PromptDialog.jsx';
 import PredictionView from '../components/PredictionView.jsx';
 import Toast from '../components/Toast.jsx';
-import { Flair, FramedAvatar } from '../components/Cosmetics.jsx';
+import { FramedAvatar, Name } from '../components/Cosmetics.jsx';
 
 /**
  * Un groupe.
@@ -238,10 +238,11 @@ export default function GroupPage() {
                                                     />
                                                 )}
                                                 <span className="ladder__name">
-                                                    {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                                                    <Name fxId={p.user?.equippedNameFx}>
+                                                        {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                                                    </Name>
                                                 </span>
                                                 {member?.role === 'OWNER' && <span className="ladder__crown">★</span>}
-                                                <Flair itemId={p.user?.equippedFlair} size={14} lang={lang} />
                                             </span>
 
                                             {/* Les chiffres en sous-ligne. Sur la même ligne que le
@@ -335,8 +336,11 @@ export default function GroupPage() {
                                                 size="xs"
                                             />
                                         )}
-                                        <strong className="mosaic__name">{p.user.globalName ?? p.user.username}</strong>
-                                        <Flair itemId={p.user.equippedFlair} size={14} lang={lang} />
+                                        <strong className="mosaic__name">
+                                            <Name fxId={p.user.equippedNameFx}>
+                                                {p.user.globalName ?? p.user.username}
+                                            </Name>
+                                        </strong>
                                         {p.comments > 0 && (
                                             <span className="mosaic__bubbles">
                                                 {t('group.picks.comments', { n: p.comments })}

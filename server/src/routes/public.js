@@ -178,14 +178,9 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
     include: {
       user: {
         select: {
-          id: true,
-          username: true,
-          globalName: true,
-          avatarUrl: true,
-          equippedFrame: true,
-          equippedTitle: true,
-          equippedFlair: true,
-        }
+          id: true, username: true, globalName: true, avatarUrl: true,
+          equippedFrame: true, equippedNameFx: true,
+        },
       },
       event: { select: { slug: true, name: true, year: true, status: true, judgeCount: true } },
       category: {
@@ -249,13 +244,10 @@ publicRouter.get('/leaderboard', async (req, res) => {
   const users = await prisma.user.findMany({
     where: { id: { in: rows.map((r) => r.userId) } },
     select: {
-      id: true,
-      username: true,
-      globalName: true,
-      avatarUrl: true,
-      equippedFrame: true,
-      equippedTitle: true,
-      equippedFlair: true,
+      id: true, username: true, globalName: true, avatarUrl: true,
+      // Le cadre et l'effet de pseudo voyagent avec le nom : un cosmétique
+      // visible du seul propriétaire ne se vend pas.
+      equippedFrame: true, equippedNameFx: true,
     },
   });
   const byId = new Map(users.map((u) => [u.id, u]));
@@ -282,11 +274,13 @@ publicRouter.get('/users/:id', async (req, res) => {
       avatarUrl: true,
       createdAt: true,
       role: true,
-      // La tenue est publique par nature : un cosmétique qui ne se montre
-      // qu'à soi-même ne vaudrait pas un point.
+      // La tenue est publique par nature : un cosmétique qui ne se montre qu'à
+      // soi-même ne vaudrait pas un point. Ni le skin de carte ni le tampon,
+      // en revanche — ils ne s'affichent pas sur un profil, et ce qu'on ne
+      // montre pas, on ne le transporte pas.
       equippedFrame: true,
-      equippedTitle: true,
-      equippedFlair: true,
+      equippedNameFx: true,
+      equippedBand: true,
     },
   });
   if (!user) return res.status(404).json({ error: 'Profil introuvable.' });
@@ -331,15 +325,16 @@ publicRouter.get('/users/:id', async (req, res) => {
   );
 
   // Le mur de badges, public lui aussi — c'est un palmarès, pas un secret.
-  // Trié en base par date, regroupé par compète côté client.
+  // Trié par date en base, regroupé par compète côté client : l'ordre à
+  // l'intérieur d'une compète dépend du prestige, que seul le catalogue connaît.
   const badges = await prisma.badgeAward.findMany({
     where: { userId: user.id },
     include: { event: { select: { slug: true, name: true, year: true } } },
     orderBy: { awardedAt: 'desc' },
   });
 
-  // Le solde, en revanche, n'appartient qu'à soi : montrer le porte-monnaie
-  // des autres inviterait à comparer des dépenses, pas des pronostics.
+  // Le solde, en revanche, n'appartient qu'à soi : montrer le porte-monnaie des
+  // autres inviterait à comparer des dépenses plutôt que des pronostics.
   const wallet = req.user?.id === user.id ? await walletBalance(user.id) : null;
 
   res.json({ user, predictions, totals, badges, wallet });

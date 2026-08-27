@@ -125,7 +125,7 @@ authRouter.get('/me', guard(async (req, res) => {
 
   const worn = await prisma.user.findUnique({
     where: { id },
-    select: { equippedFrame: true, equippedTitle: true, equippedFlair: true },
+    select: { equippedFrame: true, equippedNameFx: true, equippedBand: true },
   });
 
   res.json({
@@ -136,8 +136,8 @@ authRouter.get('/me', guard(async (req, res) => {
       avatarUrl,
       role,
       equippedFrame: worn?.equippedFrame ?? null,
-      equippedTitle: worn?.equippedTitle ?? null,
-      equippedFlair: worn?.equippedFlair ?? null,
+      equippedNameFx: worn?.equippedNameFx ?? null,
+      equippedBand: worn?.equippedBand ?? null,
     },
   });
 }));

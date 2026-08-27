@@ -1,21 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
-import { BADGES, SLOTS } from '../lib/cosmetics.js';
-import { BadgeMedal, Flair, FramedAvatar, Title } from '../components/Cosmetics.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
+import { Badge, Preview } from '../components/Cosmetics.jsx';
+import { BADGES, SLOTS, itemsForSlot } from '../lib/cosmetics.js';
 
 /**
- * P470 · LA BOUTIQUE.
+ * P470 · LA BOUTIQUE
  *
- * La vitrine se visite déconnecté — seul l'achat demande une session. Le
- * catalogue affiché vient du SERVEUR, pas du bundle : pendant un déploiement,
- * un client sur un vieux bundle montre ainsi les bons prix, et le serveur
- * reste seul juge au moment de payer.
- *
- * L'aperçu d'un cadre se fait sur SON PROPRE avatar : voir l'objet porté vaut
- * mieux que n'importe quelle description.
+ * La vitrine se visite déconnecté : quelqu'un qui découvre le site doit pouvoir
+ * voir ce qu'il y a à gagner avant de décider s'il s'inscrit. Seuls l'achat et
+ * l'équipement demandent une session.
  */
 export default function Shop() {
     const { user } = useSession();
@@ -25,121 +21,102 @@ export default function Shop() {
     const [error, setError] = useState(null);
     const [busy, setBusy] = useState(null);
 
-    const load = () => api.get('/shop').then(setData).catch((e) => setError(e.message));
     useEffect(() => {
-        load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        api.get('/shop').then(setData).catch((e) => setError(e.message));
     }, [user?.id]);
 
-    if (error) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
+    const owned = useMemo(() => new Set(data?.owned ?? []), [data]);
+    const worn = data?.equipped ?? {};
+
+    async function run(action, body) {
+        setBusy(body.itemId ?? body.slot);
+        try {
+            setData(await api.post(`/shop/${action}`, body));
+            setError(null);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setBusy(null);
+        }
+    }
+
+    if (error && !data) return <p className="notice" style={{ marginTop: '2rem' }}>{error}</p>;
     if (!data) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
-
-    const owned = new Set(data.owned ?? []);
-    const equipped = data.equipped ?? {};
-
-    const buy = async (item) => {
-        setBusy(item.id);
-        setError(null);
-        try {
-            await api.post('/shop/buy', { itemId: item.id });
-            await load();
-        } catch (e) {
-            setError(e.message);
-        } finally {
-            setBusy(null);
-        }
-    };
-
-    const equip = async (item, off = false) => {
-        setBusy(item.id);
-        setError(null);
-        try {
-            await api.post('/shop/equip', { slot: item.slot, itemId: off ? null : item.id });
-            await load();
-        } catch (e) {
-            setError(e.message);
-        } finally {
-            setBusy(null);
-        }
-    };
-
-    const preview = (item) => {
-        if (item.slot === 'frame') {
-            // Sans session, un carré neutre fait l'affaire : la vitrine reste lisible.
-            const url = user?.avatarUrl ?? null;
-            return url ? (
-                <FramedAvatar url={url} frameId={item.id} size="lg" />
-            ) : (
-                <span className={`cos-frame cos-frame--lg cos-frame--${item.id}`}>
-                    <span style={{ display: 'block', width: '100%', height: '100%', background: 'var(--surface-2)' }} />
-                </span>
-            );
-        }
-        if (item.slot === 'title') return <Title itemId={item.id} lang={lang} />;
-        return <Flair itemId={item.id} size={40} />;
-    };
 
     return (
         <div className="stack" style={{ paddingTop: '2.5rem' }}>
-            <header className="stack" style={{ gap: '0.5rem' }}>
+            <header>
                 <p className="eyebrow">{t('shop.eyebrow')}</p>
                 <h1>{t('shop.title')}</h1>
-
-                {user ? (
-                    <div className="shop-balance">
-                        <span className="shop-balance__amount data">{data.balance ?? 0}</span>
-                        <span className="eyebrow">{t('shop.balance')}</span>
-                    </div>
-                ) : (
-                    <div className="row" style={{ gap: '0.8rem', flexWrap: 'wrap' }}>
-                        <p className="faint" style={{ margin: 0 }}>{t('shop.signin')}</p>
-                        <DiscordButton />
-                    </div>
-                )}
-                <p className="faint" style={{ margin: 0, maxWidth: '60ch' }}>{t('shop.balance.lede')}</p>
             </header>
 
+            <div className="panel">
+                <div className="shop-balance">
+                    <span className="shop-balance__value">{data.balance}</span>
+                    <span className="eyebrow" style={{ margin: 0 }}>{t('shop.balance')}</span>
+                </div>
+                <p className="faint" style={{ margin: '0.6rem 0 0', maxWidth: '62ch' }}>
+                    {t('shop.balance.lede')}
+                </p>
+                {!user && (
+                    <p className="row" style={{ gap: '0.7rem', alignItems: 'center', marginTop: '0.8rem' }}>
+                        <span>{t('shop.signin')}</span>
+                        <DiscordButton />
+                    </p>
+                )}
+            </div>
+
+            {error && <p className="notice">{error}</p>}
+
             {SLOTS.map((slot) => (
-                <section className="stack" key={slot}>
-                    <h2>{t(`shop.section.${slot}`)}</h2>
+                <section className="stack" key={slot.id}>
+                    <h2>{t(`shop.section.${slot.id}`)}</h2>
+                    <p className="faint" style={{ margin: 0 }}>{t(`shop.section.${slot.id}.lede`)}</p>
+
                     <div className="shop-grid">
-                        {data.items.filter((i) => i.slot === slot).map((item) => {
-                            const has = owned.has(item.id);
-                            const worn = equipped?.[
-                                { frame: 'equippedFrame', title: 'equippedTitle', flair: 'equippedFlair' }[slot]
-                            ] === item.id;
-                            const affordable = user && (data.balance ?? 0) >= item.price;
+                        {itemsForSlot(slot.id).map((item) => {
+                            const has = owned.has(item.id) || item.price === 0;
+                            const on = worn[slot.id] === item.id;
+                            const tooPoor = data.balance < item.price;
 
                             return (
-                                <article className={`shop-card${has ? ' shop-card--owned' : ''}`} key={item.id}>
-                                    <div className="shop-card__preview">{preview(item)}</div>
-                                    <h3 className="shop-card__name">{item.name[lang] ?? item.name.en}</h3>
-                                    <p className="shop-card__blurb">{item.blurb[lang] ?? item.blurb.en}</p>
-                                    <div className="shop-card__foot">
-                                        <span className="shop-price">{item.price} pts</span>
-                                        {!user ? null : !has ? (
+                                <article className={`shop-card${on ? ' shop-card--worn' : ''}`} key={item.id}>
+                                    <div className="shop-card__stage">
+                                        <Preview item={item} avatarUrl={user?.avatarUrl} lang={lang} />
+                                    </div>
+
+                                    <p className="shop-card__name">{item.name[lang] ?? item.name.en}</p>
+                                    <p className="shop-card__price">
+                                        {item.price === 0 ? t('shop.free') : `${item.price} ${t('shop.points')}`}
+                                        {item.animated && ` · ${t('shop.animated')}`}
+                                    </p>
+
+                                    <div className="shop-card__actions">
+                                        {!has && (
                                             <button
-                                                className="btn btn--small"
-                                                disabled={!affordable || busy === item.id}
-                                                onClick={() => buy(item)}
+                                                className="btn btn--small btn--primary"
+                                                disabled={!user || tooPoor || busy === item.id}
+                                                onClick={() => run('buy', { itemId: item.id })}
                                             >
                                                 {t('shop.buy')}
                                             </button>
-                                        ) : worn ? (
-                                            <button
-                                                className="btn btn--small btn--ghost"
-                                                disabled={busy === item.id}
-                                                onClick={() => equip(item, true)}
-                                            >
-                                                {t('shop.unequip')}
-                                            </button>
-                                        ) : (
+                                        )}
+                                        {has && !on && (
                                             <button
                                                 className="btn btn--small"
-                                                disabled={busy === item.id}
-                                                onClick={() => equip(item)}
+                                                disabled={!user || busy === item.id}
+                                                onClick={() => run('equip', { slot: slot.id, itemId: item.id })}
                                             >
                                                 {t('shop.equip')}
+                                            </button>
+                                        )}
+                                        {on && (
+                                            <button
+                                                className="btn btn--small btn--ghost"
+                                                disabled={busy === slot.id}
+                                                onClick={() => run('equip', { slot: slot.id, itemId: null })}
+                                            >
+                                                {t('shop.unequip')}
                                             </button>
                                         )}
                                     </div>
@@ -150,15 +127,16 @@ export default function Shop() {
                 </section>
             ))}
 
-            {/* La carotte, affichée là où l'on dépense : ce qui ne s'achète pas. */}
+            {/* Les badges ferment la page : ils ne s'achètent pas, mais c'est
+                souvent en les voyant qu'on comprend à quoi servent les points. */}
             <section className="stack">
                 <h2>{t('shop.badges')}</h2>
-                <p className="faint" style={{ margin: 0, maxWidth: '60ch' }}>{t('shop.badges.lede')}</p>
-                <div className="shop-legend">
+                <p className="faint" style={{ margin: 0 }}>{t('shop.badges.lede')}</p>
+                <div className="panel shop-legend">
                     {BADGES.map((b) => (
                         <div className="shop-legend__item" key={b.code}>
-                            <BadgeMedal code={b.code} size={48} />
-                            <p>{t(`badge.${b.code}`)}</p>
+                            <Badge code={b.code} scale={2} label={t(`badge.${b.code}`)} />
+                            <span className="shop-legend__label">{t(`badge.${b.code}`)}</span>
                         </div>
                     ))}
                 </div>

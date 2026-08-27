@@ -1,126 +1,140 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { itemById, SHOP_ITEMS, SLOTS } from '../lib/cosmetics.js';
+import { requireUser } from '../lib/auth.js';
+import { ITEMS, SLOTS, itemById, slotById } from '../lib/cosmetics.js';
 import { walletBalance } from '../lib/badges.js';
 
 export const shopRouter = Router();
 
-/** Relaie les erreurs d'un gestionnaire asynchrone vers le middleware d'erreur. */
+/**
+ * Express 4 avale les rejets d'un handler asynchrone : la requête reste
+ * suspendue jusqu'au délai d'expiration, sans une ligne de log.
+ */
 const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-const requireUser = (req, res, next) =>
-    req.user ? next() : res.status(401).json({ error: 'Connexion requise.' });
-
-/**
- * La vitrine. Le catalogue part au client même déconnecté : la boutique se
- * visite comme on lèche une vitrine, seul l'achat demande une session.
- *
- * Le catalogue est AUSSI dans le bundle client (cosmetics.js dupliqué, comme
- * bracket.js) — le renvoyer ici sert de source de vérité pour les PRIX : un
- * client sur un bundle périmé pendant un déploiement affiche alors le bon
- * tarif, et le serveur reste seul juge au moment de payer.
- */
-shopRouter.get('/', guard(async (req, res) => {
-    if (!req.user) {
-        return res.json({ items: SHOP_ITEMS, balance: null, owned: [], equipped: null });
+/** Ce que le client reçoit après chaque opération : l'état complet, jamais un delta. */
+async function snapshot(userId) {
+    if (!userId) {
+        return { balance: 0, owned: [], equipped: {}, items: ITEMS.length };
     }
 
-    const [balance, purchases, me] = await Promise.all([
-        walletBalance(req.user.id),
+    const [entries, user] = await Promise.all([
         prisma.walletEntry.findMany({
-            where: { userId: req.user.id, kind: 'PURCHASE' },
+            where: { userId, kind: 'PURCHASE' },
             select: { itemId: true },
         }),
         prisma.user.findUnique({
-            where: { id: req.user.id },
-            select: { equippedFrame: true, equippedTitle: true, equippedFlair: true },
+            where: { id: userId },
+            select: Object.fromEntries(SLOTS.map((s) => [s.column, true])),
         }),
     ]);
 
-    res.json({
-        items: SHOP_ITEMS,
-        balance,
-        owned: purchases.map((p) => p.itemId).filter(Boolean),
-        equipped: me,
-    });
+    const equipped = {};
+    for (const slot of SLOTS) equipped[slot.id] = user?.[slot.column] ?? null;
+
+    return {
+        balance: await walletBalance(userId),
+        owned: entries.map((e) => e.itemId).filter(Boolean),
+        equipped,
+        items: ITEMS.length,
+    };
+}
+
+/**
+ * La vitrine. Visitable déconnecté : quelqu'un qui découvre le site doit
+ * pouvoir voir ce qu'il y a à gagner avant de décider s'il s'inscrit.
+ */
+shopRouter.get('/', guard(async (req, res) => {
+    res.json(await snapshot(req.user?.id ?? null));
 }));
 
 /**
- * L'achat. Vérification du solde et débit dans la MÊME transaction : deux
- * onglets qui achètent en même temps ne peuvent pas dépenser deux fois le
- * même point. L'unicité (userId, itemId) en base est la ceinture si deux
- * requêtes strictement simultanées visent le même objet.
+ * L'achat.
+ *
+ * Tout tient dans une transaction interactive parce que le solde doit être lu
+ * ET la ligne écrite sans que rien ne s'intercale : deux onglets ouverts sur la
+ * même boutique, et un porte-monnaie de cent points paie deux objets à cent.
+ * L'unicité (userId, itemId) attrape le doublon même si la vérification passe.
  */
 shopRouter.post('/buy', requireUser, guard(async (req, res) => {
-    const { itemId } = z.object({ itemId: z.string().min(1) }).parse(req.body);
-
+    const { itemId } = z.object({ itemId: z.string() }).parse(req.body);
     const item = itemById(itemId);
     if (!item) return res.status(404).json({ error: 'Objet inconnu.' });
 
-    const outcome = await prisma.$transaction(async (tx) => {
-        const owned = await tx.walletEntry.findFirst({
-            where: { userId: req.user.id, itemId },
-            select: { id: true },
-        });
-        if (owned) return { status: 409, error: 'Vous possédez déjà cet objet.' };
+    // Un objet gratuit n'a pas besoin d'une ligne d'achat : il appartient à tout
+    // le monde par définition, et une ligne à zéro polluerait le livre.
+    if (item.price === 0) return res.json(await snapshot(req.user.id));
 
-        const agg = await tx.walletEntry.aggregate({
-            where: { userId: req.user.id },
-            _sum: { amount: true },
-        });
-        const balance = agg._sum.amount ?? 0;
-        // 402 Payment Required : le code HTTP existe depuis 1997 et n'attendait
-        // que ce moment.
-        if (balance < item.price) return { status: 402, error: 'Solde insuffisant.' };
+    try {
+        await prisma.$transaction(async (tx) => {
+            const owned = await tx.walletEntry.findFirst({
+                where: { userId: req.user.id, itemId },
+                select: { id: true },
+            });
+            if (owned) { const e = new Error('owned'); e.code = 409; throw e; }
 
-        await tx.walletEntry.create({
-            data: { userId: req.user.id, kind: 'PURCHASE', itemId, amount: -item.price },
-        });
-        return { balance: balance - item.price };
-    });
+            const lines = await tx.walletEntry.findMany({
+                where: { userId: req.user.id },
+                select: { amount: true },
+            });
+            const balance = lines.reduce((n, l) => n + l.amount, 0);
+            if (balance < item.price) { const e = new Error('poor'); e.code = 402; throw e; }
 
-    if (outcome.status) return res.status(outcome.status).json({ error: outcome.error });
-    res.json({ ok: true, balance: outcome.balance });
+            await tx.walletEntry.create({
+                data: {
+                    userId: req.user.id,
+                    kind: 'PURCHASE',
+                    amount: -item.price,
+                    itemId,
+                },
+            });
+        });
+    } catch (err) {
+        if (err.code === 409) return res.status(409).json({ error: 'Objet déjà possédé.' });
+        if (err.code === 402) return res.status(402).json({ error: 'Solde insuffisant.' });
+        throw err;
+    }
+
+    res.json(await snapshot(req.user.id));
 }));
 
 /**
- * Porter ou retirer. `itemId: null` déshabille l'emplacement — retirer n'est
- * pas vendre, la possession reste dans le livre de comptes.
+ * L'équipement.
+ *
+ * `itemId` peut être nul : c'est le retrait. Un emplacement vide est un état
+ * légitime, pas une erreur — et c'est la seule façon de revenir en arrière sans
+ * racheter quoi que ce soit.
  */
 shopRouter.post('/equip', requireUser, guard(async (req, res) => {
-    const { slot, itemId } = z
-        .object({
-            slot: z.enum(SLOTS),
-            itemId: z.string().min(1).nullable(),
-        })
-        .parse(req.body);
+    const body = z.object({
+        slot: z.string(),
+        itemId: z.string().nullable(),
+    }).parse(req.body);
 
-    if (itemId) {
-        const item = itemById(itemId);
-        // Un titre ne se porte pas en cadre : l'emplacement est une propriété de
-        // l'objet, pas un choix.
-        if (!item || item.slot !== slot) {
-            return res.status(400).json({ error: 'Cet objet ne va pas à cet emplacement.' });
+    const slot = slotById(body.slot);
+    if (!slot) return res.status(400).json({ error: 'Emplacement inconnu.' });
+
+    if (body.itemId) {
+        const item = itemById(body.itemId);
+        if (!item || item.slot !== slot.id) {
+            return res.status(400).json({ error: "Cet objet ne va pas dans cet emplacement." });
         }
-        const owned = await prisma.walletEntry.findFirst({
-            where: { userId: req.user.id, itemId, kind: 'PURCHASE' },
-            select: { id: true },
-        });
-        if (!owned) return res.status(403).json({ error: 'Objet non possédé.' });
+        // On vérifie la possession côté serveur et pas seulement côté bouton :
+        // la route est publique, l'interface ne protège rien.
+        if (item.price > 0) {
+            const owned = await prisma.walletEntry.findFirst({
+                where: { userId: req.user.id, itemId: item.id },
+                select: { id: true },
+            });
+            if (!owned) return res.status(403).json({ error: 'Objet non possédé.' });
+        }
     }
 
-    const column = {
-        frame: 'equippedFrame',
-        title: 'equippedTitle',
-        flair: 'equippedFlair',
-    }[slot];
-
-    const user = await prisma.user.update({
+    await prisma.user.update({
         where: { id: req.user.id },
-        data: { [column]: itemId },
-        select: { equippedFrame: true, equippedTitle: true, equippedFlair: true },
+        data: { [slot.column]: body.itemId },
     });
 
-    res.json({ ok: true, equipped: user });
+    res.json(await snapshot(req.user.id));
 }));

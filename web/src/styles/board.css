@@ -32,10 +32,15 @@
   line-height: 1;
 }
 
+/* Le bracket, la fiche de lecture et le classement des artistes utilisent tous
+   `xs`. À 1,5 rem, une photo de battle ne permettait pas de reconnaître qui
+   affronte qui — c'est pourtant tout l'intérêt de les avoir mises. Les colonnes
+   sont en `minmax(0, 1fr)`, donc elles absorbent l'élargissement : c'est le nom
+   qui se tronque, jamais la grille qui casse. */
 .figure--xs {
-  width: 1.5rem;
-  height: 1.5rem;
-  font-size: 0.7rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: 0.95rem;
 }
 
 .figure--sm {
@@ -1119,5 +1124,15 @@ details.panel>summary .eyebrow {
 
   .gapscale__step:nth-child(n + 4) {
     border-top: 1px solid var(--line);
+  }
+}
+
+/* Sur téléphone, un Top 32 tient quatre colonnes dans 360 pixels : les photos
+   reprennent leur ancienne taille plutôt que de manger le nom. */
+@media (max-width: 520px) {
+  .figure--xs {
+    width: 1.6rem;
+    height: 1.6rem;
+    font-size: 0.72rem;
   }
 }

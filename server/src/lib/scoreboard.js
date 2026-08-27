@@ -239,7 +239,7 @@ export async function buildScoreboard({
     const scored = new Set(grouped.map((g) => g.userId));
     const idle = pad && userIds ? userIds.filter((id) => !scored.has(id)) : [];
 
-    // Les trois colonnes `equipped*` voyagent avec le pseudo. C'est la seule
+    // Les colonnes `equipped*` voyagent avec le pseudo. C'est la seule
     // requête à traverser : le classement général et celui de chaque groupe
     // passent tous deux par ici, les élargir séparément aurait fait deux
     // tableaux où l'un porte les cadres et l'autre non.
@@ -251,8 +251,7 @@ export async function buildScoreboard({
             globalName: true,
             avatarUrl: true,
             equippedFrame: true,
-            equippedTitle: true,
-            equippedFlair: true,
+            equippedNameFx: true,
         },
     });
     const byId = new Map(users.map((u) => [u.id, u]));

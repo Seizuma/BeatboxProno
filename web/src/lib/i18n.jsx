@@ -39,6 +39,7 @@ const DICT = {
     'nav.logout': 'Sign out',
     'nav.language': 'Language',
     'nav.menu': 'Menu',
+    'nav.shop': 'Shop',
 
     'footer.tagline': 'Predictions close when each phase kicks off.',
 
@@ -351,35 +352,6 @@ const DICT = {
     'artists.col.category': 'Category',
     'artists.col.as': 'Entered as',
 
-    'nav.shop': 'Shop',
-
-    'shop.eyebrow': 'SHOP',
-    'shop.title': 'The shop',
-    'shop.balance': 'wallet',
-    'shop.balance.lede': 'Points earned on finished competitions land here. Spending them never touches your leaderboard score — that one is carved for good.',
-    'shop.signin': 'Sign in with Discord to earn and spend points.',
-    'shop.buy': 'Buy',
-    'shop.equip': 'Wear',
-    'shop.unequip': 'Remove',
-    'shop.section.frame': 'Frames',
-    'shop.section.title': 'Titles',
-    'shop.section.flair': 'Pins',
-    'shop.badges': 'Badges',
-    'shop.badges.lede': 'Badges cannot be bought — they drop for everyone when a competition is finished.',
-    'badge.PARTICIPANT': 'Participant — submitted a prediction',
-    'badge.BRONZE': 'Bronze — top 60% of the event',
-    'badge.SILVER': 'Silver — top 30% of the event',
-    'badge.GOLD': 'Gold — top 5% of the event',
-    'badge.PODIUM_3': 'Event podium — 3rd best predictor',
-    'badge.PODIUM_2': 'Event podium — 2nd best predictor',
-    'badge.PODIUM_1': 'Event winner — best predictor',
-
-    'profile.badges': 'Badges',
-    'profile.badges.empty':
-      'No badges yet — they drop when a competition you predicted is finished.',
-    'profile.wallet': 'Wallet',
-    'profile.shop.cta': 'Open the shop',
-
     'profile.signin': 'Sign in to find your predictions.',
     'profile.member': 'Member since {date}',
     'profile.someoneElse': 'You are looking at {name}’s profile.',
@@ -580,6 +552,53 @@ const DICT = {
     'privacy.contact.title': 'A question',
     'privacy.contact.lede':
       'Use the postbox on the home page, or reach the site owner on the Discord. There is one person behind this site, and they read everything.',
+
+    'shop.eyebrow': 'P470 · SHOP',
+    'shop.title': 'The shop',
+    'shop.balance': 'wallet',
+    'shop.balance.lede':
+      'Points earned on finished competitions land here. Spending them never touches your leaderboard score — that one is carved for good.',
+    'shop.signin': 'Sign in with Discord to earn and spend points.',
+    'shop.buy': 'Buy',
+    'shop.equip': 'Wear',
+    'shop.unequip': 'Remove',
+    'shop.free': 'free',
+    'shop.points': 'pts',
+    'shop.animated': 'animated',
+
+    'shop.section.frame': 'Avatar frames',
+    'shop.section.frame.lede':
+      'Five pixels wide at most, hugging the photo. Shown everywhere your avatar appears.',
+    'shop.section.nameFx': 'Name effects',
+    'shop.section.nameFx.lede':
+      'Character attributes only — nothing to draw, and readable in a dense table.',
+    'shop.section.band': 'Profile bands',
+    'shop.section.band.lede':
+      'Two vertical strips framing your profile page. Hidden on narrow screens.',
+    'shop.section.cardSkin': 'Export card skins',
+    'shop.section.cardSkin.lede':
+      'The only cosmetic people without an account will ever see. The price says so.',
+    'shop.section.stamp': 'Stamps',
+    'shop.section.stamp.lede':
+      'A mark laid across your prediction, kept on the shared image.',
+
+    'shop.badges': 'Badges',
+    'shop.badges.lede':
+      'Badges cannot be bought — they drop for everyone when a competition is finished.',
+
+    'badge.PARTICIPANT': 'Wildcard — submitted a prediction',
+    'badge.BRONZE': 'Top 60% of the event',
+    'badge.SILVER': 'Top 30% of the event',
+    'badge.GOLD': 'Top 5% of the event',
+    'badge.PODIUM_3': 'Third — third best predictor',
+    'badge.PODIUM_2': 'Second — runner-up predictor',
+    'badge.PODIUM_1': 'Winner — best predictor',
+
+    'profile.badges': 'Badges',
+    'profile.badges.empty':
+      'No badges yet — they drop when a competition you predicted is finished.',
+    'profile.wallet': 'Wallet',
+    'profile.shop.cta': 'Open the shop',
   },
 
   fr: {
@@ -596,6 +615,7 @@ const DICT = {
     'nav.logout': 'Déconnexion',
     'nav.language': 'Langue',
     'nav.menu': 'Menu',
+    'nav.shop': 'Boutique',
 
     'footer.tagline': 'Les pronostics ferment au coup d’envoi de chaque phase.',
 
@@ -909,34 +929,6 @@ const DICT = {
     'artists.col.category': 'Catégorie',
     'artists.col.as': 'Sous le nom de',
 
-    'nav.shop': 'Boutique',
-
-    'shop.eyebrow': 'BOUTIQUE',
-    'shop.title': 'La boutique',
-    'shop.balance': 'porte-monnaie',
-    'shop.balance.lede': 'Les points gagnés sur les compétitions terminées atterrissent ici. Les dépenser ne touche jamais votre score au classement — celui-là est gravé pour de bon.',
-    'shop.signin': 'Connectez-vous avec Discord pour gagner et dépenser des points.',
-    'shop.buy': 'Acheter',
-    'shop.equip': 'Porter',
-    'shop.unequip': 'Retirer',
-    'shop.section.frame': 'Cadres',
-    'shop.section.title': 'Titres',
-    'shop.section.flair': 'Pins',
-    'shop.badges': 'Badges',
-    'shop.badges.lede': 'Les badges ne s’achètent pas — ils tombent pour tout le monde à la clôture d’une compétition.',
-    'badge.PARTICIPANT': 'Participant — un pronostic déposé',
-    'badge.BRONZE': 'Bronze — top 60 % de la compète',
-    'badge.SILVER': 'Silver — top 30 % de la compète',
-    'badge.GOLD': 'Gold — top 5 % de la compète',
-    'badge.PODIUM_3': 'Podium de la compète — 3e pronostiqueur',
-    'badge.PODIUM_2': 'Podium de la compète — 2e pronostiqueur',
-    'badge.PODIUM_1': 'Vainqueur de la compète — meilleur pronostiqueur',
-
-    'profile.badges': 'Badges',
-    'profile.badges.empty': 'Aucun badge pour l’instant — ils tombent à la clôture d’une compétition que vous avez pronostiquée.',
-    'profile.wallet': 'Porte-monnaie',
-    'profile.shop.cta': 'Ouvrir la boutique',
-
     'profile.signin': 'Connectez-vous pour retrouver vos pronostics.',
     'profile.member': 'Inscrit depuis {date}',
     'profile.someoneElse': 'Vous consultez le profil de {name}.',
@@ -1137,6 +1129,53 @@ const DICT = {
     'privacy.contact.title': 'Une question',
     'privacy.contact.lede':
       'Passez par la boîte à idées de la page d’accueil, ou joignez le responsable du site sur le Discord. Il y a une seule personne derrière ce site, et elle lit tout.',
+
+    'shop.eyebrow': 'P470 · BOUTIQUE',
+    'shop.title': 'La boutique',
+    'shop.balance': 'porte-monnaie',
+    'shop.balance.lede':
+      'Les points gagnés sur les compétitions terminées atterrissent ici. Les dépenser ne touche jamais votre score au classement — celui-là est gravé pour de bon.',
+    'shop.signin': 'Connectez-vous avec Discord pour gagner et dépenser des points.',
+    'shop.buy': 'Acheter',
+    'shop.equip': 'Porter',
+    'shop.unequip': 'Retirer',
+    'shop.free': 'gratuit',
+    'shop.points': 'pts',
+    'shop.animated': 'animé',
+
+    'shop.section.frame': 'Cadres d’avatar',
+    'shop.section.frame.lede':
+      'Cinq pixels de large au maximum, collés à la photo. Visibles partout où votre avatar apparaît.',
+    'shop.section.nameFx': 'Effets de pseudo',
+    'shop.section.nameFx.lede':
+      'Rien que des attributs de caractère — aucun dessin, et ça reste lisible dans un tableau dense.',
+    'shop.section.band': 'Bandes de profil',
+    'shop.section.band.lede':
+      'Deux colonnes verticales qui encadrent votre profil. Masquées sur écran étroit.',
+    'shop.section.cardSkin': 'Skins de carte d’export',
+    'shop.section.cardSkin.lede':
+      'Le seul cosmétique que verront des gens sans compte. Le prix en tient compte.',
+    'shop.section.stamp': 'Tampons',
+    'shop.section.stamp.lede':
+      'Une marque apposée sur votre pronostic, conservée sur l’image partagée.',
+
+    'shop.badges': 'Badges',
+    'shop.badges.lede':
+      'Les badges ne s’achètent pas — ils tombent pour tout le monde à la clôture d’une compétition.',
+
+    'badge.PARTICIPANT': 'Wildcard — un pronostic déposé',
+    'badge.BRONZE': 'Top 60 % de la compète',
+    'badge.SILVER': 'Top 30 % de la compète',
+    'badge.GOLD': 'Top 5 % de la compète',
+    'badge.PODIUM_3': 'Troisième — 3e pronostiqueur',
+    'badge.PODIUM_2': 'Deuxième — 2e pronostiqueur',
+    'badge.PODIUM_1': 'Vainqueur — meilleur pronostiqueur',
+
+    'profile.badges': 'Badges',
+    'profile.badges.empty':
+      'Aucun badge pour l’instant — ils tombent à la clôture d’une compétition que vous avez pronostiquée.',
+    'profile.wallet': 'Porte-monnaie',
+    'profile.shop.cta': 'Ouvrir la boutique',
   },
 };
 

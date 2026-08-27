@@ -1,193 +1,185 @@
-import {
-    IconCrown,
-    IconHexagon,
-    IconMicrophone2,
-    IconRepeat,
-    IconWorld,
-} from '@tabler/icons-react';
-import { badgeByCode as _b, itemById as _i } from '../lib/cosmetics.js';
+import { useMemo } from 'react';
+import { itemById } from '../lib/cosmetics.js';
+import { BADGE_ART, BAND_ART, gridToSvg, gridToDataUrl } from '../lib/pixels.js';
 
 /**
- * Tout ce qui se PORTE ou se GAGNE, en un seul fichier.
+ * Le rendu des cosmétiques.
  *
- * Les icônes viennent de Tabler (traits 2 px, monochromes, colorables par
- * currentColor — du télétexte vectoriel), remaniées à notre sauce : elles ne
- * s'affichent jamais nues, toujours dans nos cartouches, et les glyphes trop
- * spécifiques (la casquette) sont dessinés main dans le même gabarit 24×24.
- * Le mapping vit ici et nulle part ailleurs : changer d'icône = une ligne.
- *
- * Les badges, eux, sont du SVG maison intégral : la palette P411 n'a ni or ni
- * argent ni bronze, alors le NOMBRE de chevrons dit le palier, et le fond bleu
- * — le seul fond de bloc que le système autorise — est réservé au vainqueur.
+ * Chaque composant est SILENCIEUX quand rien n'est porté : il renvoie
+ * exactement ce qu'affichait le site avant la boutique. C'est la condition pour
+ * pouvoir remplacer les avatars partout d'un coup sans que la page change
+ * d'aspect pour ceux qui n'ont rien acheté.
  */
 
-const COLOR = {
-    y: 'var(--y)',
-    c: 'var(--c)',
-    g: 'var(--g)',
-    m: 'var(--m)',
-    r: 'var(--r)',
-    w: 'var(--w)',
-    b: 'var(--b)',
-};
-
-/* --- La casquette, dessinée main dans le gabarit Tabler (24×24, trait 2) --- */
-function CapIcon({ size = 16, ...props }) {
-    return (
-        <svg
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="square"
-            {...props}
-        >
-            {/* la calotte */}
-            <path d="M4 13a8 8 0 0 1 16 0" />
-            {/* le bandeau */}
-            <path d="M4 13h16" />
-            {/* la visière */}
-            <path d="M20 13h3v2h-4" />
-            {/* le bouton */}
-            <path d="M12 5v-2" />
-        </svg>
-    );
-}
-
-const ICONS = {
-    mic: IconMicrophone2,
-    cap: CapIcon,
-    loop: IconRepeat,
-    hex: IconHexagon,
-    globe: IconWorld,
-    crown: IconCrown,
-};
-
 /* ---------------------------------------------------------------------------
-   Le pin : la petite icône à côté d'un nom.
+   Le pixel art
    --------------------------------------------------------------------------- */
-export function Flair({ itemId, size = 16, lang = 'en' }) {
-    const item = _i(itemId);
-    if (!item || item.slot !== 'flair') return null;
-    const Icon = ICONS[item.icon];
-    if (!Icon) return null;
+
+/**
+ * Une grille de pixels, injectée telle quelle.
+ *
+ * `dangerouslySetInnerHTML` sur du SVG fabriqué par nos soins et jamais par
+ * l'utilisateur : les grilles sont des constantes de module, aucune donnée
+ * extérieure n'y entre. L'alternative — un composant React par rectangle —
+ * produisait deux cents éléments réconciliés à chaque rendu pour un dessin qui
+ * ne change jamais.
+ */
+export function PixelArt({ rows, scale = 3, label }) {
+    const html = useMemo(() => gridToSvg(rows, scale), [rows, scale]);
     return (
         <span
-            className="cos-flair"
-            style={{ color: item.color === 'b' ? COLOR.c : COLOR[item.color] }}
-            title={item.name[lang] ?? item.name.en}
-        >
-            <Icon size={size} stroke={2} />
-        </span>
+            className="cos-badge"
+            role={label ? 'img' : 'presentation'}
+            aria-label={label}
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
     );
 }
 
-/* ---------------------------------------------------------------------------
-   Le titre : la ligne magenta sous le pseudo — la couleur des méta-infos.
-   --------------------------------------------------------------------------- */
-export function Title({ itemId, lang = 'en', inline = false }) {
-    const item = _i(itemId);
-    if (!item || item.slot !== 'title') return null;
-    const text = item.name[lang] ?? item.name.en;
-    // Dans un tableau, un <p> casse la ligne et gonfle la hauteur de rangée même
-    // vide de marge : la variante en ligne est un <span> plus petit, posé sous le
-    // pseudo comme le sont déjà les sous-lignes du site.
-    if (inline) return <span className="cos-title cos-title--inline data">{text}</span>;
-    return <p className="cos-title data">{text}</p>;
+/** Un badge d'événement. */
+export function Badge({ code, scale = 2, label }) {
+    const rows = BADGE_ART[code];
+    if (!rows) return null;
+    return <PixelArt rows={rows} scale={scale} label={label} />;
 }
 
 /* ---------------------------------------------------------------------------
-   Le cadre : autour de l'avatar. Le style visuel vit dans shop.css sous
-   `cos-frame--<id>` — ici on ne fait qu'accrocher la bonne classe.
+   L'avatar
    --------------------------------------------------------------------------- */
-export function FramedAvatar({ url, frameId, size = 'md', alt = '', className = '' }) {
-    const item = _i(frameId);
-    const frameClass = item && item.slot === 'frame' ? ` cos-frame--${item.id}` : '';
+
+/**
+ * L'avatar, encadré s'il y a de quoi.
+ *
+ * `className` laisse passer les règles déjà écrites pour l'ancienne balise —
+ * `avatar--link` par exemple, que mobile.css agrandit nommément dans la ligne
+ * de service. Sans elle, encadrer l'avatar de l'en-tête le rapetissait sur
+ * téléphone.
+ */
+export function FramedAvatar({ url, frameId, size = 'sm', alt = '', className = '' }) {
     if (!url) return null;
-    // `className` laisse passer les règles déjà écrites pour l'ancienne balise —
-    // `avatar--link` par exemple, que mobile.css agrandit nommément dans la ligne
-    // de service. Sans elle, encadrer l'avatar de l'en-tête le rapetissait sur
-    // téléphone.
+    const item = itemById(frameId);
+    const frame = item && item.slot === 'frame' ? ` ${item.css}` : '';
     return (
-        <span className={`cos-frame cos-frame--${size}${frameClass}${className ? ` ${className}` : ''}`}>
+        <span className={`cos-frame cos-frame--${size}${frame}${className ? ` ${className}` : ''}`}>
             <img src={url} alt={alt} />
         </span>
     );
 }
 
 /* ---------------------------------------------------------------------------
-   Le badge : un cartouche SVG carré, 2 px de trait, zéro arrondi.
-
-   Le langage visuel :
-     ticket perforé blanc        → participation
-     1 / 2 / 3 chevrons          → bronze (magenta) / silver (cyan) / gold (jaune)
-     chiffre sur socle           → podium 3 (vert) et 2 (cyan)
-     couronne + 1 sur fond bleu  → vainqueur
+   Le pseudo
    --------------------------------------------------------------------------- */
-export function BadgeMedal({ code, size = 56, label = null }) {
-    const badge = _b(code);
-    if (!badge) return null;
-    const c = COLOR[badge.color];
-    const S = 56; // gabarit interne fixe, mis à l'échelle par width/height
+
+/**
+ * Le pseudo et son effet.
+ *
+ * Un `<span>` et non un wrapper qui remplacerait l'élément appelant : le pseudo
+ * est tantôt dans un lien, tantôt dans un `<strong>`, tantôt dans un titre. On
+ * habille le texte, on ne décide pas de ce qui l'entoure.
+ */
+export function Name({ children, fxId }) {
+    const item = itemById(fxId);
+    const fx = item && item.slot === 'nameFx' ? ` ${item.css}` : '';
+    return <span className={`cos-name${fx}`}>{children}</span>;
+}
+
+/* ---------------------------------------------------------------------------
+   Les bandes de profil
+   --------------------------------------------------------------------------- */
+
+/**
+ * Le profil encadré de ses deux bandes.
+ *
+ * Quand rien n'est porté, on ne rend AUCUN conteneur supplémentaire : le profil
+ * garde exactement le balisage qu'il avait, et la grille à trois colonnes
+ * n'existe pas. Un fragment vide vaut mieux qu'une div qui ne sert à rien.
+ */
+export function Banded({ bandId, children }) {
+    const item = itemById(bandId);
+    const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
+    const url = useMemo(() => (art ? gridToDataUrl(art, 3) : null), [art]);
+
+    if (!url) return <>{children}</>;
 
     return (
-        <span className="cos-badge" style={{ width: size }}>
-            <svg width={size} height={size} viewBox={`0 0 ${S} ${S}`} role="img" aria-label={code}>
-                {/* Le fond bleu du vainqueur — le seul fond de bloc autorisé. */}
-                {badge.code === 'PODIUM_1' && <rect x="3" y="3" width="50" height="50" fill="var(--b)" />}
-                <rect x="3" y="3" width="50" height="50" fill="none" stroke={c} strokeWidth="2" />
-                {/* Les coins télétexte : quatre ticks, jamais un arrondi. */}
-                <path d="M3 11V3h8 M45 3h8v8 M53 45v8h-8 M11 53H3v-8" fill="none" stroke={c} strokeWidth="2" />
+        <div className="cos-banded">
+            <div className="cos-band" style={{ backgroundImage: url }} aria-hidden="true" />
+            <div>{children}</div>
+            <div className="cos-band cos-band--right" style={{ backgroundImage: url }} aria-hidden="true" />
+        </div>
+    );
+}
 
-                {badge.kind === 'ticket' && (
-                    <g stroke={c} strokeWidth="2" fill="none">
-                        <rect x="14" y="20" width="28" height="16" />
-                        {/* les perforations : deux encoches carrées, découpe au fond d'écran */}
-                        <rect x="12" y="26" width="4" height="4" fill="var(--screen)" stroke="none" />
-                        <rect x="40" y="26" width="4" height="4" fill="var(--screen)" stroke="none" />
-                        <path d="M24 20v16" strokeDasharray="2 3" />
-                    </g>
-                )}
+/* ---------------------------------------------------------------------------
+   Le tampon
+   --------------------------------------------------------------------------- */
 
-                {badge.kind === 'tier' && (
-                    <g stroke={c} strokeWidth="3" fill="none" strokeLinecap="square">
-                        {Array.from({ length: badge.chevrons }).map((_, i) => {
-                            const y = 28 + (badge.chevrons - 1) * 4 - i * 8;
-                            return <path key={i} d={`M18 ${y + 6} L28 ${y - 4} L38 ${y + 6}`} />;
-                        })}
-                    </g>
-                )}
+const STAMP_COLOR = {
+    w: 'var(--w, #e8e8e8)', y: 'var(--y)', c: 'var(--c)', g: 'var(--g)',
+    m: 'var(--m)', r: 'var(--r)', o: 'var(--o, #e8531c)',
+};
 
-                {badge.kind === 'podium' && (
-                    <g>
-                        {badge.rank === 1 && (
-                            /* la couronne : trois dents carrées au-dessus du chiffre */
-                            <path
-                                d="M19 18v-6l6 4 3-6 3 6 6-4v6z"
-                                fill="none"
-                                stroke={c}
-                                strokeWidth="2"
-                                strokeLinejoin="miter"
-                            />
-                        )}
-                        <text
-                            x="28"
-                            y={badge.rank === 1 ? 42 : 38}
-                            textAnchor="middle"
-                            fill={c}
-                            fontFamily="var(--font-display)"
-                            fontSize={badge.rank === 1 ? 24 : 28}
-                        >
-                            {badge.rank}
-                        </text>
-                        {/* le socle */}
-                        <path d={`M18 ${badge.rank === 1 ? 46 : 44}h20`} stroke={c} strokeWidth="3" />
-                    </g>
-                )}
-            </svg>
-            {label && <span className="cos-badge__tag data">{label}</span>}
+/** Le libellé d'un tampon. La POSE sur le tableau viendra avec le lot suivant. */
+export function Stamp({ stampId, lang = 'en' }) {
+    const item = itemById(stampId);
+    if (!item || item.slot !== 'stamp') return null;
+    return (
+        <span className="cos-stamp" style={{ color: STAMP_COLOR[item.color] ?? 'var(--w, #e8e8e8)' }}>
+            {item.text[lang] ?? item.text.en}
         </span>
     );
+}
+
+/* ---------------------------------------------------------------------------
+   L'aperçu de boutique
+   --------------------------------------------------------------------------- */
+
+/**
+ * Ce qu'on montre dans la vitrine, selon l'emplacement.
+ *
+ * Un cadre se juge sur un vrai avatar, une bande sur sa hauteur, un skin sur un
+ * bout de carte. Un aperçu générique ne dirait rien d'aucun des trois.
+ */
+export function Preview({ item, avatarUrl, lang = 'en' }) {
+    const bandUrl = useMemo(
+        () => (item.slot === 'band' && BAND_ART[item.art] ? gridToDataUrl(BAND_ART[item.art], 3) : null),
+        [item]
+    );
+
+    if (item.slot === 'frame') {
+        return avatarUrl ? (
+            <FramedAvatar url={avatarUrl} frameId={item.id} size="md" />
+        ) : (
+            <span className={`cos-frame cos-frame--md ${item.css}`}>
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect width='1' height='1' fill='%23333'/%3E%3C/svg%3E" alt="" />
+            </span>
+        );
+    }
+
+    if (item.slot === 'nameFx') {
+        return <span className={`cos-name ${item.css}`}>SEIZUMA</span>;
+    }
+
+    if (item.slot === 'band') {
+        return (
+            <span
+                className="cos-band"
+                style={{ backgroundImage: bandUrl, width: '2.25rem', height: '5.5rem', display: 'block' }}
+            />
+        );
+    }
+
+    if (item.slot === 'cardSkin') {
+        const [bg, accent, text] = item.colors;
+        return (
+            <span className="shop-swatch" style={{ background: bg }}>
+                <span className="shop-swatch__title" style={{ color: accent }}>GRAND BEATBOX BATTLE</span>
+                <span className="shop-swatch__sub" style={{ color: text }}>SOLO · 36 POINTS</span>
+            </span>
+        );
+    }
+
+    if (item.slot === 'stamp') return <Stamp stampId={item.id} lang={lang} />;
+
+    return null;
 }

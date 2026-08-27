@@ -179,9 +179,8 @@ groupRouter.post('/', guard(async (req, res) => {
                             username: true,
                             globalName: true,
                             avatarUrl: true,
-                            equippedFrame: true,
-                            equippedTitle: true,
-                            equippedFlair: true,
+                            equippedFrame: true, 
+                            equippedNameFx: true
                         }
                     },
                 },
