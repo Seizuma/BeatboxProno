@@ -93,8 +93,10 @@ export const slotById = (id) => SLOTS.find((s) => s.id === id) ?? null;
  *            la traduction de l'interface.
  *   css    — pour les cadres et les effets de pseudo, la classe à poser.
  *   art    — pour les bandes, la clé dans BAND_ART.
- *   colors — pour les skins de carte : fond, accent, texte. Le canvas d'export
- *            ne sait pas lire une variable CSS, il lui faut des valeurs.
+ *   colors — pour les skins de carte : [fond, accent, encre], et RIEN d'autre.
+ *            Les nuances intermédiaires se déduisent par mélange dans
+ *            `predictionCard.js` : sept teintes à choisir par skin, personne ne
+ *            les choisirait bien. `null` signifie « garder la palette du site ».
  *   text   — pour les tampons, le libellé imprimé.
  */
 export const ITEMS = [
@@ -168,21 +170,21 @@ export const ITEMS = [
     // Vingt points maximum, et c'est délibéré : chaque carte partagée est une
     // affiche pour le site, vue par des gens qui n'ont pas de compte. Autant
     // qu'elles soient variées plutôt que rentables.
-    { id: 'skin-teletext', slot: 'cardSkin', price: 0, colors: ['#0b0b0b', '#ff3ce8', '#00e8e8'],
+    { id: 'skin-teletext', slot: 'cardSkin', price: 0, colors: null,
       name: { en: 'Teletext', fr: 'Télétexte' } },
-    { id: 'skin-orange', slot: 'cardSkin', price: 20, colors: ['#e8531c', '#ffb08a', '#ffffff'],
+    { id: 'skin-orange', slot: 'cardSkin', price: 20, colors: ['#e8531c', '#ffd66b', '#2a0d02'],
       name: { en: 'Contest orange', fr: 'Orange compète' } },
-    { id: 'skin-graph', slot: 'cardSkin', price: 20, colors: ['#f2ecd8', '#3a6ea5', '#1a1a1a'],
+    { id: 'skin-graph', slot: 'cardSkin', price: 20, colors: ['#f2ecd8', '#2f5fa0', '#1a1a1a'],
       name: { en: 'Graph paper', fr: 'Papier millimétré' } },
-    { id: 'skin-amber', slot: 'cardSkin', price: 15, colors: ['#0b0b0b', '#ffb000', '#8a5c00'],
+    { id: 'skin-amber', slot: 'cardSkin', price: 15, colors: ['#0b0b0b', '#ffb000', '#ffd48a'],
       name: { en: 'Amber', fr: 'Ambre' } },
-    { id: 'skin-negative', slot: 'cardSkin', price: 15, colors: ['#f4f4f4', '#0b0b0b', '#ff2222'],
+    { id: 'skin-negative', slot: 'cardSkin', price: 15, colors: ['#f4f4f4', '#c81414', '#141414'],
       name: { en: 'Negative', fr: 'Négatif' } },
-    { id: 'skin-cyan', slot: 'cardSkin', price: 15, colors: ['#04121c', '#00e8e8', '#0a6a80'],
+    { id: 'skin-cyan', slot: 'cardSkin', price: 15, colors: ['#04121c', '#00e8e8', '#bfe9f2'],
       name: { en: 'Deep cyan', fr: 'Cyan profond' } },
-    { id: 'skin-phosphor', slot: 'cardSkin', price: 15, colors: ['#04140a', '#3cff6a', '#0f7a2a'],
+    { id: 'skin-phosphor', slot: 'cardSkin', price: 15, colors: ['#04140a', '#3cff6a', '#a8f5bd'],
       name: { en: 'Phosphor green', fr: 'Vert phosphore' } },
-    { id: 'skin-gold', slot: 'cardSkin', price: 20, colors: ['#0b0b0b', '#ffe400', '#8a7a00'],
+    { id: 'skin-gold', slot: 'cardSkin', price: 20, colors: ['#0b0b0b', '#ffe400', '#e0cf7a'],
       name: { en: 'Solid gold', fr: 'Or massif' } },
 
     /* --- Tampons ----------------------------------------------------------- */

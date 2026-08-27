@@ -180,6 +180,10 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
         select: {
           id: true, username: true, globalName: true, avatarUrl: true,
           equippedFrame: true, equippedNameFx: true,
+          // Le skin habille la carte exportée depuis CE pronostic : il suit donc
+          // son auteur, pas son lecteur. Une carte doit ressembler à ce que la
+          // personne qui l'a faite a choisi, même consultée par quelqu'un d'autre.
+          equippedCardSkin: true,
         },
       },
       event: { select: { slug: true, name: true, year: true, status: true, judgeCount: true } },

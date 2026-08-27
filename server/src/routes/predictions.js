@@ -16,6 +16,29 @@ const MAX_DRAFTS = 10;
 
 const contentSchema = z.object({
   label: z.string().min(1).max(60).optional(),
+
+  /**
+   * Le tampon posé sur le tableau, ou `null` pour le retirer.
+   *
+   * Les coordonnées sont des FRACTIONS bornées et non des pixels : la largeur du
+   * bracket dépend de l'écran, et la carte exportée n'a la largeur d'aucun d'eux.
+   * Les bornes sont ici et pas seulement dans l'interface, parce qu'une API
+   * publique ne se fie pas à son client — un x de 40 sortirait le tampon de
+   * l'image sans qu'aucune erreur ne soit levée.
+   *
+   * L'identifiant n'est pas vérifié contre le catalogue : un tampon retiré du
+   * catalogue rendrait le pronostic indéposable, ce qui punirait le joueur pour
+   * une décision qui n'est pas la sienne. Le rendu ignore simplement ce qu'il ne
+   * connaît pas.
+   */
+  stamp: z
+    .object({
+      id: z.string().max(60),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
+    .nullable()
+    .optional(),
   ranks: z
     .array(z.object({ phaseId: z.string(), contenderId: z.string(), rank: z.number().int().min(1) }))
     .default([]),
@@ -232,11 +255,22 @@ predictionRouter.put('/:predictionId', async (req, res) => {
   const rejected = body.ranks.length - ranks.length + (body.battles.length - battles.length);
 
   const saved = await prisma.$transaction(async (tx) => {
+    // `undefined` laisse la colonne tranquille, `null` l'efface : c'est la
+    // distinction que Prisma fait déjà, et elle tombe juste ici — un client qui
+    // n'envoie pas la clé ne veut rien changer, un client qui envoie null retire.
+    const head = body.stamp === undefined ? {} : { stamp: body.stamp };
+
     if (body.label) {
-      await tx.prediction.update({ where: { id: prediction.id }, data: { label: body.label } });
+      await tx.prediction.update({
+        where: { id: prediction.id },
+        data: { label: body.label, ...head },
+      });
     } else {
       // Touche updatedAt même quand seul le contenu change.
-      await tx.prediction.update({ where: { id: prediction.id }, data: { updatedAt: new Date() } });
+      await tx.prediction.update({
+        where: { id: prediction.id },
+        data: { updatedAt: new Date(), ...head },
+      });
     }
 
     // On ne réécrit que les phases encore ouvertes : les phases verrouillées

@@ -1,5 +1,5 @@
 /**
- * L'd'un pronostic en image.
+ * L'affiche d'un pronostic en image.
  *
  * Tracé dans un canvas côté navigateur, pas photographié côté serveur. Un
  * navigateur sans tête rendrait la page au pixel près, mais ajouterait trois
@@ -34,6 +34,26 @@
  */
 
 import { itemById } from './cosmetics.js';
+
+/**
+ * Mélange deux couleurs hexadécimales.
+ *
+ * Un skin ne fournit que trois teintes — fond, accent, encre. Les nuances
+ * intermédiaires (filets, texte atténué, surlignage du vainqueur) s'en déduisent
+ * plutôt que d'être demandées : sept couleurs à choisir par skin, personne ne
+ * les choisirait bien, et la moitié des combinaisons seraient illisibles.
+ */
+function mix(a, b, ratio) {
+    const parse = (h) => {
+        const v = h.replace('#', '');
+        const n = v.length === 3 ? v.split('').map((c) => c + c).join('') : v;
+        return [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16));
+    };
+    const [r1, g1, b1] = parse(a);
+    const [r2, g2, b2] = parse(b);
+    const c = (x, y) => Math.round(x + (y - x) * ratio).toString(16).padStart(2, '0');
+    return `#${c(r1, r2)}${c(g1, g2)}${c(b1, b2)}`;
+}
 
 export const FORMATS = {
     square: { id: 'square', w: 1080, h: 1080 },
@@ -112,6 +132,42 @@ export function readPalette(root = document.documentElement) {
         cyan: v('--c', '#00e8e8'),
         blue: v('--b', '#1414d8'),
         magenta: v('--m', '#ff3ce8'),
+        // Le rouge ne servait à rien jusqu'ici ; les tampons en ont besoin.
+        red: v('--r', '#ff2222'),
+    };
+}
+
+/**
+ * La palette d'un skin de carte.
+ *
+ * Un skin ne redécore pas : il change de GRAMMAIRE. Le rendu télétexte joue sur
+ * six couleurs pures, un skin joue sur trois — fond, accent, encre — et tout le
+ * reste s'en déduit par mélange. Vouloir garder le bleu du vainqueur et le
+ * magenta des scores sur un fond orange donnait une image que personne ne
+ * voulait partager.
+ *
+ * Le surlignage du vainqueur mérite une mention : c'est un aplat sur lequel on
+ * écrit en accent. Le teinter à trente pour cent le laisse assez sombre pour que
+ * l'accent y reste lisible, ce qu'un aplat en accent pur interdisait — le texte
+ * y disparaissait purement et simplement.
+ */
+export function paletteForSkin(base, skinId) {
+    const skin = itemById(skinId);
+    if (!skin || skin.slot !== 'cardSkin' || !skin.colors) return base;
+
+    const [bg, accent, ink] = skin.colors;
+    return {
+        screen: bg,
+        surface: mix(bg, ink, 0.06),
+        ink,
+        dim: mix(bg, ink, 0.55),
+        faint: mix(bg, ink, 0.22),
+        accent,
+        ok: accent,
+        cyan: mix(bg, ink, 0.35),
+        blue: mix(bg, accent, 0.3),
+        magenta: mix(bg, ink, 0.55),
+        red: accent,
     };
 }
 
@@ -191,19 +247,38 @@ export function buildCardModel(prediction, { t, lang = 'en' } = {}) {
     return {
         title: `${prediction.event.name} ${prediction.event.year}`,
         subtitle: prediction.category.name,
-        // Le titre porté, s'il y en a un. Le nom vient du catalogue et non du
-        // dictionnaire : d'où `lang` passé en paramètre plutôt qu'un `t`.
-        authorTitle: (() => {
-            const item = itemById(prediction.user?.equippedTitle);
-            if (!item || item.slot !== 'title') return null;
-            return (item.name[lang] ?? item.name.en).toUpperCase();
-        })(),
+        author: prediction.user?.globalName ?? prediction.user?.username ?? '',
         // Les points ne s'affichent qu'une fois le pronostic scoré : une carte
         // annonçant « 0 point » avant la compète se lirait comme un échec.
         points: prediction.scoredAt ? prediction.points : null,
         sections,
+        // Le tampon est figé au moment où il a été posé : son identifiant vit
+        // dans le pronostic, pas dans la tenue actuelle de l'auteur. Changer de
+        // tampon ne doit pas réécrire une carte déjà partagée.
+        stamp: readStamp(prediction.stamp, lang),
+        skinId: prediction.user?.equippedCardSkin ?? null,
     };
 }
+
+/** Le tampon posé sur ce pronostic, ou rien. */
+function readStamp(raw, lang) {
+    if (!raw || typeof raw !== 'object') return null;
+    const item = itemById(raw.id);
+    if (!item || item.slot !== 'stamp') return null;
+    return {
+        text: item.text[lang] ?? item.text.en,
+        color: STAMP_COLOR[item.color] ?? 'ink',
+        // Bornés : une position hors cadre viendrait d'un écran redimensionné
+        // entre la pose et l'export, et sortirait le tampon de l'image.
+        x: Math.min(0.95, Math.max(0.05, Number(raw.x) || 0.5)),
+        y: Math.min(0.95, Math.max(0.05, Number(raw.y) || 0.5)),
+    };
+}
+
+/** Du code couleur du catalogue vers une clé de palette. */
+const STAMP_COLOR = {
+    w: 'ink', y: 'accent', c: 'cyan', g: 'ok', m: 'magenta', r: 'red', o: 'accent',
+};
 
 // --- La mise en page -------------------------------------------------------------
 //
@@ -471,38 +546,16 @@ function buildLayout(ctx, model, LW) {
     ops.push({ t: 'rule', y });
     y += 24;
     ops.push({ t: 'text', x: 0, y, s: 30, f: DATA, c: 'ink', v: model.author });
-
-    // Ce que la droite du pied occupe déjà. Le titre s'insère entre les deux et
-    // ne doit jamais mordre dessus : on mesure d'abord, on écrit ensuite — et
-    // s'il ne reste pas de quoi lire trois lettres, on n'écrit rien du tout.
-    // Une carte est une image qu'on ne peut plus corriger une fois partagée.
-    let reserved;
     if (model.points != null) {
-        reserved = measure(ctx, `${model.points} PTS`, 46, DISPLAY);
         ops.push({
             t: 'text', x: LW, y: y - 8, s: 46, f: DISPLAY, c: 'ok', align: 'right',
             v: `${model.points} PTS`,
         });
     } else {
-        reserved = measure(ctx, 'beatboxpredictions.com', 26, DATA);
         ops.push({
             t: 'text', x: LW, y, s: 26, f: DATA, c: 'dim', align: 'right',
             v: 'beatboxpredictions.com',
         });
-    }
-
-    if (model.authorTitle) {
-        const left = measure(ctx, model.author, 30, DATA) + 18;
-        const room = LW - left - reserved - 24;
-        if (room > 110) {
-            // Magenta : la couleur des méta-informations partout ailleurs sur le
-            // site, et celle du titre sur le profil. La carte ne s'invente pas
-            // une grammaire à elle.
-            ops.push({
-                t: 'text', x: left, y: y + 3, s: 24, f: DATA, c: 'magenta',
-                v: fit(ctx, model.authorTitle, 24, DATA, room),
-            });
-        }
     }
     y += 44;
 
@@ -579,6 +632,7 @@ export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_P
         cyan: palette.cyan,
         blue: palette.blue,
         magenta: palette.magenta,
+        red: palette.red ?? palette.magenta,
         black: '#000',
     }[key] ?? palette.ink);
 
@@ -624,6 +678,48 @@ export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_P
             default:
                 break;
         }
+    }
+
+    // Le tampon, en dernier : il se pose PAR-DESSUS, c'est le principe même
+    // d'un tampon. Ses coordonnées sont des fractions de la mise en page et non
+    // des pixels — l'endroit choisi sur le tableau se retrouve au même endroit
+    // relatif de la carte, quel que soit le format exporté.
+    if (model.stamp) {
+        const sx = model.stamp.x * layout.width;
+        const sy = model.stamp.y * layout.height;
+        const size = 34;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate((-11 * Math.PI) / 180);
+
+        font(ctx, size, DATA);
+        const label = model.stamp.text.toUpperCase();
+        const tw = ctx.measureText(label).width;
+        const padX = 16;
+        const padY = 10;
+        const boxW = tw + padX * 2;
+        const boxH = size + padY * 2;
+
+        // Un aplat de fond d'abord : le tampon se pose où l'auteur a cliqué, et
+        // c'est souvent par-dessus deux noms. Sans ce cache, les deux textes se
+        // superposent et aucun des deux ne se lit.
+        ctx.globalAlpha = 0.82;
+        ctx.fillStyle = palette.screen;
+        ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
+        ctx.globalAlpha = 1;
+
+        ctx.strokeStyle = color(model.stamp.color);
+        ctx.fillStyle = color(model.stamp.color);
+        ctx.lineWidth = 4;
+        ctx.strokeRect(-boxW / 2, -boxH / 2, boxW, boxH);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, 0, 2);
+        ctx.restore();
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);

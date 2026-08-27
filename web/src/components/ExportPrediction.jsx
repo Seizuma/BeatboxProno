@@ -8,6 +8,7 @@ import {
     drawCard,
     ensureFonts,
     fileNameFor,
+    paletteForSkin,
     previewScale,
     readPalette,
 } from '../lib/predictionCard.js';
@@ -53,7 +54,14 @@ export default function ExportPrediction({ prediction, onClose }) {
     const [shared, setShared] = useState(null);
 
     const spec = FORMATS[format];
-    const model = buildCardModel(prediction, { t, lang })
+    const model = buildCardModel(prediction, { t, lang });
+
+    /**
+     * La palette effective : celle du site, puis celle du skin porté par
+     * l'AUTEUR du pronostic. Pas celle du lecteur : une carte doit ressembler à
+     * ce que son auteur a choisi, y compris consultée par quelqu'un d'autre.
+     */
+    const palette = () => paletteForSkin(readPalette(), model.skinId);
     const name = fileNameFor(model, spec);
 
     /**
@@ -97,7 +105,7 @@ export default function ExportPrediction({ prediction, onClose }) {
                 await ensureFonts();
                 if (cancelled || !canvas.current) return;
 
-                drawCard(canvas.current, model, spec, readPalette(), {
+                drawCard(canvas.current, model, spec, palette(), {
                     pixelScale: previewScale(spec, cssW),
                 });
 
@@ -120,13 +128,13 @@ export default function ExportPrediction({ prediction, onClose }) {
         // boucle. Les entrées qui comptent sont le pronostic, le format et la
         // largeur d'affichage.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [prediction, format, cssW, boxW, t]);
+    }, [prediction, format, cssW, boxW, t, lang, model.skinId]);
 
     /** Le fichier, rendu hors écran à pleine définition au moment du clic. */
     const renderFile = async () => {
         await ensureFonts();
         const off = document.createElement('canvas');
-        drawCard(off, model, spec, readPalette(), { pixelScale: EXPORT_PIXEL_SCALE });
+        drawCard(off, model, spec, palette(), { pixelScale: EXPORT_PIXEL_SCALE });
         return new Promise((resolve, reject) => {
             off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Canvas vide.'))), 'image/png');
         });

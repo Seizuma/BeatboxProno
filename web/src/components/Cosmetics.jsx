@@ -170,7 +170,9 @@ export function Preview({ item, avatarUrl, lang = 'en' }) {
     }
 
     if (item.slot === 'cardSkin') {
-        const [bg, accent, text] = item.colors;
+        // `colors` vaut null pour le rendu par défaut : on montre alors la
+        // palette du site plutôt qu'un carré vide.
+        const [bg, accent, text] = item.colors ?? ['var(--screen)', 'var(--y)', 'var(--c)'];
         return (
             <span className="shop-swatch" style={{ background: bg }}>
                 <span className="shop-swatch__title" style={{ color: accent }}>GRAND BEATBOX BATTLE</span>

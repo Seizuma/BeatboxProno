@@ -380,6 +380,43 @@
   white-space: nowrap;
 }
 
+.cos-stamp--w { color: var(--w, #e8e8e8); }
+.cos-stamp--y { color: var(--y); }
+.cos-stamp--c { color: var(--c); }
+.cos-stamp--g { color: var(--g); }
+.cos-stamp--m { color: var(--m); }
+.cos-stamp--r { color: var(--r); }
+.cos-stamp--o { color: var(--o, #e8531c); }
+
+/* Le tableau devient le repère de position du tampon. `relative` et rien
+   d'autre : la grille du bracket n'est pas touchée. */
+.cos-stamp-host { position: relative; }
+
+/* Pendant la pose, le tableau entier devient une cible. Les affiches cessent de
+   répondre au clic — sans quoi poser un tampon sur une battle désignerait un
+   vainqueur au passage, ce qui serait une belle façon de saboter un pronostic. */
+.cos-stamp-host--placing { cursor: crosshair; }
+.cos-stamp-host--placing .battle__side,
+.cos-stamp-host--placing .battle__foot { pointer-events: none; }
+
+/* Le tampon posé ne doit JAMAIS intercepter un clic : il flotte au-dessus des
+   affiches, et une cible invisible par-dessus une battle rendrait celle-ci
+   inutilisable sans que personne ne comprenne pourquoi. */
+.cos-stamp--posed {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(-11deg);
+  pointer-events: none;
+  z-index: 3;
+  font-size: 1.15rem;
+  background: color-mix(in srgb, var(--screen) 78%, transparent);
+}
+
+/* `color-mix` n'est pas partout : à défaut, un aplat opaque vaut mieux qu'un
+   tampon illisible par-dessus deux noms. */
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .cos-stamp--posed { background: var(--screen); }
+}
+
 /* ---------------------------------------------------------------------------
    La page boutique
    --------------------------------------------------------------------------- */

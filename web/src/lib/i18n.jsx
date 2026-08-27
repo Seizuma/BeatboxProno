@@ -599,6 +599,12 @@ const DICT = {
       'No badges yet — they drop when a competition you predicted is finished.',
     'profile.wallet': 'Wallet',
     'profile.shop.cta': 'Open the shop',
+
+    'stamp.place': 'Place my stamp',
+    'stamp.move': 'Move my stamp',
+    'stamp.cancel': 'Cancel',
+    'stamp.remove': 'Remove stamp',
+    'stamp.hint': 'Click anywhere on the bracket to drop it. Escape to cancel.',
   },
 
   fr: {
@@ -1176,6 +1182,12 @@ const DICT = {
       'Aucun badge pour l’instant — ils tombent à la clôture d’une compétition que vous avez pronostiquée.',
     'profile.wallet': 'Porte-monnaie',
     'profile.shop.cta': 'Ouvrir la boutique',
+
+    'stamp.place': 'Poser mon tampon',
+    'stamp.move': 'Déplacer mon tampon',
+    'stamp.cancel': 'Annuler',
+    'stamp.remove': 'Retirer le tampon',
+    'stamp.hint': 'Cliquez où vous voulez sur le tableau pour le poser. Échap pour annuler.',
   },
 };
 

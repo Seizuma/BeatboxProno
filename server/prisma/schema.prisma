@@ -326,6 +326,11 @@ model Prediction {
   battles PredictedBattle[]
   podium  PredictedPodium[]
 
+  /// La position du tampon posé sur le tableau, en fractions : {id, x, y}.
+  /// JSON et non trois colonnes — c'est un tout, et la base n'a rien à
+  /// interroger là-dedans. Même choix que `seedPairs` sur Phase.
+  stamp     Json?
+
   // Les fils de discussion ouverts sur ce pronostic, un par groupe privé.
   comments      GroupComment[]
   notifications Notification[]

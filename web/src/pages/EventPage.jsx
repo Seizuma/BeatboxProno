@@ -46,7 +46,11 @@ function fingerprint(state) {
     ])
     .filter(([, list]) => list.length);
 
-  return JSON.stringify({ orders, picks });
+  // Le tampon compte comme une modification : le poser sans que rien ne le
+  // signale laisserait le bouton d'enregistrement éteint sur un changement réel.
+  const stamp = state?.stamp ?? null;
+
+  return JSON.stringify({ orders, picks, stamp });
 }
 const key = (round, slot) => `${round}:${slot}`;
 
@@ -152,7 +156,7 @@ export default function EventPage() {
   const readOnly = eventClosed || eventLive;
 
   const update = (patch) =>
-    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
+    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {}, stamp: null }), ...patch } }));
 
   // La date butoir de l'événement ferme tout. Absente — wildcards ouvertes,
   // date de la compète encore inconnue — rien ne ferme globalement : seuls les
@@ -201,6 +205,9 @@ export default function EventPage() {
       battles: Object.values(state.picks).flatMap((byBattle) =>
         Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
       ),
+      // `null` explicite et non `undefined` : c'est ainsi qu'on RETIRE un
+      // tampon. Omettre la clé laisserait le serveur conserver l'ancien.
+      stamp: state.stamp ?? null,
     };
   }
 
@@ -746,6 +753,9 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 onChange={(picks) =>
                   update({ picks: { ...state.picks, [phase.id]: picks } })
                 }
+                stamp={state.stamp ?? null}
+                stampId={user?.equippedStamp ?? null}
+                onStamp={(next) => update({ stamp: next })}
               />
             )}
           </section>
@@ -780,7 +790,7 @@ function readVersion(saved) {
       scoreB: b.scoreB,
     };
   }
-  return { orders, picks };
+  return { orders, picks, stamp: saved.stamp ?? null };
 }
 
 function hydrate({ event, myPredictions }) {
