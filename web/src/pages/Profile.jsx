@@ -170,7 +170,7 @@ export default function Profile() {
                       key={b.code}
                       code={b.code}
                       scale={2}
-                      label={t(`badge.${b.code}.name`)}
+                      label={t(`badge.${b.code}`)}
                       onClick={() => setSheet(b)}
                     />
                   ))}

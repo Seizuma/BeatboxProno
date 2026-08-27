@@ -552,37 +552,58 @@
 
    `pointer-events: none` : elles couvrent une bonne part de l'écran et ne
    doivent intercepter aucun clic. */
+/* La bande se pose au MILIEU de la marge, pas contre le bord de l'écran.
+
+   `(100% - 980px) / 2` est la largeur d'une marge — la colonne du site fait
+   980 pixels et se centre. La moitié de ça donne son milieu ; on recule ensuite
+   d'une demi-largeur de bande pour l'y centrer vraiment. Résultat : autant de
+   noir à gauche de la bande qu'à sa droite, quelle que soit la fenêtre.
+
+   Collée au bord, elle avait l'air d'une barre de défilement ; collée au
+   profil, elle lui rognait sa place. Le milieu de la marge est le seul endroit
+   où elle a l'air posée là exprès. */
 .cos-band {
+    --band-w: 3.5rem;
     position: fixed;
     top: 0;
     bottom: 0;
-    width: 3.5rem;
+    width: var(--band-w);
     background-repeat: repeat-y;
     background-position: top center;
-    background-size: 3.5rem auto;
+    background-size: var(--band-w) auto;
     image-rendering: pixelated;
     pointer-events: none;
     z-index: 0;
 }
 
 .cos-band--left {
-    left: 0;
+    left: calc((100% - 980px) / 4 - var(--band-w) / 2);
 }
 
 /* Le miroir : un motif orienté — le câble, les drapeaux — se referme sur le
    profil au lieu de fuir deux fois du même côté. */
 .cos-band--right {
-    right: 0;
+    right: calc((100% - 980px) / 4 - var(--band-w) / 2);
     transform: scaleX(-1);
 }
 
-/* En dessous de 1180 px, la colonne de 980 plus ses marges ne laisse plus la
-   place à deux bandes de 56 pixels sans mordre sur le texte. Elles
-   disparaissent : mieux vaut pas de bande qu'une bande sur un mot. */
-@media (max-width: 1179px) {
+/* En dessous de 1280 px, la marge n'est plus assez large pour porter une bande
+   ET du noir de part et d'autre. Elles disparaissent : mieux vaut pas de bande
+   qu'une bande coincée contre un mot. */
+@media (max-width: 1279px) {
     .cos-band {
         display: none;
     }
+}
+
+/* La vignette de boutique n'est PAS une bande : elle n'a que le motif. Sans
+   cette classe distincte, l'aperçu héritait de `position: fixed` et allait se
+   coller en haut de la fenêtre au lieu de rester dans sa carte. */
+.cos-band-preview {
+    display: block;
+    background-repeat: repeat-y;
+    background-position: top center;
+    image-rendering: pixelated;
 }
 
 /* ---------------------------------------------------------------------------
@@ -614,9 +635,12 @@
     outline-offset: 3px;
 }
 
-/* L'infobulle au survol. Le `title` natif ferait l'affaire, mais il arrive
-   après une seconde et demie, dans la police du système : sur un mur de sept
-   badges, il faut pouvoir balayer. */
+/* L'infobulle au survol.
+
+   Le `title` natif ferait l'affaire, mais il arrive après une seconde et demie,
+   dans la police du système. Surtout, POSER LES DEUX affichait deux bulles
+   superposées disant la même chose — le navigateur ne sait pas qu'on en a déjà
+   une. Celle-ci est la seule. */
 .cos-badge-btn::after {
     content: attr(data-label);
     position: absolute;
@@ -888,4 +912,190 @@
 .shop-legend__label {
     font-size: 0.9rem;
     line-height: 1.2;
+}
+
+/* ---------------------------------------------------------------------------
+   L'ouverture des fenêtres
+
+   Par paliers francs plutôt qu'en fondu : un site sans ombre ni dégradé n'a pas
+   à en emprunter un pour s'ouvrir. Cinq crans, c'est l'allure d'un décodeur qui
+   affiche une page.
+   --------------------------------------------------------------------------- */
+
+.cos-pop {
+    animation: cos-veil 0.16s steps(3, end) both;
+}
+
+.cos-pop .modal__panel {
+    animation: cos-unfold 0.2s steps(5, end) both;
+}
+
+.cos-pop--out {
+    animation: cos-veil 0.18s steps(3, end) reverse both;
+}
+
+.cos-pop--out .modal__panel {
+    animation: cos-unfold 0.18s steps(4, end) reverse both;
+}
+
+@keyframes cos-veil {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes cos-unfold {
+    from {
+        transform: scale(0.15);
+    }
+
+    to {
+        transform: scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .cos-pop,
+    .cos-pop .modal__panel,
+    .cos-pop--out,
+    .cos-pop--out .modal__panel {
+        animation: none;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   L'aperçu en situation
+
+   Un cadre se juge sur une ligne de classement, un tampon sur une affiche, un
+   skin sur une carte. La vitrine montrait chaque objet seul, sur fond noir : on
+   achetait sans savoir de quoi ça aurait l'air là où ça se porte.
+
+   Survoler une carte de la boutique applique l'objet aux quatre maquettes
+   ci-dessous, le temps du survol. On repose la souris, on retrouve sa tenue.
+   --------------------------------------------------------------------------- */
+
+.shop-live {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.8rem;
+}
+
+.shop-live__cell {
+    border: 1px solid var(--line);
+    background: #000;
+    padding: 0.6rem;
+    min-height: 7.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.shop-live__title {
+    color: var(--m);
+    font-family: var(--font-data);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* La ligne de classement, en miniature. Les proportions sont celles du vrai
+   tableau : c'est le seul moyen de juger si un cadre de cinq pixels tient dans
+   une rangée. */
+.shop-live__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-top: 1px solid var(--line);
+    padding-top: 0.4rem;
+}
+
+.shop-live__rank {
+    color: var(--faint, #8a8a8a);
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+}
+
+.shop-live__pts {
+    margin-left: auto;
+    color: var(--g);
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+}
+
+/* Le profil : l'avatar en grand, et les deux bandes rapportées à l'échelle de
+   la vignette pour qu'on voie de quel côté le motif regarde. */
+.shop-live__profile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.shop-live__strip {
+    width: 0.9rem;
+    align-self: stretch;
+    min-height: 3.4rem;
+}
+
+.shop-live__strip--right {
+    transform: scaleX(-1);
+}
+
+/* L'affiche de bracket, avec son tampon posé dessus comme il le sera pour de
+   vrai — d'où le conteneur en position relative. */
+.shop-live__battle {
+    position: relative;
+    border: 2px solid var(--line);
+    padding: 0.3rem 0.45rem;
+    font-family: var(--font-data);
+    font-size: 0.78rem;
+    line-height: 1.6;
+}
+
+.shop-live__battle span {
+    display: block;
+}
+
+.shop-live__battle .cos-stamp {
+    position: absolute;
+    left: 45%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-11deg);
+    font-size: 0.72rem;
+    background: color-mix(in srgb, var(--screen) 78%, transparent);
+    pointer-events: none;
+}
+
+/* La carte d'export : le fond et les deux couleurs du skin, rien de plus. Ce
+   qu'on juge ici, c'est la lisibilité du contraste. */
+.shop-live__card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.shop-live__card b {
+    font-family: var(--font-data);
+    font-size: 0.8rem;
+    font-weight: normal;
+}
+
+.shop-live__card span {
+    font-family: var(--font-data);
+    font-size: 0.7rem;
+}
+
+.shop-live__hint {
+    color: var(--faint, #8a8a8a);
+    font-size: 0.85rem;
+    margin: 0;
 }

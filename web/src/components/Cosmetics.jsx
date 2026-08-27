@@ -51,8 +51,17 @@ export function Badge({ code, scale = 2, label, onClick }) {
     const art = <PixelArt rows={rows} scale={scale} label={onClick ? undefined : label} />;
     if (!onClick) return art;
 
+    // Pas de `title` en plus de `data-label` : le navigateur ne sait pas qu'une
+    // bulle existe déjà et affichait les deux, superposées, disant la même
+    // chose. L'intitulé accessible passe par `aria-label`, invisible à l'œil.
     return (
-        <button type="button" className="cos-badge-btn" data-label={label} onClick={onClick} title={label}>
+        <button
+            type="button"
+            className="cos-badge-btn"
+            data-label={label}
+            aria-label={label}
+            onClick={onClick}
+        >
             {art}
         </button>
     );
@@ -109,6 +118,13 @@ export function Name({ children, fxId }) {
  * garde exactement le balisage qu'il avait, et la grille à trois colonnes
  * n'existe pas. Un fragment vide vaut mieux qu'une div qui ne sert à rien.
  */
+/** L'URL du motif d'une bande, pour qui veut la peindre lui-même. */
+export function bandImage(bandId) {
+    const item = itemById(bandId);
+    const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
+    return art ? gridToDataUrl(art, 4) : null;
+}
+
 export function Banded({ bandId, children }) {
     const item = itemById(bandId);
     const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
@@ -183,10 +199,13 @@ export function Preview({ item, avatarUrl, lang = 'en' }) {
     }
 
     if (item.slot === 'band') {
+        // `cos-band-preview` et non `cos-band` : la seconde est en position fixe
+        // et irait se coller en haut de la fenêtre au lieu de rester dans sa
+        // carte. Deux usages, deux classes.
         return (
             <span
-                className="cos-band"
-                style={{ backgroundImage: bandUrl, width: '2.25rem', height: '5.5rem', display: 'block' }}
+                className="cos-band-preview"
+                style={{ backgroundImage: bandUrl, backgroundSize: '2.4rem auto', width: '2.4rem', height: '5.5rem' }}
             />
         );
     }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Une fenêtre de paramétrage. Rien de plus qu'il n'en faut : un fond qui
@@ -6,17 +6,40 @@ import { useEffect, useRef } from 'react';
  * rendu à son point de départ à la fermeture, et le défilement de la page
  * bloqué pendant ce temps — sinon on scrolle l'arrière-plan en croyant
  * scroller la fenêtre.
+ *
+ * ─── L'ouverture et la fermeture ────────────────────────────────────────────
+ *
+ * La fenêtre se déplie depuis son centre et s'y replie. En `steps()`, par
+ * paliers francs : un fondu progressif jurerait avec un site qui n'a ni ombre
+ * ni dégradé, alors qu'une extension par crans a exactement l'allure d'un
+ * décodeur qui affiche une page.
+ *
+ * La fermeture est le point délicat. Démonter le composant tout de suite ne
+ * laisse rien à animer ; on marque donc la fenêtre comme sortante, on laisse
+ * l'animation se jouer, et on prévient l'appelant à la fin. `onClose` n'est
+ * appelé qu'une fois, même si l'on clique trois fois sur la croix.
  */
+const EXIT_MS = 180;
+
 export default function Modal({ title, subtitle, onClose, children, footer, wide = false }) {
     const panel = useRef(null);
     const returnTo = useRef(null);
+    const [closing, setClosing] = useState(false);
+    const done = useRef(false);
+
+    const close = useCallback(() => {
+        if (done.current) return;
+        done.current = true;
+        setClosing(true);
+        setTimeout(onClose, EXIT_MS);
+    }, [onClose]);
 
     useEffect(() => {
         returnTo.current = document.activeElement;
         panel.current?.focus();
 
         const onKey = (e) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') close();
             if (e.key !== 'Tab') return;
 
             // Piège à focus : la tabulation tourne en boucle dans la fenêtre.
@@ -44,10 +67,13 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
             document.body.style.overflow = previousOverflow;
             returnTo.current?.focus?.();
         };
-    }, [onClose]);
+    }, [close]);
 
     return (
-        <div className="modal" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <div
+            className={`modal cos-pop${closing ? ' cos-pop--out' : ''}`}
+            onMouseDown={(e) => e.target === e.currentTarget && close()}
+        >
             <div
                 className={`modal__panel${wide ? ' modal__panel--wide' : ''}`}
                 role="dialog"
@@ -61,7 +87,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
                         {subtitle && <p className="eyebrow" style={{ margin: 0 }}>{subtitle}</p>}
                         <h2 style={{ margin: 0 }}>{title}</h2>
                     </div>
-                    <button className="btn btn--small btn--ghost" onClick={onClose} aria-label="Fermer">
+                    <button className="btn btn--small btn--ghost" onClick={close} aria-label="Fermer">
                         ✕
                     </button>
                 </header>

@@ -566,6 +566,13 @@ const DICT = {
     'shop.points': 'pts',
     'shop.animated': 'animated',
 
+    'shop.live': 'See it in place',
+    'shop.live.lede': 'Hover any item below to try it on. Release, and you get your own kit back.',
+    'shop.live.leaderboard': 'Leaderboard row',
+    'shop.live.profile': 'Profile header',
+    'shop.live.bracket': 'Bracket battle',
+    'shop.live.card': 'Shared card',
+
     'shop.section.frame': 'Avatar frames',
     'shop.section.frame.lede':
       'Five pixels wide at most, hugging the photo. Shown everywhere your avatar appears.',
@@ -610,7 +617,6 @@ const DICT = {
 
     'badge.rule': 'How it drops',
     'badge.awarded': 'Awarded on {date}.',
-    'badge.free.note': 'Badges cannot be bought. They drop for everyone at once when a competition is finished, and re-closing it corrects them rather than duplicating them.',
 
     'badge.PARTICIPANT.name': 'The wildcard',
     'badge.BRONZE.name': 'One facet',
@@ -621,19 +627,19 @@ const DICT = {
     'badge.PODIUM_1.name': 'Winner',
 
     'badge.PARTICIPANT.detail':
-      'Drops as soon as one prediction is filed on the competition, whatever it scores. The cube is a wireframe: you are in, nothing is filled in yet.',
+      'One prediction filed on the competition. Whatever it scores.',
     'badge.BRONZE.detail':
-      'Finish in the top 60% of predictors on the competition. One face lights up. Only the highest tier reached is kept — this one gives way to the next.',
+      'Top 60% of predictors. Only the highest tier reached is kept.',
     'badge.SILVER.detail':
-      'Top 30% of predictors. The second face lights up and the cube takes on volume.',
+      'Top 30% of predictors.',
     'badge.GOLD.detail':
-      'Top 5% of predictors. All three faces. On a twenty-player competition that means first place alone.',
+      'Top 5% of predictors. On twenty players, that is first place alone.',
     'badge.PODIUM_3.detail':
-      'Third best predictor of the competition. The cube comes to rest on one step of the podium. Ties share the place, as on a real podium.',
+      'Third best predictor. Ties share the place.',
     'badge.PODIUM_2.detail':
-      'Second best predictor. Two steps.',
+      'Second best predictor of the competition.',
     'badge.PODIUM_1.detail':
-      'Best predictor of the competition. Three steps, gold on a blue field — the only solid colour in the whole set.',
+      'Best predictor of the competition.',
   },
 
   fr: {
@@ -1178,6 +1184,13 @@ const DICT = {
     'shop.points': 'pts',
     'shop.animated': 'animé',
 
+    'shop.live': 'Aperçu en situation',
+    'shop.live.lede': 'Survolez un objet plus bas pour l’essayer. Relâchez, vous retrouvez votre tenue.',
+    'shop.live.leaderboard': 'Ligne de classement',
+    'shop.live.profile': 'En-tête de profil',
+    'shop.live.bracket': 'Affiche de tableau',
+    'shop.live.card': 'Carte partagée',
+
     'shop.section.frame': 'Cadres d’avatar',
     'shop.section.frame.lede':
       'Cinq pixels de large au maximum, collés à la photo. Visibles partout où votre avatar apparaît.',
@@ -1222,7 +1235,6 @@ const DICT = {
 
     'badge.rule': 'Comment il tombe',
     'badge.awarded': 'Obtenu le {date}.',
-    'badge.free.note': 'Les badges ne s’achètent pas. Ils tombent pour tout le monde en même temps à la clôture d’une compétition, et re-clôturer celle-ci les corrige au lieu de les dupliquer.',
 
     'badge.PARTICIPANT.name': 'La wildcard',
     'badge.BRONZE.name': 'Une facette',
@@ -1233,19 +1245,19 @@ const DICT = {
     'badge.PODIUM_1.name': 'Vainqueur',
 
     'badge.PARTICIPANT.detail':
-      'Tombe dès qu’un pronostic est déposé sur la compétition, quel que soit son score. Le cube est en fil de fer : on est entré, rien n’est encore rempli.',
+      'Un pronostic déposé sur la compétition. Quel que soit son score.',
     'badge.BRONZE.detail':
-      'Terminer dans les 60 % les mieux classés de la compète. Une face s’allume. Seul le palier le plus haut atteint est conservé — celui-ci s’efface devant le suivant.',
+      'Top 60 % des pronostiqueurs. Seul le palier le plus haut atteint est conservé.',
     'badge.SILVER.detail':
-      'Top 30 % des pronostiqueurs. La deuxième face s’allume et le cube prend du volume.',
+      'Top 30 % des pronostiqueurs.',
     'badge.GOLD.detail':
-      'Top 5 % des pronostiqueurs. Les trois faces. Sur une compète à vingt joueurs, cela ne désigne que la première place.',
+      'Top 5 % des pronostiqueurs. Sur vingt joueurs, c’est la première place seule.',
     'badge.PODIUM_3.detail':
-      'Troisième meilleur pronostiqueur de la compète. Le cube se pose sur un étage de socle. Les ex æquo partagent la place, comme sur un vrai podium.',
+      'Troisième meilleur pronostiqueur. Les ex æquo partagent la place.',
     'badge.PODIUM_2.detail':
-      'Deuxième meilleur pronostiqueur. Deux étages.',
+      'Deuxième meilleur pronostiqueur de la compète.',
     'badge.PODIUM_1.detail':
-      'Meilleur pronostiqueur de la compète. Trois étages, l’or sur champ bleu — le seul aplat de couleur de toute la série.',
+      'Meilleur pronostiqueur de la compète.',
   },
 };
 
