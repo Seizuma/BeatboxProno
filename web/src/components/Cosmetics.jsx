@@ -36,11 +36,26 @@ export function PixelArt({ rows, scale = 3, label }) {
     );
 }
 
-/** Un badge d'événement. */
-export function Badge({ code, scale = 2, label }) {
+/**
+ * Un badge d'événement.
+ *
+ * Avec `onClick`, il devient un vrai bouton — focus au clavier, touche Entrée,
+ * annonce vocale — et porte son intitulé en infobulle. Sans, ce n'est qu'un
+ * dessin, et il ne prétend pas être autre chose : un élément qui a l'air
+ * cliquable sans l'être est pire qu'un élément inerte.
+ */
+export function Badge({ code, scale = 2, label, onClick }) {
     const rows = BADGE_ART[code];
     if (!rows) return null;
-    return <PixelArt rows={rows} scale={scale} label={label} />;
+
+    const art = <PixelArt rows={rows} scale={scale} label={onClick ? undefined : label} />;
+    if (!onClick) return art;
+
+    return (
+        <button type="button" className="cos-badge-btn" data-label={label} onClick={onClick} title={label}>
+            {art}
+        </button>
+    );
 }
 
 /* ---------------------------------------------------------------------------
@@ -97,16 +112,20 @@ export function Name({ children, fxId }) {
 export function Banded({ bandId, children }) {
     const item = itemById(bandId);
     const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
-    const url = useMemo(() => (art ? gridToDataUrl(art, 3) : null), [art]);
+    const url = useMemo(() => (art ? gridToDataUrl(art, 4) : null), [art]);
 
     if (!url) return <>{children}</>;
 
+    // Les bandes vivent dans les MARGES de la fenêtre, pas dans la largeur du
+    // profil : le contenu n'est plus enveloppé du tout, elles se posent à côté.
+    // C'est aussi pour ça qu'elles sortent avant les enfants — l'ordre du
+    // document n'a plus d'importance pour deux éléments en position fixe.
     return (
-        <div className="cos-banded">
-            <div className="cos-band" style={{ backgroundImage: url }} aria-hidden="true" />
-            <div>{children}</div>
+        <>
+            <div className="cos-band cos-band--left" style={{ backgroundImage: url }} aria-hidden="true" />
             <div className="cos-band cos-band--right" style={{ backgroundImage: url }} aria-hidden="true" />
-        </div>
+            {children}
+        </>
     );
 }
 
@@ -147,10 +166,13 @@ export function Preview({ item, avatarUrl, lang = 'en' }) {
     );
 
     if (item.slot === 'frame') {
+        // En `lg` et non en `md` : un cadre de cinq pixels sur une vignette de
+        // trois rem et demie ne se voit pas, et c'est précisément ce qu'on
+        // demande à l'acheteur de juger.
         return avatarUrl ? (
-            <FramedAvatar url={avatarUrl} frameId={item.id} size="md" />
+            <FramedAvatar url={avatarUrl} frameId={item.id} size="lg" />
         ) : (
-            <span className={`cos-frame cos-frame--md ${item.css}`}>
+            <span className={`cos-frame cos-frame--lg ${item.css}`}>
                 <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect width='1' height='1' fill='%23333'/%3E%3C/svg%3E" alt="" />
             </span>
         );

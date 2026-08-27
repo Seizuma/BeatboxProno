@@ -4,6 +4,7 @@ import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import DiscordButton from '../components/DiscordButton.jsx';
 import { Badge, Preview } from '../components/Cosmetics.jsx';
+import BadgeDetail from '../components/BadgeDetail.jsx';
 import { BADGES, SLOTS, itemsForSlot } from '../lib/cosmetics.js';
 
 /**
@@ -15,11 +16,13 @@ import { BADGES, SLOTS, itemsForSlot } from '../lib/cosmetics.js';
  */
 export default function Shop() {
     const { user } = useSession();
-    const { t, lang } = useI18n();
+    const { t, lang, date } = useI18n();
 
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [busy, setBusy] = useState(null);
+    // Le badge consulté depuis la légende : la règle, sans compète ni date.
+    const [sheet, setSheet] = useState(null);
 
     useEffect(() => {
         api.get('/shop').then(setData).catch((e) => setError(e.message));
@@ -135,12 +138,21 @@ export default function Shop() {
                 <div className="panel shop-legend">
                     {BADGES.map((b) => (
                         <div className="shop-legend__item" key={b.code}>
-                            <Badge code={b.code} scale={2} label={t(`badge.${b.code}`)} />
+                            <Badge
+                                code={b.code}
+                                scale={2}
+                                label={t(`badge.${b.code}.name`)}
+                                onClick={() => setSheet(b.code)}
+                            />
                             <span className="shop-legend__label">{t(`badge.${b.code}`)}</span>
                         </div>
                     ))}
                 </div>
             </section>
+
+            {sheet && (
+                <BadgeDetail code={sheet} t={t} date={date} onClose={() => setSheet(null)} />
+            )}
         </div>
     );
 }

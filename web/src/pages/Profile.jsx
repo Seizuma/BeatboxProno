@@ -7,6 +7,7 @@ import DiscordButton from '../components/DiscordButton.jsx';
 import PredictionView from '../components/PredictionView.jsx';
 import DeleteAccount from '../components/DeleteAccount.jsx';
 import { Badge, Banded, FramedAvatar, Name } from '../components/Cosmetics.jsx';
+import BadgeDetail from '../components/BadgeDetail.jsx';
 import { BADGES } from '../lib/cosmetics.js';
 
 export default function Profile() {
@@ -22,6 +23,8 @@ export default function Profile() {
   const [reading, setReading] = useState(null);
   const [busy, setBusy] = useState(null);
   const [closing, setClosing] = useState(false);
+  // Le badge dont on consulte la fiche : { code, event, awardedAt }.
+  const [sheet, setSheet] = useState(null);
 
   useEffect(() => {
     if (!targetId) return;
@@ -76,9 +79,11 @@ export default function Profile() {
         byEvent.set(key, { event: b.event, codes: [] });
         wall.push(byEvent.get(key));
       }
-      byEvent.get(key).codes.push(b.code);
+      byEvent.get(key).codes.push(b);
     }
-    for (const row of wall) row.codes.sort((a, b) => (order.get(a) ?? 99) - (order.get(b) ?? 99));
+    for (const row of wall) {
+      row.codes.sort((a, b) => (order.get(a.code) ?? 99) - (order.get(b.code) ?? 99));
+    }
   }
 
   return (
@@ -160,8 +165,14 @@ export default function Profile() {
                   <div className="cos-wall__event">
                     {row.event ? `${row.event.name} ${row.event.year}` : '—'}
                   </div>
-                  {row.codes.map((code) => (
-                    <Badge key={code} code={code} scale={2} label={t(`badge.${code}`)} />
+                  {row.codes.map((b) => (
+                    <Badge
+                      key={b.code}
+                      code={b.code}
+                      scale={2}
+                      label={t(`badge.${b.code}.name`)}
+                      onClick={() => setSheet(b)}
+                    />
                   ))}
                 </div>
               ))}
@@ -255,6 +266,16 @@ export default function Profile() {
               </span>
             </div>
           </section>
+        )}
+
+        {sheet && (
+          <BadgeDetail
+            code={sheet.code}
+            award={sheet}
+            t={t}
+            date={date}
+            onClose={() => setSheet(null)}
+          />
         )}
 
         {reading && <PredictionView predictionId={reading} onClose={() => setReading(null)} />}
