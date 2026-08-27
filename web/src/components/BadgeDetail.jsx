@@ -21,26 +21,26 @@ export default function BadgeDetail({ code, award, t, date, onClose }) {
             title={t(`badge.${code}`)}
             subtitle={award?.event ? `${award.event.name} ${award.event.year}` : t(`badge.${code}.name`)}
             onClose={onClose}
+            narrow
             footer={<button className="btn" onClick={onClose}>{t('common.close')}</button>}
         >
             <div className="cos-sheet">
                 <span className="cos-sheet__art">
-                    {/* Quatre fois la taille du mur : c'est la seule occasion de
-                        regarder le dessin plutôt que de le reconnaître. */}
-                    <Badge code={code} scale={4} label={t(`badge.${code}`)} />
+                    {/* Trois fois la taille du mur : assez pour regarder le
+                        dessin plutôt que de le reconnaître, pas au point de
+                        remplir la fenêtre à lui seul. */}
+                    <Badge code={code} scale={3} label={t(`badge.${code}`)} />
                 </span>
 
-                <div className="cos-sheet__body stack" style={{ gap: '0.5rem' }}>
-                    <p style={{ margin: 0 }}>{t(`badge.${code}.detail`)}</p>
+                <p className="cos-sheet__text">{t(`badge.${code}.detail`)}</p>
 
-                    {award?.awardedAt && (
-                        <p className="faint data" style={{ margin: 0, fontSize: '0.85rem' }}>
-                            {t('badge.awarded', {
-                                date: date(award.awardedAt, { day: 'numeric', month: 'long', year: 'numeric' }),
-                            })}
-                        </p>
-                    )}
-                </div>
+                {award?.awardedAt && (
+                    <p className="cos-sheet__when">
+                        {t('badge.awarded', {
+                            date: date(award.awardedAt, { day: 'numeric', month: 'long', year: 'numeric' }),
+                        })}
+                    </p>
+                )}
             </div>
         </Modal>
     );

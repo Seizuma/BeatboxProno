@@ -552,6 +552,23 @@
 
    `pointer-events: none` : elles couvrent une bonne part de l'écran et ne
    doivent intercepter aucun clic. */
+/* La ligne de service passe AU-DESSUS des bandes.
+ 
+   Une seule règle visant une classe qui n'est pas à nous, et elle est
+   assumée : les bandes sont en position fixe, donc elles créent un plan
+   d'empilement et se dessinaient par-dessus un en-tête qui, lui, n'était
+   positionné nulle part. Le fond est celui de la page — visuellement identique,
+   à ceci près qu'il cache maintenant ce qui passe derrière.
+ 
+   L'alternative aurait été de décaler les bandes de la hauteur de l'en-tête,
+   c'est-à-dire d'écrire un nombre magique qui redeviendrait faux à la première
+   ligne ajoutée au menu. */
+.masthead {
+    position: relative;
+    z-index: 2;
+    background: var(--screen);
+}
+
 /* La bande se pose au MILIEU de la marge, pas contre le bord de l'écran.
 
    `(100% - 980px) / 2` est la largeur d'une marge — la colonne du site fait
@@ -679,24 +696,40 @@
     transform: none;
 }
 
-/* La fiche d'un badge : le dessin en grand, à gauche de son explication. */
+/* La fiche d'un badge.
+
+   En colonne et centrée, dans une fenêtre étroite. En deux colonnes sur les
+   720 pixels par défaut, deux lignes de texte laissaient les deux tiers de la
+   fenêtre vides — ce qui donne l'impression qu'il manque quelque chose. */
 .cos-sheet {
     display: flex;
-    gap: 1.1rem;
-    align-items: flex-start;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+    text-align: center;
 }
 
 .cos-sheet__art {
     border: var(--frame);
-    padding: 0.6rem;
+    padding: 0.7rem;
     background: #000;
     line-height: 0;
 }
 
-.cos-sheet__body {
-    flex: 1 1 18rem;
-    min-width: 0;
+/* Une taille de lecture, pas une note de bas de page : c'est la seule phrase
+   de la fenêtre, autant qu'elle se lise. */
+.cos-sheet__text {
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1.4;
+    max-width: 32ch;
+}
+
+.cos-sheet__when {
+    margin: 0;
+    color: var(--ink-faint);
+    font-family: var(--font-data);
+    font-size: 0.9rem;
 }
 
 .cos-wall {
@@ -922,20 +955,24 @@
    affiche une page.
    --------------------------------------------------------------------------- */
 
+/* Cinq crans donnaient une saccade, pas un déploiement : à cette échelle et sur
+   deux dixièmes de seconde, l'œil ne lit pas des paliers, il lit un défaut. La
+   courbe part vite et freine à l'arrivée, ce qui suffit à donner l'impression
+   que la fenêtre se pose. */
 .cos-pop {
-    animation: cos-veil 0.16s steps(3, end) both;
+    animation: cos-veil 0.13s ease-out both;
 }
 
 .cos-pop .modal__panel {
-    animation: cos-unfold 0.2s steps(5, end) both;
+    animation: cos-unfold 0.16s cubic-bezier(0.16, 0.9, 0.3, 1) both;
 }
 
 .cos-pop--out {
-    animation: cos-veil 0.18s steps(3, end) reverse both;
+    animation: cos-veil 0.12s ease-in reverse both;
 }
 
 .cos-pop--out .modal__panel {
-    animation: cos-unfold 0.18s steps(4, end) reverse both;
+    animation: cos-unfold 0.12s ease-in reverse both;
 }
 
 @keyframes cos-veil {
@@ -950,11 +987,13 @@
 
 @keyframes cos-unfold {
     from {
-        transform: scale(0.15);
+        transform: scale(0.86);
+        opacity: 0;
     }
 
     to {
         transform: scale(1);
+        opacity: 1;
     }
 }
 
@@ -1098,4 +1137,9 @@
     color: var(--faint, #8a8a8a);
     font-size: 0.85rem;
     margin: 0;
+}
+
+/* Une fenêtre étroite, pour ce qui n'a que trois lignes à dire. */
+.modal__panel--narrow {
+    width: min(420px, 100%);
 }

@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 const EXIT_MS = 180;
 
-export default function Modal({ title, subtitle, onClose, children, footer, wide = false }) {
+export default function Modal({ title, subtitle, onClose, children, footer, wide = false, narrow = false }) {
     const panel = useRef(null);
     const returnTo = useRef(null);
     const [closing, setClosing] = useState(false);
@@ -75,7 +75,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
             onMouseDown={(e) => e.target === e.currentTarget && close()}
         >
             <div
-                className={`modal__panel${wide ? ' modal__panel--wide' : ''}`}
+                className={`modal__panel${wide ? ' modal__panel--wide' : ''}${narrow ? ' modal__panel--narrow' : ''}`}
                 role="dialog"
                 aria-modal="true"
                 aria-label={title}

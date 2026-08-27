@@ -566,8 +566,8 @@ const DICT = {
     'shop.points': 'pts',
     'shop.animated': 'animated',
 
-    'shop.live': 'See it in place',
-    'shop.live.lede': 'Hover any item below to try it on. Release, and you get your own kit back.',
+    'shop.preview': 'Preview',
+    'shop.preview.note': 'Shown with the rest of your kit. Nothing is bought or worn yet.',
     'shop.live.leaderboard': 'Leaderboard row',
     'shop.live.profile': 'Profile header',
     'shop.live.bracket': 'Bracket battle',
@@ -1184,8 +1184,8 @@ const DICT = {
     'shop.points': 'pts',
     'shop.animated': 'animé',
 
-    'shop.live': 'Aperçu en situation',
-    'shop.live.lede': 'Survolez un objet plus bas pour l’essayer. Relâchez, vous retrouvez votre tenue.',
+    'shop.preview': 'Aperçu',
+    'shop.preview.note': 'Montré avec le reste de votre tenue. Rien n’est acheté ni porté pour autant.',
     'shop.live.leaderboard': 'Ligne de classement',
     'shop.live.profile': 'En-tête de profil',
     'shop.live.bracket': 'Affiche de tableau',
