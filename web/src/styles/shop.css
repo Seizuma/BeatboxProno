@@ -827,21 +827,22 @@
 /* Le tampon posé ne doit JAMAIS intercepter un clic : il flotte au-dessus des
    affiches, et une cible invisible par-dessus une battle rendrait celle-ci
    inutilisable sans que personne ne comprenne pourquoi. */
+/* Le cache est OPAQUE, et c'est un changement d'avis assumé.
+
+   À soixante-dix-huit pour cent, les noms du dessous transparaissaient sous les
+   lettres du tampon : deux textes mêlés, dont aucun ne se lit. Un tampon cache
+   ce qu'il recouvre — c'est ce qu'on attend d'un tampon, et c'est plus lisible
+   que la transparence qui voulait ménager les deux. */
 .cos-stamp--posed {
     position: absolute;
     transform: translate(-50%, -50%) rotate(-11deg);
     pointer-events: none;
     z-index: 3;
     font-size: 1.15rem;
-    background: color-mix(in srgb, var(--screen) 78%, transparent);
-}
-
-/* `color-mix` n'est pas partout : à défaut, un aplat opaque vaut mieux qu'un
-   tampon illisible par-dessus deux noms. */
-@supports not (background: color-mix(in srgb, red 50%, transparent)) {
-    .cos-stamp--posed {
-        background: var(--screen);
-    }
+    max-width: 86%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: var(--screen);
 }
 
 /* ---------------------------------------------------------------------------
@@ -930,21 +931,41 @@
     font-size: 0.7rem;
 }
 
+/* Cent cinquante pixels par colonne, c'était compter sans le badge : quatre-
+   vingts pour le dessin, il en restait soixante pour « Vainqueur — meilleur
+   pronostiqueur ». Le texte débordait sur la colonne suivante et venait se
+   poser sur le cube du voisin.
+
+   `align-items: start` plutôt que `center` : les badges de podium sont plus
+   hauts que les autres, et centrer donnait des lignes de texte à des hauteurs
+   différentes dans une même rangée. */
 .shop-legend {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 0.8rem;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem 1.2rem;
+    align-items: start;
 }
 
 .shop-legend__item {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.7rem;
+    min-width: 0;
+}
+
+/* Le dessin ne se comprime pas, le texte se replie. Sans ces deux règles, un
+   conteneur trop étroit écrasait le badge au lieu de faire passer le libellé
+   à la ligne. */
+.shop-legend__item .cos-badge,
+.shop-legend__item .cos-badge-btn {
+    flex: 0 0 auto;
 }
 
 .shop-legend__label {
+    flex: 1;
+    min-width: 0;
     font-size: 0.9rem;
-    line-height: 1.2;
+    line-height: 1.25;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1085,28 +1106,50 @@
 }
 
 /* L'affiche de bracket, avec son tampon posé dessus comme il le sera pour de
-   vrai — d'où le conteneur en position relative. */
+   vrai — d'où le conteneur en position relative. `overflow: hidden` parce
+   qu'un tampon en biais dépasse toujours d'un cadre plus étroit que lui, et
+   qu'il n'a rien à faire par-dessus la carte voisine. */
 .shop-live__battle {
     position: relative;
+    overflow: hidden;
     border: 2px solid var(--line);
     padding: 0.3rem 0.45rem;
     font-family: var(--font-data);
     font-size: 0.78rem;
     line-height: 1.6;
+    min-height: 4rem;
 }
 
 .shop-live__battle span {
     display: block;
 }
 
-.shop-live__battle .cos-stamp {
+/* En bas à droite plutôt qu'au milieu : au centre, le tampon barrait les deux
+   noms et on ne voyait plus l'affiche qu'il est censé décorer. Décalé, il se
+   lit ET on lit ce qu'il y a dessous. */
+.shop-live__battle .cos-stamp,
+.shop-live__card .cos-stamp {
     position: absolute;
-    left: 45%;
-    top: 50%;
-    transform: translate(-50%, -50%) rotate(-11deg);
-    font-size: 0.72rem;
-    background: color-mix(in srgb, var(--screen) 78%, transparent);
+    right: 0.3rem;
+    bottom: 0.3rem;
+    left: auto;
+    top: auto;
+    transform: rotate(-9deg);
+    transform-origin: bottom right;
+    max-width: calc(100% - 0.6rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.62rem;
+    border-width: 2px;
+    padding: 0.05rem 0.35rem;
+    background: var(--screen);
     pointer-events: none;
+}
+
+/* Sur la carte, le fond du tampon est celui du skin et non celui du site :
+   un rectangle noir sur un fond orange se verrait comme un trou. */
+.shop-live__card .cos-stamp {
+    background: transparent;
 }
 
 /* La carte d'export : le fond et les deux couleurs du skin, rien de plus. Ce

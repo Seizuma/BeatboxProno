@@ -173,15 +173,20 @@ groupRouter.post('/', guard(async (req, res) => {
         include: {
             members: {
                 include: {
+                    // Le cadre et l’effet de pseudo voyagent avec le nom, partout où un
+                    // membre apparaît : un cosmétique visible du seul propriétaire ne se
+                    // vend pas. Ni la bande de profil, ni le skin de carte, ni le tampon —
+                    // ils ne s’affichent pas ici, et ce qu’on ne montre pas, on ne le
+                    // transporte pas.
                     user: {
                         select: {
                             id: true,
                             username: true,
                             globalName: true,
                             avatarUrl: true,
-                            equippedFrame: true, 
-                            equippedNameFx: true
-                        }
+                            equippedFrame: true,
+                            equippedNameFx: true,
+                        },
                     },
                 },
             },
@@ -222,9 +227,8 @@ groupRouter.patch('/:slug', loadGroup, requireGroupOwner, guard(async (req, res)
                             globalName: true,
                             avatarUrl: true,
                             equippedFrame: true,
-                            equippedTitle: true,
-                            equippedFlair: true,
-                        }
+                            equippedNameFx: true,
+                        },
                     },
                 },
             },
@@ -294,9 +298,8 @@ groupRouter.put('/:slug/events', loadGroup, requireGroupOwner, guard(async (req,
                             globalName: true,
                             avatarUrl: true,
                             equippedFrame: true,
-                            equippedTitle: true,
-                            equippedFlair: true,
-                        }
+                            equippedNameFx: true,
+                        },
                     },
                 },
             },
@@ -381,9 +384,8 @@ groupRouter.get('/:slug/predictions', loadGroup, guard(async (req, res) => {
                     globalName: true,
                     avatarUrl: true,
                     equippedFrame: true,
-                    equippedTitle: true,
-                    equippedFlair: true,
-                }
+                    equippedNameFx: true,
+                },
             },
             event: { select: { slug: true, name: true, year: true, status: true } },
             category: { select: { name: true, kind: true } },
@@ -616,9 +618,8 @@ groupRouter.get('/:slug/predictions/:predictionId/comments', loadGroup, guard(as
                     globalName: true,
                     avatarUrl: true,
                     equippedFrame: true,
-                    equippedTitle: true,
-                    equippedFlair: true,
-                }
+                    equippedNameFx: true,
+                },
             },
         },
     });
@@ -664,9 +665,8 @@ groupRouter.post('/:slug/predictions/:predictionId/comments', loadGroup, guard(a
                     globalName: true,
                     avatarUrl: true,
                     equippedFrame: true,
-                    equippedTitle: true,
-                    equippedFlair: true,
-                }
+                    equippedNameFx: true,
+                },
             },
         },
     });
