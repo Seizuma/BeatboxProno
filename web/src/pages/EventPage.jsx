@@ -621,6 +621,11 @@ export default function EventPage() {
 
 function CategoryEditor({ category, event, state, update, phaseLocked, locked }) {
   const { t } = useI18n();
+  // La session est relue ICI et non passée en propriété : le tampon porté est
+  // la seule chose dont cet éditeur ait besoin du compte, et le faire
+  // descendre depuis EventPage aurait ajouté une propriété à un composant qui
+  // en a déjà six.
+  const { user } = useSession();
   const contenders = category.contenders;
 
   // Le jury de la catégorie. Vide tant que l'organisateur ne l'a pas saisi :
