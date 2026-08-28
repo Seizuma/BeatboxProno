@@ -99,7 +99,14 @@ function useFlash() {
       // Une action peut renvoyer son propre message quand elle en sait plus
       // que l'appelant — par exemple le poids gagné après réduction d'image.
       const text = await fn();
-      setFlash({ ok: true, text: text ?? okText });
+
+      // Une CHAÎNE, et rien d'autre. Passer `api.post(...)` directement à `run`
+      // faisait remonter ici la réponse JSON de l'API ; React refuse un objet
+      // comme enfant, lève, et fait tomber TOUT l'écran d'administration —
+      // écran noir, sans message, sur un bouton qui avait pourtant réussi.
+      // Le garde vaut mieux que la discipline : il protège aussi les appels
+      // qu'on écrira demain.
+      setFlash({ ok: true, text: typeof text === 'string' ? text : okText });
     } catch (e) {
       setFlash({ ok: false, text: e.message });
     }
@@ -1394,7 +1401,16 @@ function ResultsAdmin() {
         {category && (
           <button
             className="btn btn--small"
-            onClick={() => run(() => api.post(`/admin/categories/${category.id}/rescore`), 'Scores recalculés.')}
+            onClick={() =>
+              run(async () => {
+                const { rescored } = await api.post(`/admin/categories/${category.id}/rescore`);
+                // Le rechargement n'est pas cosmétique : les points affichés sur
+                // la page viennent de la réponse précédente, et sans lui on
+                // annonce un recalcul en montrant les anciens chiffres.
+                await reload();
+                return `${category.name} : ${rescored} pronostic(s) recalculé(s).`;
+              })
+            }
           >
             Recalculer {category.name}
           </button>

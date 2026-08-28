@@ -1257,7 +1257,11 @@ adminRouter.get('/events/:eventId/max-score', async (req, res) => {
           contenders: { select: { id: true } },
           phases: {
             orderBy: { position: 'asc' },
-            include: { battles: { select: { id: true } } },
+            // `round` en plus de l'identifiant : le barème du top 4 dépend de la
+            // PRÉSENCE d'une finale et d'une petite finale, pas du nombre
+            // d'affiches. Sans cette colonne, maxScoreForCategory ne voyait que
+            // des tours `undefined` et n'annonçait jamais ces points.
+            include: { battles: { select: { id: true, round: true } } },
           },
         },
       },
