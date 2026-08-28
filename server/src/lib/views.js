@@ -74,10 +74,26 @@ export async function recordView({ viewerId, userId = null, artistId = null }) {
     }
 }
 
-/** Le nombre de consultations d'un joueur ou d'un artiste. */
-export function countViews({ userId = null, artistId = null }) {
-    if (!userId && !artistId) return Promise.resolve(0);
-    return prisma.profileView.count({
-        where: userId ? { userId } : { artistId },
-    });
+/**
+ * Le nombre de consultations d'un joueur ou d'un artiste.
+ *
+ * Ne lève pas davantage que `recordView`, et pour la même raison — mais celle-ci
+ * s'est apprise à la dure. Cette fonction était attendue au milieu d'un handler
+ * asynchrone non protégé : quand `prisma.profileView` n'existait pas encore
+ * (modèle absent du schéma, client pas régénéré), l'exception ne produisait ni
+ * réponse ni log, et la page de profil tournait dans le vide.
+ *
+ * Un compteur de vues est un ornement. Sa panne doit se voir comme un zéro, pas
+ * comme une page morte.
+ */
+export async function countViews({ userId = null, artistId = null }) {
+    if (!userId && !artistId) return 0;
+    try {
+        return await prisma.profileView.count({
+            where: userId ? { userId } : { artistId },
+        });
+    } catch (err) {
+        console.warn('[vues] comptage impossible :', err?.message ?? err);
+        return 0;
+    }
 }

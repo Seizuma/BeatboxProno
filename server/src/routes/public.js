@@ -7,6 +7,20 @@ import { countViews, recordView } from '../lib/views.js';
 
 export const publicRouter = Router();
 
+/**
+ * Express 4 n'attrape PAS le rejet d'un handler asynchrone.
+ *
+ * Ce n'est pas une erreur silencieuse, c'est pire : la requête reste
+ * suspendue jusqu'au délai d'expiration, sans réponse et sans une ligne de
+ * log. Côté navigateur, la page tourne indéfiniment — le symptôme le plus
+ * difficile à relier à sa cause, parce qu'il ne ressemble pas à une erreur.
+ *
+ * Les autres routeurs du projet ont ce garde depuis longtemps ; celui-ci ne
+ * l'avait pas, et ses six handlers asynchrones étaient à une exception près
+ * de faire tourner une page dans le vide.
+ */
+const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
 const isStaff = (user) => Boolean(user) && ['ADMIN', 'OWNER'].includes(user.role);
 
 const visible = (user) =>
@@ -107,7 +121,7 @@ const categoryInclude = {
   },
 };
 
-publicRouter.get('/events', async (req, res) => {
+publicRouter.get('/events', guard(async (req, res) => {
   const events = await prisma.event.findMany({
     where: visible(req.user),
     orderBy: [{ startsAt: 'desc' }, { year: 'desc' }],
@@ -119,9 +133,9 @@ publicRouter.get('/events', async (req, res) => {
     },
   });
   res.json({ events });
-});
+}));
 
-publicRouter.get('/events/:slug', async (req, res) => {
+publicRouter.get('/events/:slug', guard(async (req, res) => {
   const event = await prisma.event.findFirst({
     where: { slug: req.params.slug, ...visible(req.user) },
     include: {
@@ -165,7 +179,7 @@ publicRouter.get('/events/:slug', async (req, res) => {
     event: isStaff(req.user) ? event : redactEvent(event),
     myPredictions,
   });
-});
+}));
 
 /**
  * Le détail d'un pronostic, lisible par tout le monde.
@@ -174,7 +188,7 @@ publicRouter.get('/events/:slug', async (req, res) => {
  * privé, sans quoi on lirait les hésitations des autres — et son événement doit
  * être visible. Le propriétaire, lui, accède aussi à ses propres brouillons.
  */
-publicRouter.get('/predictions/:predictionId', async (req, res) => {
+publicRouter.get('/predictions/:predictionId', guard(async (req, res) => {
   const prediction = await prisma.prediction.findUnique({
     where: { id: req.params.predictionId },
     include: {
@@ -225,10 +239,10 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
 
   prediction.category.contenders = prediction.category.contenders.map(withName);
   res.json({ prediction });
-});
+}));
 
 /** Classement général ou par événement. */
-publicRouter.get('/leaderboard', async (req, res) => {
+publicRouter.get('/leaderboard', guard(async (req, res) => {
   const { event: eventSlug } = req.query;
 
   const where = { submitted: true };
@@ -267,7 +281,7 @@ publicRouter.get('/leaderboard', async (req, res) => {
       predictions: r._count._all,
     })),
   });
-});
+}));
 
 /** Fiche publique d'un pronostiqueur. */
 /**
@@ -279,7 +293,7 @@ publicRouter.get('/leaderboard', async (req, res) => {
  * un profil rassemble points, historique et badges de quelqu'un : le rendre
  * lisible sans compte, c'est le publier.
  */
-publicRouter.get('/users/:id', requireAuth, async (req, res) => {
+publicRouter.get('/users/:id', requireAuth, guard(async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: {
@@ -360,16 +374,16 @@ publicRouter.get('/users/:id', requireAuth, async (req, res) => {
   const views = await countViews({ userId: user.id });
 
   res.json({ user, predictions, totals, badges, wallet, views });
-});
+}));
 
 /**
  * Stats d'un artiste : sur combien de pronostics les gens l'ont vu gagner,
  * et à quelle fréquence ils ont eu raison.
  */
-publicRouter.get('/artists', async (_req, res) => {
+publicRouter.get('/artists', guard(async (_req, res) => {
   const artists = await prisma.artist.findMany({ orderBy: { name: 'asc' } });
   res.json({ artists });
-});
+}));
 
 /**
  * La fiche d'un artiste. OUVERTE, contrairement aux profils de joueurs.
@@ -384,7 +398,7 @@ publicRouter.get('/artists', async (_req, res) => {
  * `recordView` s'en charge en sortant tout de suite quand il n'y a pas de
  * session. On compte donc des membres, pas des passages.
  */
-publicRouter.get('/artists/:slug', async (req, res) => {
+publicRouter.get('/artists/:slug', guard(async (req, res) => {
   const artist = await prisma.artist.findUnique({
     where: { slug: req.params.slug },
     include: {
@@ -671,4 +685,4 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     views,
     appearances,
   });
-});
+}));
