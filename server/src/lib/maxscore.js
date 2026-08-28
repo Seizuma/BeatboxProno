@@ -4,6 +4,7 @@ import {
     BATTLE_WINNER,
     BATTLE_SCORE,
     QUALIFIED_POINT,
+    FINAL_FOUR_POINTS,
 } from './scoring.js';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -74,6 +75,40 @@ export function maxScoreForCategory(category) {
             points,
         });
         total += points;
+
+        /**
+         * Le top 4 final, une fois par tableau.
+         *
+         * Il dépend de la STRUCTURE et non des résultats, comme le reste de ce
+         * fichier : une finale existe ou n'existe pas, une petite finale aussi.
+         * Un format sans petite finale ne vaut donc que 9 points ici au lieu de
+         * 14 — et c'est un argument de plus pour en ajouter une, ce que l'écran
+         * de format sait faire depuis peu.
+         */
+        if (phase.type === 'BRACKET') {
+            const rounds = new Set((phase.battles ?? []).map((b) => b.round));
+            const places = [];
+            if (rounds.has('FINAL')) places.push(FINAL_FOUR_POINTS[0], FINAL_FOUR_POINTS[1]);
+            if (rounds.has('FINAL') && rounds.has('SMALL_FINAL')) {
+                places.push(FINAL_FOUR_POINTS[2], FINAL_FOUR_POINTS[3]);
+            }
+
+            if (places.length) {
+                const four = places.reduce((n, p) => n + p, 0);
+                lines.push({
+                    phaseId: `${phase.id}-four`,
+                    phase: `${phase.name} — top 4`,
+                    type: 'FINAL_FOUR',
+                    detail:
+                        places.join(' + ') +
+                        (places.length === 2
+                            ? ' (pas de petite finale : ni 3e ni 4e place)'
+                            : ' (vainqueur, finaliste, 3e, 4e)'),
+                    points: four,
+                });
+                total += four;
+            }
+        }
     }
 
     return { category: category.name, categoryId: category.id, total, lines };

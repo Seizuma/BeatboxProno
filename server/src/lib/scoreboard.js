@@ -5,6 +5,8 @@ import {
     BATTLE_WINNER,
     GAP_MAX_BONUS,
     QUALIFIED_POINT,
+    FINAL_FOUR_POINTS,
+    finalFour,
 } from './scoring.js';
 
 /**
@@ -101,6 +103,15 @@ function maxOnResolved(category) {
         ).length;
 
         total += battles * (BATTLE_HAPPENED + BATTLE_WINNER + BATTLE_SCORE);
+
+        // Le top 4 : les seules places RÉELLEMENT attribuées comptent. Une finale
+        // pas encore jouée ne met pas ses 9 points au dénominateur, sans quoi la
+        // précision de tout le monde chuterait entre les demies et la finale sans
+        // que personne n'ait rien fait de mal.
+        if (phase.type === 'BRACKET') {
+            const places = finalFour(phase.battles ?? [], { playedOnly: true });
+            total += places.reduce((n, id, i) => n + (id ? FINAL_FOUR_POINTS[i] : 0), 0);
+        }
     }
 
     return total;

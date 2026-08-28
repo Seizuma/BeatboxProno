@@ -16,7 +16,9 @@
  *   +2 si le vainqueur est le bon
  *   +2 si le score est le bon
  *
- * Il n'y a pas de pari sur le classement final : tout se joue sur les phases.
+ * Top 4 final — une fois par tableau
+ *   +5 pour le vainqueur, +4 pour le finaliste, +3 pour le troisième,
+ *   +2 pour le quatrième, à condition de les avoir mis à cette place-là.
  */
 
 export const GAP_MAX_BONUS = 5;
@@ -24,6 +26,101 @@ export const BATTLE_HAPPENED = 2;
 export const BATTLE_WINNER = 2;
 export const BATTLE_SCORE = 2;
 export const QUALIFIED_POINT = 1;
+
+/**
+ * Le podium final, place par place : 5 points pour le vainqueur, 4 pour le
+ * finaliste, 3 pour le troisième, 2 pour le quatrième. Quatorze en tout.
+ *
+ * ─── Pourquoi ce barème existe ──────────────────────────────────────────────
+ *
+ * Un tableau se marche sur lui-même : une affiche ratée en quarts fait dérailler
+ * toutes les suivantes, et quelqu'un qui avait pourtant vu le bon vainqueur
+ * repartait avec zéro sur la moitié basse de son arbre. Ces points-là ne
+ * regardent pas le chemin, seulement l'arrivée — voir juste qui finit premier
+ * vaut quelque chose, même quand on s'est trompé sur la route.
+ *
+ * D'où la dégressivité : le vainqueur est le pronostic qui demande le plus de
+ * justesse, et la quatrième place le moins.
+ */
+export const FINAL_FOUR_POINTS = [5, 4, 3, 2];
+
+const FINAL_ROUNDS = ['FINAL', 'SMALL_FINAL'];
+
+/**
+ * Le top 4 déduit d'un tableau : [1er, 2e, 3e, 4e].
+ *
+ * Rien n'est stocké — le podium se LIT dans les deux dernières affiches. La
+ * finale donne les deux premières places, la petite finale les deux suivantes.
+ * Un format sans petite finale n'a donc pas de 3e ni de 4e, et ces places-là ne
+ * rapportent ni ne coûtent rien : les cases restent à `null` des deux côtés du
+ * rapport.
+ *
+ * `playedOnly` distingue les deux usages. Une affiche officielle ne compte que
+ * jouée ; l'affiche pronostiquée d'un joueur n'a pas de notion de « jouée », un
+ * vainqueur désigné suffit.
+ */
+export function finalFour(battles, { playedOnly = false } = {}) {
+  const places = [null, null, null, null];
+
+  const pairOf = (round) => {
+    const b = (battles ?? []).find(
+      (x) =>
+        x.round === round &&
+        x.contenderAId &&
+        x.contenderBId &&
+        x.winnerId &&
+        (!playedOnly || x.played)
+    );
+    if (!b) return null;
+    const loser = b.winnerId === b.contenderAId ? b.contenderBId : b.contenderAId;
+    return [b.winnerId, loser];
+  };
+
+  const final = pairOf('FINAL');
+  if (final) [places[0], places[1]] = final;
+
+  const small = pairOf('SMALL_FINAL');
+  if (small) [places[2], places[3]] = small;
+
+  return places;
+}
+
+/**
+ * Les points du top 4 final.
+ *
+ * La place compte autant que le nom : mettre le vainqueur en finaliste ne
+ * rapporte pas les 5 points, parce que « qui gagne » et « qui perd la finale »
+ * sont deux pronostics différents et que le second est plus facile.
+ *
+ * On n'énumère que les places RÉELLEMENT attribuées. Une place qui n'existe pas
+ * — pas de petite finale, ou finale pas encore jouée — n'apparaît nulle part,
+ * ni en points gagnés ni en points possibles.
+ */
+export function scoreFinalFour(predicted, official) {
+  const mine = finalFour(predicted);
+  const real = finalFour(official, { playedOnly: true });
+
+  const lines = [];
+  let total = 0;
+
+  real.forEach((contenderId, index) => {
+    if (!contenderId) return;
+    const hit = mine[index] === contenderId;
+    const points = hit ? FINAL_FOUR_POINTS[index] : 0;
+    total += points;
+    lines.push({
+      place: index + 1,
+      // L'identifiant OFFICIEL, pas celui pronostiqué : c'est lui qui permet à
+      // la fiche d'un artiste de dire « ce joueur a marqué grâce à moi ».
+      contenderId,
+      predictedId: mine[index] ?? null,
+      hit,
+      points,
+    });
+  });
+
+  return { total, lines };
+}
 
 /** Écart 0 → 5 pts, 1 → 4, 2 → 3, 3 → 2, 4 → 1, ≥5 → 0. */
 export function gapPoints(predictedRank, officialRank) {
@@ -216,6 +313,26 @@ export function scorePrediction(prediction, category) {
         phaseType: phase.type,
         ...result,
       });
+
+      // Le top 4 sort dans sa PROPRE section, et pas ajouté au total du
+      // tableau : ses lignes n'ont pas la forme d'une affiche, et surtout un
+      // joueur doit pouvoir lire d'un coup d'œil ce qu'il a sauvé à l'arrivée
+      // quand son arbre s'est effondré en route. Noyé dans les points
+      // d'affiches, ce serait invisible.
+      //
+      // Réservé au BRACKET : une catégorie Legacy n'a pas de finale.
+      if (phase.type === 'BRACKET') {
+        const four = scoreFinalFour(picks, phase.battles);
+        if (four.lines.length) {
+          total += four.total;
+          sections.push({
+            phaseId: phase.id,
+            phaseName: `${phase.name} — top 4`,
+            phaseType: 'FINAL_FOUR',
+            ...four,
+          });
+        }
+      }
     } else {
       const picks = prediction.ranks.filter((r) => r.phaseId === phase.id);
       const result = scoreRankingPhase(
