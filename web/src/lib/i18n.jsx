@@ -614,6 +614,9 @@ const DICT = {
     'profile.badges.empty':
       'No badges yet — they drop when a competition you predicted is finished.',
     'profile.wallet': 'Wallet',
+    'profile.views': 'Profile views',
+    'profile.gate': 'Sign in with Discord to see this profile. Counted once per member per day.',
+    'artists.views': 'Page views',
     'profile.shop.cta': 'Open the shop',
 
     'stamp.place': 'Place my stamp',
@@ -1241,6 +1244,9 @@ const DICT = {
     'profile.badges.empty':
       'Aucun badge pour l’instant — ils tombent à la clôture d’une compétition que vous avez pronostiquée.',
     'profile.wallet': 'Porte-monnaie',
+    'profile.views': 'Vues du profil',
+    'profile.gate': 'Connectez-vous avec Discord pour voir ce profil. Une vue par membre et par jour.',
+    'artists.views': 'Vues de la fiche',
     'profile.shop.cta': 'Ouvrir la boutique',
 
     'stamp.place': 'Poser mon tampon',

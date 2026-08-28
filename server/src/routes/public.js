@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { withName } from '../lib/naming.js';
 import { walletBalance } from '../lib/badges.js';
+import { requireAuth } from '../lib/auth.js';
+import { countViews, recordView } from '../lib/views.js';
 
 export const publicRouter = Router();
 
@@ -268,7 +270,16 @@ publicRouter.get('/leaderboard', async (req, res) => {
 });
 
 /** Fiche publique d'un pronostiqueur. */
-publicRouter.get('/users/:id', async (req, res) => {
+/**
+ * Le profil d'un joueur.
+ *
+ * `requireAuth` : la fiche est réservée aux membres. Deux raisons, et la
+ * seconde compte plus que la première. Un compteur de vues n'a de sens que si
+ * chaque vue a un visage — sinon il compte surtout des robots d'indexation. Et
+ * un profil rassemble points, historique et badges de quelqu'un : le rendre
+ * lisible sans compte, c'est le publier.
+ */
+publicRouter.get('/users/:id', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: {
@@ -341,7 +352,14 @@ publicRouter.get('/users/:id', async (req, res) => {
   // autres inviterait à comparer des dépenses plutôt que des pronostics.
   const wallet = req.user?.id === user.id ? await walletBalance(user.id) : null;
 
-  res.json({ user, predictions, totals, badges, wallet });
+  // La consultation est notée puis comptée — dans cet ordre, pour que la
+  // personne qui vient d'arriver se voie dans le total plutôt que de découvrir
+  // un chiffre en retard d'une visite. On ne l'attend pas : `recordView` ne lève
+  // jamais, mais rien n'oblige à retarder la réponse pour un ornement.
+  recordView({ viewerId: req.user.id, userId: user.id });
+  const views = await countViews({ userId: user.id });
+
+  res.json({ user, predictions, totals, badges, wallet, views });
 });
 
 /**
@@ -353,6 +371,19 @@ publicRouter.get('/artists', async (_req, res) => {
   res.json({ artists });
 });
 
+/**
+ * La fiche d'un artiste. OUVERTE, contrairement aux profils de joueurs.
+ *
+ * La distinction n'est pas une inconséquence. Un profil rassemble les points,
+ * l'historique et les badges de quelqu'un : le rendre lisible sans compte, ce
+ * serait le publier. Une fiche d'artiste ne parle de personne d'inscrit — c'est
+ * une page sur un beatboxer, le genre de lien qu'on partage sur un Discord et
+ * qu'un moteur indexe. La fermer coûterait au site sa meilleure porte d'entrée.
+ *
+ * Le compteur, lui, ne bouge pas : seuls les visiteurs connectés y figurent, et
+ * `recordView` s'en charge en sortant tout de suite quand il n'y a pas de
+ * session. On compte donc des membres, pas des passages.
+ */
 publicRouter.get('/artists/:slug', async (req, res) => {
   const artist = await prisma.artist.findUnique({
     where: { slug: req.params.slug },
@@ -620,6 +651,12 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     };
   });
 
+  // `req.user?.id` et non `req.user.id` : la route est ouverte, il n'y a pas
+  // toujours quelqu'un derrière. `recordView` sort sans rien faire sur un
+  // visiteur anonyme.
+  recordView({ viewerId: req.user?.id, artistId: artist.id });
+  const views = await countViews({ artistId: artist.id });
+
   res.json({
     artist: {
       id: artist.id,
@@ -631,6 +668,7 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     },
     // Le seul chiffre qui se cumule honnêtement d'une compétition à l'autre.
     totals: { pointsFrom },
+    views,
     appearances,
   });
 });

@@ -32,6 +32,18 @@ export default function Profile() {
   }, [targetId]);
 
   if (loading) return <p className="faint" style={{ marginTop: '2rem' }}>{t('common.loading')}</p>;
+
+  // La barrière. Elle vaut pour SON profil comme pour celui des autres : sans
+  // compte il n'y a pas de « son » profil, et un visiteur anonyme sur la fiche
+  // de quelqu'un ne pourrait de toute façon pas y être compté.
+  if (!user) {
+    return (
+      <div className="empty" style={{ marginTop: '3rem' }}>
+        <p>{targetId ? t('profile.gate') : t('profile.signin')}</p>
+        <DiscordButton />
+      </div>
+    );
+  }
   if (!targetId) {
     return (
       <div className="empty" style={{ marginTop: '3rem' }}>
@@ -135,6 +147,10 @@ export default function Profile() {
           <Stat value={data.totals.submitted} label={t('profile.submitted')} />
           <Stat value={data.totals.pending} label={t('profile.pending')} />
           <Stat value={data.totals.drafts} label={t('profile.drafts')} />
+          {/* Les vues se comptent par visiteur et par JOUR : recharger dix fois
+              la même page n'ajoute rien. Le chiffre dit combien de membres sont
+              passés, pas combien de requêtes ont eu lieu. */}
+          {data.views != null && <Stat value={data.views} label={t('profile.views')} />}
           {/* Le porte-monnaie n'apparaît que chez soi : les points dépensables
               des autres ne regardent personne — leurs badges, si. */}
           {own && data.wallet != null && (
