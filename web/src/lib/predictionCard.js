@@ -180,7 +180,16 @@ export function paletteForSkin(base, skinId) {
  * affiches. Rien n'est écarté ici : c'est la mise en page qui se débrouille
  * pour tout faire tenir.
  */
-export function buildCardModel(prediction, { t, lang = 'en' } = {}) {
+/**
+ * @param {object}  options
+ * @param {string}  [options.skinId]  force un skin — `undefined` garde celui de
+ *   l'auteur, `null` retire tout skin. Sert à l'aperçu de boutique, qui doit
+ *   montrer un skin qu'on ne porte pas encore.
+ * @param {object}  [options.stamp]   même logique pour le tampon : `undefined`
+ *   garde celui du pronostic, `null` l'efface. L'aperçu de tampon dessine le
+ *   sien par-dessus le canvas, il n'en veut donc pas DANS le canvas.
+ */
+export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {}) {
     const label = (key, fallback) => (t ? t(key) : fallback);
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
     const nameOf = (id) => byId.get(id)?.name ?? '—';
@@ -255,8 +264,8 @@ export function buildCardModel(prediction, { t, lang = 'en' } = {}) {
         // Le tampon est figé au moment où il a été posé : son identifiant vit
         // dans le pronostic, pas dans la tenue actuelle de l'auteur. Changer de
         // tampon ne doit pas réécrire une carte déjà partagée.
-        stamp: readStamp(prediction.stamp, lang),
-        skinId: prediction.user?.equippedCardSkin ?? null,
+        stamp: stamp === undefined ? readStamp(prediction.stamp, lang) : stamp && readStamp(stamp, lang),
+        skinId: skinId === undefined ? prediction.user?.equippedCardSkin ?? null : skinId,
     };
 }
 

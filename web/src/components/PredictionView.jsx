@@ -128,7 +128,7 @@ const ROUND_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FIN
  * l'alimentent, et les deux finales dans la même colonne. Une liste à plat
  * ne dit rien du chemin parcouru — or c'est précisément ce qu'on vient lire.
  */
-function ReadOnlyBracket({ battles, byId, photo }) {
+export function ReadOnlyBracket({ battles, byId, photo }) {
     const { t } = useI18n();
 
     const byRound = {};
@@ -220,7 +220,11 @@ function ReadOnlyBracket({ battles, byId, photo }) {
     );
 }
 
-function Body({ prediction }) {
+/**
+ * Exporté pour l'aperçu de boutique : le tampon se juge sur un vrai tableau, et
+ * c'est ce composant qui sait le dessiner en lecture seule.
+ */
+export function Body({ prediction }) {
     const { t } = useI18n();
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
     const photo = (c) => c?.imageUrl ?? c?.artists?.[0]?.artist?.imageUrl ?? null;

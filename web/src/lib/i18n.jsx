@@ -577,6 +577,10 @@ const DICT = {
 
     'shop.preview': 'Preview',
     'shop.preview.note': 'Shown with the rest of your kit. Nothing is bought or worn yet.',
+    'shop.preview.noPrediction': 'File a prediction first: the preview shows your latest one.',
+    'shop.preview.noBracket': 'Your latest prediction has no bracket to stamp.',
+    'shop.stamp.hint': 'Click anywhere to stamp.',
+    'shop.stamp.again': 'Click again to move it.',
     'shop.live.leaderboard': 'Leaderboard row',
     'shop.live.profile': 'Profile header',
     'shop.live.bracket': 'Bracket battle',
@@ -1207,6 +1211,10 @@ const DICT = {
 
     'shop.preview': 'Aperçu',
     'shop.preview.note': 'Montré avec le reste de votre tenue. Rien n’est acheté ni porté pour autant.',
+    'shop.preview.noPrediction': 'Déposez d’abord un pronostic : l’aperçu utilise votre dernier.',
+    'shop.preview.noBracket': 'Votre dernier pronostic n’a pas de tableau à tamponner.',
+    'shop.stamp.hint': 'Cliquez n’importe où pour tamponner.',
+    'shop.stamp.again': 'Cliquez à nouveau pour le déplacer.',
     'shop.live.leaderboard': 'Ligne de classement',
     'shop.live.profile': 'En-tête de profil',
     'shop.live.bracket': 'Affiche de tableau',

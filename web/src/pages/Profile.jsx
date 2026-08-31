@@ -10,7 +10,14 @@ import { Badge, Banded, FramedAvatar, Name } from '../components/Cosmetics.jsx';
 import BadgeDetail from '../components/BadgeDetail.jsx';
 import { BADGES } from '../lib/cosmetics.js';
 
-export default function Profile() {
+/**
+ * @param {object} [preview]  l'aperçu de boutique. `{ band, frame, nameFx }`
+ *   remplace la tenue affichée par celle qu'on essaie, et le profil se rend
+ *   dans une fenêtre : pas de déconnexion, pas de zone dangereuse, les bandes
+ *   confinées au conteneur. C'est le VRAI profil, avec ses vrais chiffres —
+ *   seule la tenue est empruntée.
+ */
+export default function Profile({ preview = null }) {
   const { id } = useParams();
   const { user, loading, refresh, logout } = useSession();
   const { t, date, lang } = useI18n();
@@ -57,6 +64,14 @@ export default function Profile() {
 
   const own = !id || id === user?.id;
 
+  // La tenue affichée : celle de l'aperçu si on en essaie une, sinon la vraie.
+  // Emplacement par emplacement — essayer une bande ne retire pas son cadre.
+  const worn = {
+    frame: preview?.frame !== undefined ? preview.frame : data.user.equippedFrame,
+    nameFx: preview?.nameFx !== undefined ? preview.nameFx : data.user.equippedNameFx,
+    band: preview?.band !== undefined ? preview.band : data.user.equippedBand,
+  };
+
   const removeDraft = async (p) => {
     setBusy(p.id);
     try {
@@ -99,11 +114,11 @@ export default function Profile() {
   }
 
   return (
-    <Banded bandId={data.user.equippedBand}>
-      <div className="stack" style={{ paddingTop: '2.5rem' }}>
+    <Banded bandId={worn.band} inline={Boolean(preview)}>
+      <div className="stack" style={{ paddingTop: preview ? '0.5rem' : '2.5rem' }}>
         <header className="row" style={{ gap: '1rem' }}>
           {data.user.avatarUrl && (
-            <FramedAvatar url={data.user.avatarUrl} frameId={data.user.equippedFrame} size="lg" />
+            <FramedAvatar url={data.user.avatarUrl} frameId={worn.frame} size="lg" />
           )}
           <div>
             <p className="eyebrow">
@@ -112,7 +127,7 @@ export default function Profile() {
               })}
             </p>
             <h1>
-              <Name fxId={data.user.equippedNameFx}>
+              <Name fxId={worn.nameFx}>
                 {data.user.globalName ?? data.user.username}
               </Name>
             </h1>
@@ -121,7 +136,7 @@ export default function Profile() {
           {/* La déconnexion vit ici, avec le reste de ce qui touche au compte.
               Dans la ligne de service, elle voisinait l'avatar : deux cibles de
               quarante pixels côte à côte, dont l'une ferme la session. */}
-          {own && user && (
+          {own && user && !preview && (
             <button
               className="btn btn--small btn--ghost"
               style={{ marginLeft: 'auto' }}
@@ -260,7 +275,7 @@ export default function Profile() {
 
         {/* La zone dangereuse, sur son propre profil seulement. En bas de page et
             bordée de rouge : on ne la croise pas, on va la chercher. */}
-        {own && user && (
+        {own && user && !preview && (
           <section className="stack" style={{ gap: '0.6rem', marginTop: '2rem' }}>
             <h2>{t('account.zone')}</h2>
             <div className="panel stack" style={{ gap: '0.7rem', borderColor: 'var(--r)' }}>

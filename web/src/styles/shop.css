@@ -22,8 +22,8 @@
    plus près de leur seul usage, plutôt que dans themes.css : le jour où on les
    retire, il n'y a qu'un fichier à ouvrir. */
 :root {
-    --o: #e8531c;
-    --bz: #b06a2c;
+  --o: #e8531c;
+  --bz: #b06a2c;
 }
 
 /* ---------------------------------------------------------------------------
@@ -39,44 +39,29 @@
    d'élargir la boîte. Aucune ligne de tableau ne bouge d'un pixel selon ce que
    porte le joueur. */
 .cos-frame {
-    position: relative;
-    display: inline-block;
-    line-height: 0;
-    flex-shrink: 0;
-    border: 2px solid var(--c);
-    image-rendering: pixelated;
-    filter: contrast(1.15) saturate(1.3);
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  flex-shrink: 0;
+  border: 2px solid var(--c);
+  image-rendering: pixelated;
+  filter: contrast(1.15) saturate(1.3);
 }
 
 .cos-frame img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Les tailles suivent celles des avatars : `xs` vaut `.avatar`, `sm` vaut
    `.avatar--md`, `lg` la version agrandie du profil. En rem et non en pixels,
    pour suivre le zoom du texte comme le reste du site. */
-.cos-frame--xs {
-    width: 1.6rem;
-    height: 1.6rem;
-}
-
-.cos-frame--sm {
-    width: 2.6rem;
-    height: 2.6rem;
-}
-
-.cos-frame--md {
-    width: 3.4rem;
-    height: 3.4rem;
-}
-
-.cos-frame--lg {
-    width: 4.5rem;
-    height: 4.5rem;
-}
+.cos-frame--xs { width: 1.6rem; height: 1.6rem; }
+.cos-frame--sm { width: 2.6rem; height: 2.6rem; }
+.cos-frame--md { width: 3.4rem; height: 3.4rem; }
+.cos-frame--lg { width: 4.5rem; height: 4.5rem; }
 
 /* ---------------------------------------------------------------------------
    Les cadres
@@ -86,9 +71,7 @@
    pas au flux, donc elle ne peut pas décaler la ligne, quoi qu'il arrive.
    --------------------------------------------------------------------------- */
 
-.cos-f-filet {
-    border: 3px solid var(--c);
-}
+.cos-f-filet { border: 3px solid var(--c); }
 
 /* Le bouton d'enregistrement d'une loopstation : trois pixels de rouge qui
    battent. `steps(1)` et non une transition douce — un voyant est allumé ou
@@ -96,22 +79,10 @@
 /* Le voyant d'enregistrement : allumé longtemps, éteint brièvement. Un
    clignotement à parts égales fait sapin de Noël ; celui-ci respire. */
 .cos-f-rec {
-    border: 5px solid var(--r);
-    animation: cos-blink 2.8s steps(1, end) infinite;
+  border: 5px solid var(--r);
+  animation: cos-blink 2.8s steps(1, end) infinite;
 }
-
-@keyframes cos-blink {
-
-    0%,
-    72% {
-        border-color: var(--r);
-    }
-
-    73%,
-    100% {
-        border-color: var(--line);
-    }
-}
+@keyframes cos-blink { 0%, 72% { border-color: var(--r); } 73%, 100% { border-color: var(--line); } }
 
 /* La tête de lecture qui fait le tour. Un bloc de trois pixels parcourt les
    quatre côtés en quatre segments de durée égale ; `steps()` par côté donne le
@@ -119,372 +90,201 @@
 /* La tête de lecture fait le tour en sept secondes. À deux, elle passait si
    vite qu'on la prenait pour un scintillement ; lente, on la SUIT du regard,
    ce qui est exactement ce qu'on veut d'un cadre qu'on porte en permanence. */
-.cos-f-track {
-    border: 3px solid var(--line);
-}
-
+.cos-f-track { border: 3px solid var(--line); }
 .cos-f-track::before {
-    content: '';
-    position: absolute;
-    width: 34%;
-    height: 5px;
-    background: var(--g);
-    top: -5px;
-    left: 0;
-    animation: cos-run 7s linear infinite;
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 5px;
+  background: var(--g);
+  top: -5px;
+  left: 0;
+  animation: cos-run 7s linear infinite;
 }
-
 @keyframes cos-run {
-    0% {
-        top: -5px;
-        left: 0;
-        width: 34%;
-        height: 5px;
-        margin: 0;
-    }
-
-    25% {
-        top: -5px;
-        left: 66%;
-        width: 34%;
-        height: 5px;
-        margin: 0;
-    }
-
-    25.1% {
-        top: 0;
-        left: 100%;
-        width: 5px;
-        height: 34%;
-        margin-left: -5px;
-    }
-
-    50% {
-        top: 66%;
-        left: 100%;
-        width: 5px;
-        height: 34%;
-        margin-left: -5px;
-    }
-
-    50.1% {
-        top: 100%;
-        left: 66%;
-        width: 34%;
-        height: 5px;
-        margin-top: -5px;
-        margin-left: 0;
-    }
-
-    75% {
-        top: 100%;
-        left: 0;
-        width: 34%;
-        height: 5px;
-        margin-top: -5px;
-    }
-
-    75.1% {
-        top: 66%;
-        left: -5px;
-        width: 5px;
-        height: 34%;
-        margin-top: 0;
-    }
-
-    100% {
-        top: 0;
-        left: -5px;
-        width: 5px;
-        height: 34%;
-    }
+  0%   { top: -5px; left: 0;    width: 34%; height: 5px; margin: 0; }
+  25%  { top: -5px; left: 66%;  width: 34%; height: 5px; margin: 0; }
+  25.1%{ top: 0;    left: 100%; width: 5px; height: 34%; margin-left: -5px; }
+  50%  { top: 66%;  left: 100%; width: 5px; height: 34%; margin-left: -5px; }
+  50.1%{ top: 100%; left: 66%;  width: 34%; height: 5px; margin-top: -5px; margin-left: 0; }
+  75%  { top: 100%; left: 0;    width: 34%; height: 5px; margin-top: -5px; }
+  75.1%{ top: 66%;  left: -5px; width: 5px; height: 34%; margin-top: 0; }
+  100% { top: 0;    left: -5px; width: 5px; height: 34%; }
 }
 
 /* Le chrono se remplit par le haut puis repart de zéro. Le remplissage est un
    fond à arrêts francs : aucun dégradé, seulement deux blocs qui se poussent. */
 /* Quatre-vingt-dix secondes, à l'échelle : l'aiguille change de côté toutes
    les trois secondes et fait le tour en douze. */
-.cos-f-clock {
-    border: 4px solid var(--line);
-}
-
+.cos-f-clock { border: 4px solid var(--line); }
 .cos-f-clock::before {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border: 4px solid transparent;
-    border-top-color: var(--y);
-    animation: cos-turn 12s steps(4, end) infinite;
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--y);
+  animation: cos-turn 12s steps(4, end) infinite;
 }
+@keyframes cos-turn { to { transform: rotate(360deg); } }
 
-@keyframes cos-turn {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.cos-f-countdown {
-    border: 4px solid var(--line);
-}
-
+.cos-f-countdown { border: 4px solid var(--line); }
 .cos-f-countdown::before {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border: 4px solid var(--r);
-    animation: cos-drain 10s steps(8, end) infinite;
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 4px solid var(--r);
+  animation: cos-drain 10s steps(8, end) infinite;
 }
-
 @keyframes cos-drain {
-    0% {
-        clip-path: inset(0 0 0 0);
-    }
-
-    100% {
-        clip-path: inset(0 0 100% 0);
-    }
+  0%   { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 100% 0); }
 }
 
 /* L'onde : la couleur du filet monte et redescend. La plus douce du lot, et la
    seule qu'on peut porter sans que l'œil y revienne sans cesse. */
 .cos-f-wave {
-    border: 5px solid var(--c);
-    animation: cos-wave 5s ease-in-out infinite;
+  border: 5px solid var(--c);
+  animation: cos-wave 5s ease-in-out infinite;
 }
-
-@keyframes cos-wave {
-
-    0%,
-    100% {
-        border-color: var(--line);
-    }
-
-    50% {
-        border-color: var(--c);
-    }
-}
+@keyframes cos-wave { 0%, 100% { border-color: var(--line); } 50% { border-color: var(--c); } }
 
 /* Deux blocs qui se poursuivent en sens opposé. Ils se croisent deux fois par
    tour, et c'est le seul moment où le cadre a l'air symétrique. */
-.cos-f-helix {
-    border: 3px solid var(--line);
-}
-
+.cos-f-helix { border: 3px solid var(--line); }
 .cos-f-helix::before,
 .cos-f-helix::after {
-    content: '';
-    position: absolute;
-    width: 34%;
-    height: 5px;
-    top: -5px;
-    left: 0;
-    animation: cos-run 8s linear infinite;
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 5px;
+  top: -5px;
+  left: 0;
+  animation: cos-run 8s linear infinite;
 }
-
-.cos-f-helix::before {
-    background: var(--m);
-}
-
+.cos-f-helix::before { background: var(--m); }
 /* Un demi-tour de décalage : les deux blocs sont toujours à l'opposé l'un de
    l'autre, et le cadre reste équilibré à chaque instant. */
-.cos-f-helix::after {
-    background: var(--c);
-    animation-delay: -4s;
-}
+.cos-f-helix::after { background: var(--c); animation-delay: -4s; }
 
 /* Les fourmis. Un pointillé qui avance d'un cran deux fois par seconde :
    `background-position` sur un motif à arrêts francs, pas un dégradé. */
 .cos-f-ants {
-    border: 5px solid transparent;
-    background-image: repeating-linear-gradient(90deg, var(--r) 0 5px, transparent 5px 10px),
-        repeating-linear-gradient(90deg, var(--r) 0 5px, transparent 5px 10px),
-        repeating-linear-gradient(0deg, var(--r) 0 5px, transparent 5px 10px),
-        repeating-linear-gradient(0deg, var(--r) 0 5px, transparent 5px 10px);
-    background-size: 100% 5px, 100% 5px, 5px 100%, 5px 100%;
-    background-position: 0 0, 0 100%, 0 0, 100% 0;
-    background-repeat: no-repeat;
-    background-origin: border-box;
-    background-clip: border-box;
-    animation: cos-ants 1.6s steps(2, end) infinite;
+  border: 5px solid transparent;
+  background-image: repeating-linear-gradient(90deg, var(--r) 0 5px, transparent 5px 10px),
+                    repeating-linear-gradient(90deg, var(--r) 0 5px, transparent 5px 10px),
+                    repeating-linear-gradient(0deg, var(--r) 0 5px, transparent 5px 10px),
+                    repeating-linear-gradient(0deg, var(--r) 0 5px, transparent 5px 10px);
+  background-size: 100% 5px, 100% 5px, 5px 100%, 5px 100%;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-clip: border-box;
+  animation: cos-ants 1.6s steps(2, end) infinite;
 }
-
-@keyframes cos-ants {
-    to {
-        background-position: 10px 0, -10px 100%, 0 -10px, 100% 10px;
-    }
-}
+@keyframes cos-ants { to { background-position: 10px 0, -10px 100%, 0 -10px, 100% 10px; } }
 
 /* Le VU-mètre : seul le bord bas s'agite, en trois segments qui montent et
    retombent à des rythmes différents. */
 .cos-f-vu {
-    border: 3px solid var(--line);
-    border-bottom-width: 6px;
-    animation: cos-vu 3.6s steps(3, end) infinite;
+  border: 3px solid var(--line);
+  border-bottom-width: 6px;
+  animation: cos-vu 3.6s steps(3, end) infinite;
 }
-
 @keyframes cos-vu {
-    0% {
-        border-bottom-color: var(--g);
-    }
-
-    33% {
-        border-bottom-color: var(--y);
-    }
-
-    66% {
-        border-bottom-color: var(--r);
-    }
-
-    100% {
-        border-bottom-color: var(--g);
-    }
+  0%   { border-bottom-color: var(--g); }
+  33%  { border-bottom-color: var(--y); }
+  66%  { border-bottom-color: var(--r); }
+  100% { border-bottom-color: var(--g); }
 }
 
 /* L'ovation : des éclats blancs qui s'allument par à-coups aux quatre coins.
    Le jury qui se lève, la distinction la plus rare du milieu. */
-.cos-f-ovation {
-    border: 3px solid var(--line);
-}
-
+.cos-f-ovation { border: 3px solid var(--line); }
 .cos-f-ovation::before,
 .cos-f-ovation::after {
-    content: '';
-    position: absolute;
-    inset: -5px;
-    border: 5px solid transparent;
-    animation: cos-spark 6s steps(1, end) infinite;
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 5px solid transparent;
+  animation: cos-spark 6s steps(1, end) infinite;
 }
-
-.cos-f-ovation::after {
-    animation-delay: -3s;
-}
-
+.cos-f-ovation::after { animation-delay: -3s; }
 @keyframes cos-spark {
-
-    0%,
-    88% {
-        border-color: transparent;
-    }
-
-    90% {
-        border-top-color: var(--w, #e8e8e8);
-        border-right-color: var(--w, #e8e8e8);
-    }
-
-    94% {
-        border-bottom-color: var(--w, #e8e8e8);
-        border-left-color: var(--w, #e8e8e8);
-        border-top-color: transparent;
-        border-right-color: transparent;
-    }
-
-    96%,
-    100% {
-        border-color: transparent;
-    }
+  0%, 88%  { border-color: transparent; }
+  90%      { border-top-color: var(--w, #e8e8e8); border-right-color: var(--w, #e8e8e8); }
+  94%      { border-bottom-color: var(--w, #e8e8e8); border-left-color: var(--w, #e8e8e8); border-top-color: transparent; border-right-color: transparent; }
+  96%, 100%{ border-color: transparent; }
 }
 
 /* Quatre éclats orange aux angles, rien sur les côtés. Le motif du badge en
    négatif — et le seul cadre qui laisse trois côtés nus. */
 .cos-f-cube {
-    border: 5px solid transparent;
-    background-image: linear-gradient(var(--o), var(--o)), linear-gradient(var(--o), var(--o)),
-        linear-gradient(var(--o), var(--o)), linear-gradient(var(--o), var(--o));
-    background-size: 42% 5px, 5px 42%, 42% 5px, 5px 42%;
-    background-position: 0 0, 0 0, 100% 100%, 100% 100%;
-    background-repeat: no-repeat;
-    background-origin: border-box;
+  border: 5px solid transparent;
+  background-image: linear-gradient(var(--o), var(--o)), linear-gradient(var(--o), var(--o)),
+                    linear-gradient(var(--o), var(--o)), linear-gradient(var(--o), var(--o));
+  background-size: 42% 5px, 5px 42%, 42% 5px, 5px 42%;
+  background-position: 0 0, 0 0, 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-origin: border-box;
 }
 
 .cos-f-tricolore {
-    border: 5px solid var(--w, #e8e8e8);
-    border-left-color: var(--b);
-    border-right-color: var(--r);
+  border: 5px solid var(--w, #e8e8e8);
+  border-left-color: var(--b);
+  border-right-color: var(--r);
 }
 
 /* Double filet or sur champ bleu, avec un reflet qui glisse. Ne s'affiche
    correctement qu'avec deux bordures : l'outline en est une seconde qui ne
    décale rien. */
 .cos-f-champion {
-    border: 5px solid var(--y);
-    outline: 3px solid var(--b);
-    outline-offset: 0;
+  border: 5px solid var(--y);
+  outline: 3px solid var(--b);
+  outline-offset: 0;
 }
-
 .cos-f-champion::before {
-    content: '';
-    position: absolute;
-    width: 34%;
-    height: 5px;
-    background: var(--w, #e8e8e8);
-    top: -5px;
-    left: 0;
-    animation: cos-run 9s linear infinite;
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 5px;
+  background: var(--w, #e8e8e8);
+  top: -5px;
+  left: 0;
+  animation: cos-run 9s linear infinite;
 }
 
 /* Une ligne claire descend le long des deux montants. Le balayage d'un tube
    cathodique mal réglé. */
-.cos-f-scan {
-    border: 4px solid var(--line);
-}
-
+.cos-f-scan { border: 4px solid var(--line); }
 .cos-f-scan::before,
 .cos-f-scan::after {
-    content: '';
-    position: absolute;
-    width: 4px;
-    height: 34%;
-    background: var(--c);
-    top: 0;
-    animation: cos-slide 5.5s linear infinite;
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 34%;
+  background: var(--c);
+  top: 0;
+  animation: cos-slide 5.5s linear infinite;
 }
-
-.cos-f-scan::before {
-    left: -4px;
-}
-
-.cos-f-scan::after {
-    right: -4px;
-    animation-delay: -2.75s;
-}
-
-@keyframes cos-slide {
-    0% {
-        top: -30%;
-    }
-
-    100% {
-        top: 100%;
-    }
-}
+.cos-f-scan::before { left: -4px; }
+.cos-f-scan::after { right: -4px; animation-delay: -2.75s; }
+@keyframes cos-slide { 0% { top: -30%; } 100% { top: 100%; } }
 
 /* Quelqu'un qui a demandé moins d'animations à son système en a assez vu. On
    coupe tout : les cadres gardent leur couleur au repos, ils restent
    distincts, ils ne bougent plus. */
 @media (prefers-reduced-motion: reduce) {
-
-    .cos-frame,
-    .cos-frame::before,
-    .cos-frame::after {
-        animation: none !important;
-    }
-
-    .cos-f-track::before,
-    .cos-f-helix::before,
-    .cos-f-helix::after,
-    .cos-f-champion::before,
-    .cos-f-scan::before,
-    .cos-f-scan::after {
-        display: none;
-    }
-
-    .cos-f-rec {
-        border-color: var(--r);
-    }
-
-    .cos-f-wave {
-        border-color: var(--c);
-    }
+  .cos-frame,
+  .cos-frame::before,
+  .cos-frame::after { animation: none !important; }
+  .cos-f-track::before,
+  .cos-f-helix::before,
+  .cos-f-helix::after,
+  .cos-f-champion::before,
+  .cos-f-scan::before,
+  .cos-f-scan::after { display: none; }
+  .cos-f-rec { border-color: var(--r); }
+  .cos-f-wave { border-color: var(--c); }
 }
 
 /* ---------------------------------------------------------------------------
@@ -495,44 +295,14 @@
    l'arc-en-ciel ont été écartés.
    --------------------------------------------------------------------------- */
 
-.cos-name {
-    display: inline;
-}
-
-.cos-n-underline {
-    border-bottom: 2px solid var(--g);
-}
-
-.cos-n-chevrons::before {
-    content: '<< ';
-    color: var(--y);
-}
-
-.cos-n-chevrons::after {
-    content: ' >>';
-    color: var(--y);
-}
-
-.cos-n-invert {
-    background: var(--c);
-    color: var(--screen);
-    padding: 0 0.35em;
-}
-
-.cos-n-tall {
-    font-size: 1.5em;
-    line-height: 0.8;
-    vertical-align: -0.1em;
-}
-
-.cos-n-bullet::before {
-    content: '■ ';
-    color: var(--m);
-}
-
-.cos-n-spaced {
-    letter-spacing: 0.34em;
-}
+.cos-name { display: inline; }
+.cos-n-underline { border-bottom: 2px solid var(--g); }
+.cos-n-chevrons::before { content: '<< '; color: var(--y); }
+.cos-n-chevrons::after { content: ' >>'; color: var(--y); }
+.cos-n-invert { background: var(--c); color: var(--screen); padding: 0 0.35em; }
+.cos-n-tall { font-size: 1.5em; line-height: 0.8; vertical-align: -0.1em; }
+.cos-n-bullet::before { content: '■ '; color: var(--m); }
+.cos-n-spaced { letter-spacing: 0.34em; }
 
 /* ---------------------------------------------------------------------------
    Les bandes de profil
@@ -564,9 +334,9 @@
    c'est-à-dire d'écrire un nombre magique qui redeviendrait faux à la première
    ligne ajoutée au menu. */
 .masthead {
-    position: relative;
-    z-index: 2;
-    background: var(--screen);
+  position: relative;
+  z-index: 2;
+  background: var(--screen);
 }
 
 /* La bande se pose au MILIEU de la marge, pas contre le bord de l'écran.
@@ -580,77 +350,67 @@
    profil, elle lui rognait sa place. Le milieu de la marge est le seul endroit
    où elle a l'air posée là exprès. */
 .cos-band {
-    --band-w: 3.5rem;
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    width: var(--band-w);
-    background-repeat: repeat-y;
-    background-position: top center;
-    background-size: var(--band-w) auto;
-    image-rendering: pixelated;
-    pointer-events: none;
-    z-index: 0;
+  --band-w: 3.5rem;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: var(--band-w);
+  background-repeat: repeat-y;
+  background-position: top center;
+  background-size: var(--band-w) auto;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.cos-band--left {
-    left: calc((100% - 980px) / 4 - var(--band-w) / 2);
-}
+.cos-band--left { left: calc((100% - 980px) / 4 - var(--band-w) / 2); }
 
 /* Le miroir : un motif orienté — le câble, les drapeaux — se referme sur le
    profil au lieu de fuir deux fois du même côté. */
 .cos-band--right {
-    right: calc((100% - 980px) / 4 - var(--band-w) / 2);
-    transform: scaleX(-1);
+  right: calc((100% - 980px) / 4 - var(--band-w) / 2);
+  transform: scaleX(-1);
 }
 
 /* En dessous de 1280 px, la marge n'est plus assez large pour porter une bande
    ET du noir de part et d'autre. Elles disparaissent : mieux vaut pas de bande
    qu'une bande coincée contre un mot. */
 @media (max-width: 1279px) {
-    .cos-band {
-        display: none;
-    }
+  .cos-band { display: none; }
 }
 
 /* La vignette de boutique n'est PAS une bande : elle n'a que le motif. Sans
    cette classe distincte, l'aperçu héritait de `position: fixed` et allait se
    coller en haut de la fenêtre au lieu de rester dans sa carte. */
 .cos-band-preview {
-    display: block;
-    background-repeat: repeat-y;
-    background-position: top center;
-    image-rendering: pixelated;
+  display: block;
+  background-repeat: repeat-y;
+  background-position: top center;
+  image-rendering: pixelated;
 }
 
 /* ---------------------------------------------------------------------------
    Les badges
    --------------------------------------------------------------------------- */
 
-.cos-badge {
-    display: inline-block;
-    line-height: 0;
-}
+.cos-badge { display: inline-block; line-height: 0; }
 
 /* Un badge cliquable est un BOUTON, pas une image avec un gestionnaire : c'est
    ce qui lui donne le focus au clavier, la touche Entrée et l'annonce vocale.
    Tout le reste n'est que la remise à zéro du style natif. */
 .cos-badge-btn {
-    position: relative;
-    display: inline-block;
-    line-height: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
-.cos-badge-btn:focus-visible {
-    outline: 2px solid var(--c);
-    outline-offset: 3px;
-}
+.cos-badge-btn:focus-visible { outline: 2px solid var(--c); outline-offset: 3px; }
 
 /* L'infobulle au survol.
 
@@ -659,42 +419,32 @@
    superposées disant la même chose — le navigateur ne sait pas qu'on en a déjà
    une. Celle-ci est la seule. */
 .cos-badge-btn::after {
-    content: attr(data-label);
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 0.4rem);
-    transform: translateX(-50%);
-    padding: 0.15rem 0.5rem;
-    border: 2px solid var(--c);
-    background: var(--screen);
-    color: var(--ink);
-    font-family: var(--font-data);
-    font-size: 0.8rem;
-    line-height: 1.3;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 20;
+  content: attr(data-label);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  transform: translateX(-50%);
+  padding: 0.15rem 0.5rem;
+  border: 2px solid var(--c);
+  background: var(--screen);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
 }
 
 .cos-badge-btn:hover::after,
-.cos-badge-btn:focus-visible::after {
-    opacity: 1;
-}
+.cos-badge-btn:focus-visible::after { opacity: 1; }
 
 /* Le premier et le dernier d'une rangée : l'infobulle se recale sur son bord
    plutôt que de sortir du panneau. */
-.cos-badge-btn:first-of-type::after {
-    left: 0;
-    transform: none;
-}
-
-.cos-badge-btn:last-of-type::after {
-    left: auto;
-    right: 0;
-    transform: none;
-}
+.cos-badge-btn:first-of-type::after { left: 0; transform: none; }
+.cos-badge-btn:last-of-type::after { left: auto; right: 0; transform: none; }
 
 /* La fiche d'un badge.
 
@@ -702,62 +452,59 @@
    720 pixels par défaut, deux lignes de texte laissaient les deux tiers de la
    fenêtre vides — ce qui donne l'impression qu'il manque quelque chose. */
 .cos-sheet {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.9rem;
-    text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: center;
 }
 
 .cos-sheet__art {
-    border: var(--frame);
-    padding: 0.7rem;
-    background: #000;
-    line-height: 0;
+  border: var(--frame);
+  padding: 0.7rem;
+  background: #000;
+  line-height: 0;
 }
 
 /* Une taille de lecture, pas une note de bas de page : c'est la seule phrase
    de la fenêtre, autant qu'elle se lise. */
 .cos-sheet__text {
-    margin: 0;
-    font-size: 1.15rem;
-    line-height: 1.4;
-    max-width: 32ch;
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  max-width: 32ch;
 }
 
 .cos-sheet__when {
-    margin: 0;
-    color: var(--ink-faint);
-    font-family: var(--font-data);
-    font-size: 0.9rem;
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-data);
+  font-size: 0.9rem;
 }
 
 .cos-wall {
-    display: grid;
-    gap: 0.9rem;
+  display: grid;
+  gap: 0.9rem;
 }
 
 .cos-wall__row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    padding-bottom: 0.7rem;
-    border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
 }
 
-.cos-wall__row:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-}
+.cos-wall__row:last-child { border-bottom: 0; padding-bottom: 0; }
 
 .cos-wall__event {
-    min-width: 14rem;
-    color: var(--m);
-    font-family: var(--font-data);
-    font-size: 0.85rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+  min-width: 14rem;
+  color: var(--m);
+  font-family: var(--font-data);
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 /* ---------------------------------------------------------------------------
@@ -767,62 +514,35 @@
 /* Un angle léger et fixe : posé bien droit il a l'air d'une étiquette, posé
    trop penché il a l'air d'une erreur. */
 .cos-stamp {
-    display: inline-block;
-    border: 3px solid currentColor;
-    padding: 0.1rem 0.55rem;
-    font-family: var(--font-data);
-    font-size: 0.95rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    transform: rotate(-11deg);
-    white-space: nowrap;
+  display: inline-block;
+  border: 3px solid currentColor;
+  padding: 0.1rem 0.55rem;
+  font-family: var(--font-data);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-11deg);
+  white-space: nowrap;
 }
 
-.cos-stamp--w {
-    color: var(--w, #e8e8e8);
-}
-
-.cos-stamp--y {
-    color: var(--y);
-}
-
-.cos-stamp--c {
-    color: var(--c);
-}
-
-.cos-stamp--g {
-    color: var(--g);
-}
-
-.cos-stamp--m {
-    color: var(--m);
-}
-
-.cos-stamp--r {
-    color: var(--r);
-}
-
-.cos-stamp--o {
-    color: var(--o, #e8531c);
-}
+.cos-stamp--w { color: var(--w, #e8e8e8); }
+.cos-stamp--y { color: var(--y); }
+.cos-stamp--c { color: var(--c); }
+.cos-stamp--g { color: var(--g); }
+.cos-stamp--m { color: var(--m); }
+.cos-stamp--r { color: var(--r); }
+.cos-stamp--o { color: var(--o, #e8531c); }
 
 /* Le tableau devient le repère de position du tampon. `relative` et rien
    d'autre : la grille du bracket n'est pas touchée. */
-.cos-stamp-host {
-    position: relative;
-}
+.cos-stamp-host { position: relative; }
 
 /* Pendant la pose, le tableau entier devient une cible. Les affiches cessent de
    répondre au clic — sans quoi poser un tampon sur une battle désignerait un
    vainqueur au passage, ce qui serait une belle façon de saboter un pronostic. */
-.cos-stamp-host--placing {
-    cursor: crosshair;
-}
-
+.cos-stamp-host--placing { cursor: crosshair; }
 .cos-stamp-host--placing .battle__side,
-.cos-stamp-host--placing .battle__foot {
-    pointer-events: none;
-}
+.cos-stamp-host--placing .battle__foot { pointer-events: none; }
 
 /* Le tampon posé ne doit JAMAIS intercepter un clic : il flotte au-dessus des
    affiches, et une cible invisible par-dessus une battle rendrait celle-ci
@@ -834,15 +554,15 @@
    ce qu'il recouvre — c'est ce qu'on attend d'un tampon, et c'est plus lisible
    que la transparence qui voulait ménager les deux. */
 .cos-stamp--posed {
-    position: absolute;
-    transform: translate(-50%, -50%) rotate(-11deg);
-    pointer-events: none;
-    z-index: 3;
-    font-size: 1.15rem;
-    max-width: 86%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    background: var(--screen);
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(-11deg);
+  pointer-events: none;
+  z-index: 3;
+  font-size: 1.15rem;
+  max-width: 86%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--screen);
 }
 
 /* ---------------------------------------------------------------------------
@@ -850,86 +570,69 @@
    --------------------------------------------------------------------------- */
 
 .shop-balance {
-    display: flex;
-    align-items: baseline;
-    gap: 0.8rem;
-    flex-wrap: wrap;
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  flex-wrap: wrap;
 }
 
 .shop-balance__value {
-    font-family: var(--font-display);
-    font-size: calc(4rem * var(--display-scale, 1));
-    color: var(--g);
-    line-height: 1;
+  font-family: var(--font-display);
+  font-size: calc(4rem * var(--display-scale, 1));
+  color: var(--g);
+  line-height: 1;
 }
 
 .shop-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.8rem;
 }
 
 .shop-card {
-    border: var(--frame);
-    padding: 0.7rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  border: var(--frame);
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.shop-card--worn {
-    border-color: var(--y);
-}
+.shop-card--worn { border-color: var(--y); }
 
 .shop-card__stage {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 5.5rem;
-    background: #000;
-    border: 1px solid var(--line);
-    overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5.5rem;
+  background: #000;
+  border: 1px solid var(--line);
+  overflow: hidden;
 }
 
-.shop-card__name {
-    margin: 0;
-    letter-spacing: 0.06em;
-}
+.shop-card__name { margin: 0; letter-spacing: 0.06em; }
 
 .shop-card__price {
-    margin: 0;
-    color: var(--g);
-    font-family: var(--font-data);
-    font-size: 0.9rem;
+  margin: 0;
+  color: var(--g);
+  font-family: var(--font-data);
+  font-size: 0.9rem;
 }
 
-.shop-card__actions {
-    display: flex;
-    gap: 0.4rem;
-    margin-top: auto;
-}
+.shop-card__actions { display: flex; gap: 0.4rem; margin-top: auto; }
 
 .shop-swatch {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0.5rem;
 }
 
-.shop-swatch__title {
-    font-family: var(--font-data);
-    font-size: 0.75rem;
-    letter-spacing: 0.1em;
-}
-
-.shop-swatch__sub {
-    font-family: var(--font-data);
-    font-size: 0.7rem;
-}
+.shop-swatch__title { font-family: var(--font-data); font-size: 0.75rem; letter-spacing: 0.1em; }
+.shop-swatch__sub { font-family: var(--font-data); font-size: 0.7rem; }
 
 /* Cent cinquante pixels par colonne, c'était compter sans le badge : quatre-
    vingts pour le dessin, il en restait soixante pour « Vainqueur — meilleur
@@ -940,32 +643,30 @@
    hauts que les autres, et centrer donnait des lignes de texte à des hauteurs
    différentes dans une même rangée. */
 .shop-legend {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 1rem 1.2rem;
-    align-items: start;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem 1.2rem;
+  align-items: start;
 }
 
 .shop-legend__item {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
 }
 
 /* Le dessin ne se comprime pas, le texte se replie. Sans ces deux règles, un
    conteneur trop étroit écrasait le badge au lieu de faire passer le libellé
    à la ligne. */
 .shop-legend__item .cos-badge,
-.shop-legend__item .cos-badge-btn {
-    flex: 0 0 auto;
-}
+.shop-legend__item .cos-badge-btn { flex: 0 0 auto; }
 
 .shop-legend__label {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.9rem;
-    line-height: 1.25;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.25;
 }
 
 /* ---------------------------------------------------------------------------
@@ -980,52 +681,23 @@
    deux dixièmes de seconde, l'œil ne lit pas des paliers, il lit un défaut. La
    courbe part vite et freine à l'arrivée, ce qui suffit à donner l'impression
    que la fenêtre se pose. */
-.cos-pop {
-    animation: cos-veil 0.13s ease-out both;
-}
+.cos-pop { animation: cos-veil 0.13s ease-out both; }
+.cos-pop .modal__panel { animation: cos-unfold 0.16s cubic-bezier(0.16, 0.9, 0.3, 1) both; }
 
-.cos-pop .modal__panel {
-    animation: cos-unfold 0.16s cubic-bezier(0.16, 0.9, 0.3, 1) both;
-}
+.cos-pop--out { animation: cos-veil 0.12s ease-in reverse both; }
+.cos-pop--out .modal__panel { animation: cos-unfold 0.12s ease-in reverse both; }
 
-.cos-pop--out {
-    animation: cos-veil 0.12s ease-in reverse both;
-}
-
-.cos-pop--out .modal__panel {
-    animation: cos-unfold 0.12s ease-in reverse both;
-}
-
-@keyframes cos-veil {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
+@keyframes cos-veil { from { opacity: 0; } to { opacity: 1; } }
 @keyframes cos-unfold {
-    from {
-        transform: scale(0.86);
-        opacity: 0;
-    }
-
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
+  from { transform: scale(0.86); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-
-    .cos-pop,
-    .cos-pop .modal__panel,
-    .cos-pop--out,
-    .cos-pop--out .modal__panel {
-        animation: none;
-    }
+  .cos-pop,
+  .cos-pop .modal__panel,
+  .cos-pop--out,
+  .cos-pop--out .modal__panel { animation: none; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -1040,149 +712,177 @@
    --------------------------------------------------------------------------- */
 
 .shop-live {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.8rem;
 }
 
 .shop-live__cell {
-    border: 1px solid var(--line);
-    background: #000;
-    padding: 0.6rem;
-    min-height: 7.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
+  border: 1px solid var(--line);
+  background: #000;
+  padding: 0.6rem;
+  min-height: 7.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .shop-live__title {
-    color: var(--m);
-    font-family: var(--font-data);
-    font-size: 0.72rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+  color: var(--m);
+  font-family: var(--font-data);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 /* La ligne de classement, en miniature. Les proportions sont celles du vrai
    tableau : c'est le seul moyen de juger si un cadre de cinq pixels tient dans
    une rangée. */
 .shop-live__row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    border-top: 1px solid var(--line);
-    padding-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.4rem;
 }
 
-.shop-live__rank {
-    color: var(--faint, #8a8a8a);
-    font-family: var(--font-data);
-    font-size: 0.8rem;
-}
-
-.shop-live__pts {
-    margin-left: auto;
-    color: var(--g);
-    font-family: var(--font-data);
-    font-size: 0.8rem;
-}
+.shop-live__rank { color: var(--faint, #8a8a8a); font-family: var(--font-data); font-size: 0.8rem; }
+.shop-live__pts { margin-left: auto; color: var(--g); font-family: var(--font-data); font-size: 0.8rem; }
 
 /* Le profil : l'avatar en grand, et les deux bandes rapportées à l'échelle de
    la vignette pour qu'on voie de quel côté le motif regarde. */
-.shop-live__profile {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.shop-live__strip {
-    width: 0.9rem;
-    align-self: stretch;
-    min-height: 3.4rem;
-}
-
-.shop-live__strip--right {
-    transform: scaleX(-1);
-}
+.shop-live__profile { display: flex; align-items: center; gap: 0.5rem; }
+.shop-live__strip { width: 0.9rem; align-self: stretch; min-height: 3.4rem; }
+.shop-live__strip--right { transform: scaleX(-1); }
 
 /* L'affiche de bracket, avec son tampon posé dessus comme il le sera pour de
    vrai — d'où le conteneur en position relative. `overflow: hidden` parce
    qu'un tampon en biais dépasse toujours d'un cadre plus étroit que lui, et
    qu'il n'a rien à faire par-dessus la carte voisine. */
 .shop-live__battle {
-    position: relative;
-    overflow: hidden;
-    border: 2px solid var(--line);
-    padding: 0.3rem 0.45rem;
-    font-family: var(--font-data);
-    font-size: 0.78rem;
-    line-height: 1.6;
-    min-height: 4rem;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  padding: 0.3rem 0.45rem;
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  min-height: 4rem;
 }
 
-.shop-live__battle span {
-    display: block;
-}
+.shop-live__battle span { display: block; }
 
 /* En bas à droite plutôt qu'au milieu : au centre, le tampon barrait les deux
    noms et on ne voyait plus l'affiche qu'il est censé décorer. Décalé, il se
    lit ET on lit ce qu'il y a dessous. */
 .shop-live__battle .cos-stamp,
 .shop-live__card .cos-stamp {
-    position: absolute;
-    right: 0.3rem;
-    bottom: 0.3rem;
-    left: auto;
-    top: auto;
-    transform: rotate(-9deg);
-    transform-origin: bottom right;
-    max-width: calc(100% - 0.6rem);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 0.62rem;
-    border-width: 2px;
-    padding: 0.05rem 0.35rem;
-    background: var(--screen);
-    pointer-events: none;
+  position: absolute;
+  right: 0.3rem;
+  bottom: 0.3rem;
+  left: auto;
+  top: auto;
+  transform: rotate(-9deg);
+  transform-origin: bottom right;
+  max-width: calc(100% - 0.6rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.62rem;
+  border-width: 2px;
+  padding: 0.05rem 0.35rem;
+  background: var(--screen);
+  pointer-events: none;
 }
 
 /* Sur la carte, le fond du tampon est celui du skin et non celui du site :
    un rectangle noir sur un fond orange se verrait comme un trou. */
-.shop-live__card .cos-stamp {
-    background: transparent;
-}
+.shop-live__card .cos-stamp { background: transparent; }
 
 /* La carte d'export : le fond et les deux couleurs du skin, rien de plus. Ce
    qu'on juge ici, c'est la lisibilité du contraste. */
 .shop-live__card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.25rem;
-    padding: 0.5rem;
-    position: relative;
-    overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  position: relative;
+  overflow: hidden;
 }
 
-.shop-live__card b {
-    font-family: var(--font-data);
-    font-size: 0.8rem;
-    font-weight: normal;
-}
-
-.shop-live__card span {
-    font-family: var(--font-data);
-    font-size: 0.7rem;
-}
+.shop-live__card b { font-family: var(--font-data); font-size: 0.8rem; font-weight: normal; }
+.shop-live__card span { font-family: var(--font-data); font-size: 0.7rem; }
 
 .shop-live__hint {
-    color: var(--faint, #8a8a8a);
-    font-size: 0.85rem;
-    margin: 0;
+  color: var(--faint, #8a8a8a);
+  font-size: 0.85rem;
+  margin: 0;
 }
 
 /* Une fenêtre étroite, pour ce qui n'a que trois lignes à dire. */
-.modal__panel--narrow {
-    width: min(420px, 100%);
+.modal__panel--narrow { width: min(420px, 100%); }
+
+/* ---------------------------------------------------------------------------
+   L'aperçu réel
+
+   Trois objets s'essaient pour de vrai : la bande sur son profil, le skin sur
+   son dernier pronostic, le tampon en le posant. Le reste de cette section
+   sert à ça.
+   --------------------------------------------------------------------------- */
+
+/* Les bandes confinées au conteneur, pour un profil rendu dans une fenêtre.
+   La spécificité à deux classes l'emporte sur la règle qui cache les bandes
+   sous 1280 px : ici elles n'ont pas de fenêtre à mesurer. */
+.cos-banded-inline {
+  position: relative;
+  padding: 0 4.4rem;
+  min-height: 12rem;
+}
+
+.cos-banded-inline .cos-band {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  --band-w: 3rem;
+  width: var(--band-w);
+  background-size: var(--band-w) auto;
+}
+
+.cos-banded-inline .cos-band--left { left: 0.5rem; }
+.cos-banded-inline .cos-band--right { right: 0.5rem; left: auto; }
+
+/* La carte, à sa taille réelle d'aperçu. Le conteneur porte le tampon en
+   surimpression, d'où le `relative`. */
+.shop-card-stage {
+  position: relative;
+  background: #000;
+  border: 1px solid var(--line);
+  padding: 0.6rem;
+}
+
+/* ─── Le coup de tampon ──────────────────────────────────────────────────────
+
+   Il arrive de haut, gros et transparent, s'écrase un peu trop puis se pose :
+   c'est le mouvement d'un vrai tampon, et l'excès à mi-course est ce qui donne
+   le poids. Court — un tampon ne flotte pas — et sans `steps()` : ici c'est le
+   geste qu'on imite, pas un affichage de décodeur. */
+.cos-stamp--slam {
+  animation: cos-slam 0.28s cubic-bezier(0.2, 1.1, 0.4, 1) both;
+  transform-origin: center;
+}
+
+@keyframes cos-slam {
+  0%   { transform: translate(-50%, -50%) rotate(-11deg) scale(2.6); opacity: 0; }
+  55%  { transform: translate(-50%, -50%) rotate(-11deg) scale(0.9); opacity: 1; }
+  78%  { transform: translate(-50%, -50%) rotate(-11deg) scale(1.06); }
+  100% { transform: translate(-50%, -50%) rotate(-11deg) scale(1); opacity: 1; }
+}
+
+/* Le tampon posé dans l'aperçu ne doit jamais bloquer la pose suivante. */
+.cos-stamp-host .cos-stamp--posed { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cos-stamp--slam { animation: none; }
 }

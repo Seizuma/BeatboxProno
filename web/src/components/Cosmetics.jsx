@@ -125,12 +125,26 @@ export function bandImage(bandId) {
     return art ? gridToDataUrl(art, 4) : null;
 }
 
-export function Banded({ bandId, children }) {
+export function Banded({ bandId, children, inline = false }) {
     const item = itemById(bandId);
     const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
     const url = useMemo(() => (art ? gridToDataUrl(art, 4) : null), [art]);
 
     if (!url) return <>{children}</>;
+
+    // `inline` : les bandes se posent aux bords du CONTENEUR et non de la
+    // fenêtre. C'est le mode de l'aperçu de boutique, où le profil s'affiche
+    // dans une fenêtre modale — des bandes en position fixe iraient se coller
+    // aux bords de l'écran, derrière le voile, invisibles.
+    if (inline) {
+        return (
+            <div className="cos-banded-inline">
+                <div className="cos-band cos-band--left" style={{ backgroundImage: url }} aria-hidden="true" />
+                <div className="cos-band cos-band--right" style={{ backgroundImage: url }} aria-hidden="true" />
+                {children}
+            </div>
+        );
+    }
 
     // Les bandes vivent dans les MARGES de la fenêtre, pas dans la largeur du
     // profil : le contenu n'est plus enveloppé du tout, elles se posent à côté.
