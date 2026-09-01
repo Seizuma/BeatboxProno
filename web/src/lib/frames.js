@@ -127,20 +127,10 @@ export const FRAME_ART = {
         corner: ['wwwwww', 'w.....', 'w.ww..', 'w.ww..', 'w.....', 'w.....'],
         edge: ['wwwwww', '..ww..', '..ww..', '......', '......', '......'],
     },
-    'frame-creneaux': {
-        tint: 'c',
-        corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'c.....', 'c.....'],
-        edge: ['cccccc', 'ccc...', 'ccc...', '......', '......', '......'],
-    },
     'frame-grille': {
         tint: 'w',
         corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
         edge: ['w.w.w.', '.w.w.w', 'w.w.w.', '......', '......', '......'],
-    },
-    'frame-pistes': {
-        tint: 'g',
-        corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-        edge: ['gggg.g', 'gggg.g', '......', '......', '......', '......'],
     },
     'frame-pellicule': {
         tint: 'w',
@@ -166,11 +156,6 @@ export const FRAME_ART = {
         tint: 'm',
         corner: ['..mmmm', '.mmmm.', 'mmmm..', 'mmm...', 'mm....', 'm.....'],
         edge: ['mmmmmm', 'm....m', '......', '......', '......', '......'],
-    },
-    'frame-jury': {
-        tint: 'y',
-        corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-        edge: ['yy.yy.', 'yy.yy.', '......', '......', '......', '......'],
     },
     'frame-cube': {
         tint: 'o',
@@ -205,9 +190,9 @@ export const FRAME_ART = {
    dessinée à la main. Rien d'autre en CSS ne fait ça.
 
    FLUIDES — mais tout ne mérite pas d'être saccadé. Un fondu entre deux dessins,
-   une bande qui glisse, un cadre qui respire : ce sont des propriétés qui
-   S'INTERPOLENT, donc deux copies superposées du cadre et une opacité qui passe
-   de l'une à l'autre. Le dessin reste net, le mouvement devient continu.
+   un cadre qui respire : ce sont des propriétés qui S'INTERPOLENT, donc deux
+   copies superposées du cadre et une opacité qui passe de l'une à l'autre. Le
+   dessin reste net, le mouvement devient continu.
    --------------------------------------------------------------------------- */
 
 export const FRAME_ANIM = {
@@ -234,28 +219,8 @@ export const FRAME_ANIM = {
               edge: ['dddddd', '......', '......', '......', '......', '......'] },
         ],
     },
-    'frame-scan': {
-        tint: 'c', kind: 'steps', duration: 3,
-        states: [
-            { corner: ['cccccc', 'cc....', 'c.....', 'c.....', 'c.....', 'c.....'],
-              edge: ['cccccc', '......', '......', '......', '......', '......'] },
-            { corner: ['cccccc', 'c.....', 'cc....', 'cc....', 'c.....', 'c.....'],
-              edge: ['cccccc', '......', '......', '......', '......', '......'] },
-            { corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'cc....', 'cc....'],
-              edge: ['cccccc', '......', '......', '......', '......', '......'] },
-        ],
-    },
 
     /* --- Fluides ----------------------------------------------------------- */
-    'frame-onde': {
-        tint: 'c', kind: 'fade', duration: 5,
-        states: [
-            { corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'c.....', 'c.....'],
-              edge: ['cccccc', '......', '......', '......', '......', '......'] },
-            { corner: ['cccccc', 'cccccc', 'cc....', 'cc....', 'cc....', 'cc....'],
-              edge: ['cccccc', 'cccccc', '......', '......', '......', '......'] },
-        ],
-    },
     'frame-braise': {
         tint: 'r', kind: 'fade', duration: 3.6,
         states: [
@@ -279,13 +244,6 @@ export const FRAME_ANIM = {
         states: [
             { corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
               edge: ['wwwwww', '..ww..', '......', '......', '......', '......'] },
-        ],
-    },
-    'frame-glisse': {
-        tint: 'g', kind: 'slide', duration: 7,
-        states: [
-            { corner: ['gggggg', 'g.....', 'g.....', 'g.....', 'g.....', 'g.....'],
-              edge: ['gggggg', '......', '......', '......', '......', '......'] },
         ],
     },
 };
@@ -366,31 +324,10 @@ export function frameStylesheet() {
             continue;
         }
 
-        if (art.kind === 'slide') {
-            // Le dessin ne bouge pas ; c'est un bloc plein qui glisse le long du
-            // filet, en mouvement continu. Le seul cadre qui combine les deux.
-            out.push(`.cos-f-${key}{border-image-source:${first};position:relative}`);
-            out.push(
-                `.cos-f-${key}::after{content:'';position:absolute;width:34%;height:var(--cos-band,${TILE}px);` +
-                `background:${PALETTE[art.tint]};top:calc(-1 * var(--cos-band,${TILE}px));left:0;` +
-                `pointer-events:none;animation:cosf-run ${art.duration}s linear infinite}`
-            );
-        }
     }
 
     out.push(`@keyframes cosf-fade{0%,100%{opacity:0}50%{opacity:1}}`);
     out.push(`@keyframes cosf-breathe{0%,100%{opacity:.4}50%{opacity:1}}`);
-    out.push(
-        `@keyframes cosf-run{` +
-        `0%{top:calc(-1 * var(--cos-band,6px));left:0;width:34%;height:var(--cos-band,6px);margin:0}` +
-        `25%{top:calc(-1 * var(--cos-band,6px));left:66%;width:34%;height:var(--cos-band,6px);margin:0}` +
-        `25.1%{top:0;left:100%;width:var(--cos-band,6px);height:34%;margin-left:calc(-1 * var(--cos-band,6px))}` +
-        `50%{top:66%;left:100%;width:var(--cos-band,6px);height:34%;margin-left:calc(-1 * var(--cos-band,6px))}` +
-        `50.1%{top:100%;left:66%;width:34%;height:var(--cos-band,6px);margin-top:calc(-1 * var(--cos-band,6px));margin-left:0}` +
-        `75%{top:100%;left:0;width:34%;height:var(--cos-band,6px);margin-top:calc(-1 * var(--cos-band,6px))}` +
-        `75.1%{top:66%;left:calc(-1 * var(--cos-band,6px));width:var(--cos-band,6px);height:34%;margin-top:0}` +
-        `100%{top:0;left:calc(-1 * var(--cos-band,6px));width:var(--cos-band,6px);height:34%}}`
-    );
 
     // Quelqu'un qui a demandé moins d'animations en a assez vu.
     out.push(
