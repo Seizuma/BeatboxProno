@@ -100,35 +100,65 @@ export const slotById = (id) => SLOTS.find((s) => s.id === id) ?? null;
  *   text   — pour les tampons, le libellé imprimé.
  */
 export const ITEMS = [
-    /* --- Cadres d'avatar --------------------------------------------------- */
+    /* --- Cadres d'avatar ---------------------------------------------------
+       Le dessin ne vit PAS ici mais dans `frames.js`, sous le même identifiant
+       privé du préfixe `frame-`. Ce fichier ne retient que ce qui se vend : un
+       nom, un prix, et le fait que ça bouge ou non.
+
+       `css` reste la classe posée par FramedAvatar. Elle est engendrée avec la
+       feuille, donc il n'y a rien à tenir d'accord à la main. */
     { id: 'frame-filet', slot: 'frame', price: 60, css: 'cos-f-filet',
       name: { en: 'Hairline', fr: 'Filet' } },
-    { id: 'frame-rec', slot: 'frame', price: 350, css: 'cos-f-rec', animated: true,
-      name: { en: 'Rec button', fr: 'Bouton REC' } },
-    { id: 'frame-track', slot: 'frame', price: 400, css: 'cos-f-track', animated: true,
-      name: { en: 'Running track', fr: 'Piste qui tourne' } },
-    { id: 'frame-clock', slot: 'frame', price: 420, css: 'cos-f-clock', animated: true,
-      name: { en: '90 on the clock', fr: 'Chrono 90' } },
-    { id: 'frame-countdown', slot: 'frame', price: 420, css: 'cos-f-countdown', animated: true,
-      name: { en: 'Countdown', fr: 'Compte à rebours' } },
-    { id: 'frame-wave', slot: 'frame', price: 380, css: 'cos-f-wave', animated: true,
-      name: { en: 'Wave', fr: 'Onde' } },
-    { id: 'frame-helix', slot: 'frame', price: 460, css: 'cos-f-helix', animated: true,
-      name: { en: 'Double helix', fr: 'Double hélice' } },
-    { id: 'frame-ants', slot: 'frame', price: 280, css: 'cos-f-ants', animated: true,
-      name: { en: 'Marching ants', fr: 'Fourmis' } },
-    { id: 'frame-vu', slot: 'frame', price: 440, css: 'cos-f-vu', animated: true,
-      name: { en: 'VU meter', fr: 'VU-mètre' } },
-    { id: 'frame-ovation', slot: 'frame', price: 600, css: 'cos-f-ovation', animated: true,
-      name: { en: 'Standing ovation', fr: 'Ovation' } },
+    { id: 'frame-equerres', slot: 'frame', price: 220, css: 'cos-f-equerres',
+      name: { en: 'Corner brackets', fr: 'Équerres' } },
+    { id: 'frame-rivets', slot: 'frame', price: 280, css: 'cos-f-rivets',
+      name: { en: 'Rivets', fr: 'Rivets' } },
+    { id: 'frame-creneaux', slot: 'frame', price: 260, css: 'cos-f-creneaux',
+      name: { en: 'Crenels', fr: 'Créneaux' } },
+    { id: 'frame-grille', slot: 'frame', price: 300, css: 'cos-f-grille',
+      name: { en: 'Mic grille', fr: 'Grille de micro' } },
+    { id: 'frame-pistes', slot: 'frame', price: 340, css: 'cos-f-pistes',
+      name: { en: 'Five tracks', fr: 'Cinq pistes' } },
+    { id: 'frame-pellicule', slot: 'frame', price: 300, css: 'cos-f-pellicule',
+      name: { en: 'Film strip', fr: 'Pellicule' } },
+    { id: 'frame-chevrons', slot: 'frame', price: 320, css: 'cos-f-chevrons',
+      name: { en: 'Chevrons', fr: 'Chevrons' } },
+    { id: 'frame-double', slot: 'frame', price: 280, css: 'cos-f-double',
+      name: { en: 'Double rule', fr: 'Double filet' } },
+    { id: 'frame-vis', slot: 'frame', price: 360, css: 'cos-f-vis',
+      name: { en: 'Screws', fr: 'Vis' } },
+    { id: 'frame-ruban', slot: 'frame', price: 300, css: 'cos-f-ruban',
+      name: { en: 'Torn tape', fr: 'Ruban' } },
+    { id: 'frame-jury', slot: 'frame', price: 380, css: 'cos-f-jury',
+      name: { en: 'Judges', fr: 'Le jury' } },
     { id: 'frame-cube', slot: 'frame', price: 400, css: 'cos-f-cube',
-      name: { en: 'Split cube', fr: 'Cube scindé' } },
+      name: { en: 'Cube shards', fr: 'Éclats de cube' } },
     { id: 'frame-tricolore', slot: 'frame', price: 340, css: 'cos-f-tricolore',
       name: { en: 'Tricolour', fr: 'Tricolore' } },
-    { id: 'frame-champion', slot: 'frame', price: 900, css: 'cos-f-champion', animated: true,
-      name: { en: 'Champion', fr: 'Champion' } },
+    { id: 'frame-cypher', slot: 'frame', price: 360, css: 'cos-f-cypher',
+      name: { en: 'Cypher', fr: 'Cypher' } },
+    { id: 'frame-cabine', slot: 'frame', price: 340, css: 'cos-f-cabine',
+      name: { en: 'Booth', fr: 'Cabine' } },
+
+    // Par crans : de l'animation image par image, dessinée.
+    { id: 'frame-course', slot: 'frame', price: 420, css: 'cos-f-course', animated: true,
+      name: { en: 'Running light', fr: 'Lampe qui court' } },
+    { id: 'frame-rec', slot: 'frame', price: 350, css: 'cos-f-rec', animated: true,
+      name: { en: 'Rec light', fr: 'Voyant REC' } },
     { id: 'frame-scan', slot: 'frame', price: 300, css: 'cos-f-scan', animated: true,
-      name: { en: 'Scanline', fr: 'Scanline' } },
+      name: { en: 'Scanline', fr: 'Balayage' } },
+
+    // Fluides : deux dessins qui se fondent, une respiration, un bloc qui glisse.
+    { id: 'frame-onde', slot: 'frame', price: 400, css: 'cos-f-onde', animated: true,
+      name: { en: 'Swell', fr: 'Onde' } },
+    { id: 'frame-braise', slot: 'frame', price: 440, css: 'cos-f-braise', animated: true,
+      name: { en: 'Embers', fr: 'Braise' } },
+    { id: 'frame-relais', slot: 'frame', price: 460, css: 'cos-f-relais', animated: true,
+      name: { en: 'Relay', fr: 'Relais' } },
+    { id: 'frame-souffle', slot: 'frame', price: 320, css: 'cos-f-souffle', animated: true,
+      name: { en: 'Breath', fr: 'Souffle' } },
+    { id: 'frame-glisse', slot: 'frame', price: 480, css: 'cos-f-glisse', animated: true,
+      name: { en: 'Running track', fr: 'Piste qui glisse' } },
 
     /* --- Effets de pseudo -------------------------------------------------- */
     { id: 'fx-underline', slot: 'nameFx', price: 120, css: 'cos-n-underline',

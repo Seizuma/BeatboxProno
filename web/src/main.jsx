@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { SessionProvider, ThemeProvider } from './lib/context.jsx';
 import { I18nProvider } from './lib/i18n.jsx';
+import { installFrames } from './lib/frames.js';
 import App from './App.jsx';
 
 /* L'ordre compte : chaque feuille surcharge les précédentes à spécificité
@@ -16,6 +17,14 @@ import './styles/board.css';
 import './styles/groups.css';
 import './styles/shop.css';
 import './styles/mobile.css';
+
+/* Les cadres d'avatar sont engendrés depuis leurs dessins et posés en une seule
+   feuille. Appelé ICI, explicitement, plutôt qu'en effet de bord à l'import de
+   `frames.js` : une feuille de styles qui apparaît parce qu'un module a été
+   chargé quelque part est le genre de chose qu'on cherche pendant une heure.
+
+   Avant le rendu, pour qu'aucun avatar ne s'affiche nu le temps d'une frame. */
+installFrames();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
