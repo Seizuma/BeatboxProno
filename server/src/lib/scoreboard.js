@@ -6,8 +6,10 @@ import {
     GAP_MAX_BONUS,
     QUALIFIED_POINT,
     FINAL_FOUR_POINTS,
+    WILDCARD_HIT,
     finalFour,
 } from './scoring.js';
+import { isWildcardCategory } from './wildcard.js';
 
 /**
  * Le moteur du classement.
@@ -74,6 +76,9 @@ export async function resolveScope({ event, kind } = {}) {
  * Ici, dépublier une phase la retire des deux côtés du rapport à la fois.
  */
 function maxOnResolved(category) {
+    // Le même barème que le calcul du score et que le maximum annoncé. Les
+    // trois doivent s'accorder au point près, sinon la précision dérape.
+    const hitValue = isWildcardCategory(category) ? WILDCARD_HIT : QUALIFIED_POINT;
     let total = 0;
 
     for (const phase of category.phases ?? []) {
@@ -92,7 +97,7 @@ function maxOnResolved(category) {
             const cut = phase.qualifierCount ?? 0;
             const qualifies = countsQualification && cut > 0 && cut < ranked ? cut : 0;
 
-            total += ranked * GAP_MAX_BONUS + qualifies * QUALIFIED_POINT;
+            total += ranked * GAP_MAX_BONUS + qualifies * hitValue;
             continue;
         }
 

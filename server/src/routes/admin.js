@@ -7,6 +7,7 @@ import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
 import { notifyEventOpen } from '../lib/notifications.js';
 import { settleEvent } from '../lib/badges.js';
+import { WILDCARD_KINDS, MIN_PLACES, MAX_PLACES } from '../lib/wildcard.js';
 import {
   validateSeedPairs,
   patternFor,
@@ -622,6 +623,11 @@ adminRouter.get('/formats', (_req, res) => {
       rounds: f.rounds.map(([round, count]) => ({ round, count })),
     })),
     kinds: Object.entries(CATEGORY_KINDS).map(([id, label]) => ({ id, label })),
+    // Les sélections sur vidéo. Elles portent une DISCIPLINE réelle — c'est
+    // elle qui décide quels artistes on peut engager — et un nom qui dit la
+    // nuance que la discipline ignore : mixte, féminine.
+    wildcards: WILDCARD_KINDS,
+    places: { min: MIN_PLACES, max: MAX_PLACES },
   });
 });
 
@@ -653,6 +659,17 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
           eliminationCount: z.number().int().min(2).max(200).nullable().optional(),
           smallFinal: z.boolean().default(false),
           legacyBattles: z.number().int().min(1).max(16).default(4),
+
+          /**
+           * Une SÉLECTION sur vidéo : pas de tableau, pas d'affiches. Une liste
+           * d'inscrits, un nombre de places, et un classement à pronostiquer.
+           *
+           * `places` est libre entre 1 et 100 : une sélection peut retenir un
+           * seul nom comme en retenir quarante, et rien ne justifie de
+           * n'autoriser que les puissances de deux — ce n'est pas un tableau.
+           */
+          wildcardOnly: z.boolean().default(false),
+          places: z.number().int().min(MIN_PLACES).max(MAX_PLACES).optional(),
         })
       )
       .min(1),
@@ -701,6 +718,28 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
       });
 
       let position = 0;
+
+      /**
+       * Une sélection s'arrête là : une phase de classement, et c'est tout.
+       *
+       * Pas de squelette d'affiches, donc rien à propager, rien à recomposer
+       * quand le classement change. C'est aussi ce qui la rend reconnaissable
+       * ensuite — une catégorie à phase unique de type WILDCARD, et le reste du
+       * site en déduit la règle sans qu'on ait eu à poser un drapeau.
+       */
+      if (spec.wildcardOnly) {
+        await tx.phase.create({
+          data: {
+            categoryId: category.id,
+            name,
+            type: 'WILDCARD',
+            position: 0,
+            qualifierCount: spec.places ?? bracket.size,
+          },
+        });
+        out.push({ id: category.id, name, battles: 0, places: spec.places ?? bracket.size });
+        continue;
+      }
 
       // Les paliers de qualification, dans l'ordre : wildcards puis
       // éliminations. Chacun est facultatif et peut exister sans l'autre.
@@ -1360,7 +1399,9 @@ adminRouter.put('/phases/:id/seeding', async (req, res) => {
 /** Change le nombre de qualifiés d'une phase après coup. */
 adminRouter.patch('/phases/:id/qualifiers', async (req, res) => {
   const { qualifierCount } = z
-    .object({ qualifierCount: z.number().int().min(1).max(128).nullable() })
+    // Une place au minimum, cent au plus — les mêmes bornes qu'à la
+    // composition. Une sélection n'a pas de raison d'être une puissance de deux.
+    .object({ qualifierCount: z.number().int().min(MIN_PLACES).max(MAX_PLACES).nullable() })
     .parse(req.body);
 
   const phase = await prisma.phase.update({

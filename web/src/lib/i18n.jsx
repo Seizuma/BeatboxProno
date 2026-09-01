@@ -437,6 +437,24 @@ const DICT = {
     'help.four.fourth': '4th',
     'help.four.short':
       'Read from your final and small final. A bracket derails fast: one wrong quarter-final and everything below it is lost. These points look only at who ends up where — call the winner right and it pays, whatever happened on the way. The place counts too: putting the winner as runner-up is a different call.',
+    'wc.title': 'How a wildcard selection is scored',
+    'wc.subtitle': '{n} qualifying places',
+    'wc.lede':
+      'No bracket here, no battles. One list of entrants, {n} places, and one question: who gets through? You rank everyone; the points follow.',
+    'wc.card.hit': 'Called a qualifier',
+    'wc.card.hit.hint': 'Per artist you put in the top {n} who actually got through.',
+    'wc.card.place': 'Exact place',
+    'wc.card.place.hint': 'Per artist ranked at the right position.',
+    'wc.gap.title': 'Placement',
+    'wc.gap.exact': 'exact',
+    'wc.gap.beyond': '5 or more',
+    'wc.gap.short':
+      'Every artist is scored on how far your rank sits from the official one. Nothing is lost for being close.',
+    'wc.hit.title': 'The qualifiers',
+    'wc.hit.short':
+      'Three points for each artist you placed in your top {n} who really got through — whatever position you gave them. It is worth three times the usual qualification point, because here it is not a detail beside a ranking: it is the whole question.',
+    'wc.note':
+      'Both add up: calling a qualifier and placing them exactly pays 8 on that artist alone.',
     'help.title': 'How points work',
     'help.matchup.title': 'A battle pays wherever it happens',
     'help.close': 'Got it',
@@ -1071,6 +1089,24 @@ const DICT = {
     'help.four.fourth': '4e',
     'help.four.short':
       'Lu dans votre finale et votre petite finale. Un tableau déraille vite : un quart de finale manqué et tout ce qui suit tombe avec lui. Ces points-là ne regardent que l’arrivée — voir juste qui gagne rapporte, quoi qu’il se soit passé en route. La place compte aussi : mettre le vainqueur en finaliste, c’est un autre pronostic.',
+    'wc.title': 'Comment se comptent les points d’une sélection',
+    'wc.subtitle': '{n} places qualificatives',
+    'wc.lede':
+      'Pas de tableau ici, pas d’affiches. Une liste d’inscrits, {n} places, et une seule question : qui passe ? Vous classez tout le monde, les points suivent.',
+    'wc.card.hit': 'Qualifié deviné',
+    'wc.card.hit.hint': 'Par artiste placé dans votre top {n} et réellement retenu.',
+    'wc.card.place': 'Place exacte',
+    'wc.card.place.hint': 'Par artiste classé au bon rang.',
+    'wc.gap.title': 'Le placement',
+    'wc.gap.exact': 'exact',
+    'wc.gap.beyond': '5 ou plus',
+    'wc.gap.short':
+      'Chaque artiste rapporte selon l’écart entre votre rang et le rang officiel. Être proche ne fait rien perdre.',
+    'wc.hit.title': 'Les qualifiés',
+    'wc.hit.short':
+      'Trois points par artiste placé dans votre top {n} et réellement retenu — quel que soit le rang que vous lui avez donné. C’est trois fois le point de qualification habituel, parce qu’ici ce n’est pas un détail au bord d’un classement : c’est toute la question.',
+    'wc.note':
+      'Les deux se cumulent : deviner un qualifié ET le placer au bon rang rapporte 8 points sur ce seul artiste.',
     'help.title': 'Comment marchent les points',
     'help.matchup.title': 'Un battle rapporte où qu’il se joue',
     'help.close': 'Compris',

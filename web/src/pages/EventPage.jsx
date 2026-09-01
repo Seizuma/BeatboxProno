@@ -6,6 +6,8 @@ import { useI18n } from '../lib/i18n.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
+import WildcardHelp from '../components/WildcardHelp.jsx';
+import { isWildcardCategory } from '../lib/wildcard.js';
 import PromptDialog from '../components/PromptDialog.jsx';
 import Modal from '../components/Modal.jsx';
 import { seedFromContenders } from '../lib/bracket.js';
@@ -552,7 +554,20 @@ export default function EventPage() {
         ok={flash?.ok}
         onDismiss={() => setFlash(null)}
       />
-      {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
+      {/* Deux barèmes, deux fenêtres. Quelqu'un qui remplit une sélection n'a
+          aucune raison de lire comment se comptent les affiches d'un tableau :
+          il n'y en a pas. La règle se lit dans la structure de la catégorie
+          ouverte, pas dans un réglage. */}
+      {helpOpen && (
+        isWildcardCategory(category) ? (
+          <WildcardHelp
+            places={category?.phases?.[0]?.qualifierCount ?? null}
+            onClose={() => setHelpOpen(false)}
+          />
+        ) : (
+          <ScoringHelp onClose={() => setHelpOpen(false)} />
+        )
+      )}
 
       {guard.pending && (
         <Modal

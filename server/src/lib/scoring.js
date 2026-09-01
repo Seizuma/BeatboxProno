@@ -1,3 +1,5 @@
+import { isWildcardCategory } from './wildcard.js';
+
 /**
  * Moteur de score — fonctions pures, aucune dépendance à Prisma.
  * Toutes les règles du barème vivent ici et nulle part ailleurs.
@@ -26,6 +28,21 @@ export const BATTLE_HAPPENED = 2;
 export const BATTLE_WINNER = 2;
 export const BATTLE_SCORE = 2;
 export const QUALIFIED_POINT = 1;
+
+/**
+ * Le point de qualification d'une COMPÉTITION de wildcards.
+ *
+ * Trois points au lieu d'un, et ce n'est pas un réglage : c'est la question
+ * posée qui change. Dans un événement ordinaire, la qualification est un détail
+ * au bord d'un classement — on demande surtout qui finit devant qui. Dans une
+ * sélection sur vidéo, « qui passe » EST la compétition, et le classement n'est
+ * que la manière de le dire.
+ *
+ * À un point, deviner juste les huit qualifiés d'un top 8 rapportait huit
+ * points contre une centaine pour le placement : le pronostic principal pesait
+ * moins que l'accessoire.
+ */
+export const WILDCARD_HIT = 3;
 
 /**
  * Le podium final, place par place : 5 points pour le vainqueur, 4 pour le
@@ -137,7 +154,12 @@ export function gapPoints(predictedRank, officialRank) {
  * @param {Array<{contenderId:string, rank:number|null, qualified:boolean}>} official
  * @param {number|null} qualifierCount  nb de qualifiés — sinon déduit de `official`
  */
-export function scoreRankingPhase(type, predicted, official, qualifierCount = null) {
+/**
+ * @param {number} [hitValue]  ce que vaut une qualification devinée. Un point
+ *   partout, trois dans une compétition de wildcards où c'est le pronostic
+ *   principal.
+ */
+export function scoreRankingPhase(type, predicted, official, qualifierCount = null, hitValue = QUALIFIED_POINT) {
   const lines = [];
   let total = 0;
 
@@ -186,7 +208,7 @@ export function scoreRankingPhase(type, predicted, official, qualifierCount = nu
     let qualification = 0;
 
     if (countsQualification && actual.qualified && predictedQualified.has(pick.contenderId)) {
-      qualification = QUALIFIED_POINT;
+      qualification = hitValue;
     }
 
     const points = gap + qualification;
@@ -297,6 +319,10 @@ function isSameScore(pick, match) {
  * @param {object} category    phases[] (avec entries[] et battles[])
  */
 export function scorePrediction(prediction, category) {
+  // Une compétition de wildcards n'a qu'une phase, et c'est une phase de
+  // classement. La règle se lit dans la structure, pas dans un drapeau qu'on
+  // aurait pu oublier de mettre à jour après une retouche de format.
+  const wildcard = isWildcardCategory(category);
   const sections = [];
   let total = 0;
 
@@ -339,7 +365,10 @@ export function scorePrediction(prediction, category) {
         phase.type,
         picks,
         phase.entries,
-        phase.qualifierCount
+        phase.qualifierCount,
+        // Une compétition de wildcards ne demande pas autre chose : la
+        // qualification y vaut trois fois plus qu'ailleurs.
+        wildcard ? WILDCARD_HIT : QUALIFIED_POINT
       );
       total += result.total;
       sections.push({

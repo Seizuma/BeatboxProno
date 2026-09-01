@@ -1,3 +1,4 @@
+import { isWildcardCategory } from './wildcard.js';
 import {
     GAP_MAX_BONUS,
     BATTLE_HAPPENED,
@@ -5,6 +6,7 @@ import {
     BATTLE_SCORE,
     QUALIFIED_POINT,
     FINAL_FOUR_POINTS,
+    WILDCARD_HIT,
 } from './scoring.js';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -25,6 +27,12 @@ export function maxScoreForCategory(category) {
     const lines = [];
     let total = 0;
 
+    // Dans une compétition de wildcards, la qualification vaut trois points au
+    // lieu d'un. Le maximum doit le savoir, sinon la précision d'un pronostic
+    // parfait dépasse cent pour cent — c'est exactement le défaut qu'on a mis
+    // deux jours à trouver sur le Crew.
+    const hitValue = isWildcardCategory(category) ? WILDCARD_HIT : QUALIFIED_POINT;
+
     for (const phase of category.phases ?? []) {
         if (RANKING_TYPES.includes(phase.type)) {
             const runners = category.contenders?.length ?? 0;
@@ -42,7 +50,7 @@ export function maxScoreForCategory(category) {
             const countsQualification = phase.type === 'WILDCARD' || phase.type === 'ELIMINATION';
             const cut = phase.qualifierCount ?? 0;
             const qualifies = countsQualification && cut > 0 && cut < runners ? cut : 0;
-            const qualification = qualifies * QUALIFIED_POINT;
+            const qualification = qualifies * hitValue;
 
             const points = gap + qualification;
 
@@ -51,7 +59,7 @@ export function maxScoreForCategory(category) {
                 phase: phase.name,
                 type: phase.type,
                 detail: qualifies
-                    ? `${runners} × ${GAP_MAX_BONUS} (placement) + ${qualifies} × ${QUALIFIED_POINT} (qualification)`
+                    ? `${runners} × ${GAP_MAX_BONUS} (placement) + ${qualifies} × ${hitValue} (qualification)`
                     : `${runners} × ${GAP_MAX_BONUS} (placement)` +
                     (countsQualification && cut >= runners && runners > 0
                         ? ' — personne n\'est éliminé, aucun point de qualification'
