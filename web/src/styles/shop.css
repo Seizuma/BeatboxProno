@@ -824,6 +824,70 @@
 .modal__panel--narrow { width: min(420px, 100%); }
 
 /* ---------------------------------------------------------------------------
+   L'aperçu réel
+
+   Trois objets s'essaient pour de vrai : la bande sur son profil, le skin sur
+   son dernier pronostic, le tampon en le posant. Le reste de cette section
+   sert à ça.
+   --------------------------------------------------------------------------- */
+
+/* Les bandes confinées au conteneur, pour un profil rendu dans une fenêtre.
+   La spécificité à deux classes l'emporte sur la règle qui cache les bandes
+   sous 1280 px : ici elles n'ont pas de fenêtre à mesurer. */
+.cos-banded-inline {
+  position: relative;
+  padding: 0 4.4rem;
+  min-height: 12rem;
+}
+
+.cos-banded-inline .cos-band {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  --band-w: 3rem;
+  width: var(--band-w);
+  background-size: var(--band-w) auto;
+}
+
+.cos-banded-inline .cos-band--left { left: 0.5rem; }
+.cos-banded-inline .cos-band--right { right: 0.5rem; left: auto; }
+
+/* La carte, à sa taille réelle d'aperçu. Le conteneur porte le tampon en
+   surimpression, d'où le `relative`. */
+.shop-card-stage {
+  position: relative;
+  background: #000;
+  border: 1px solid var(--line);
+  padding: 0.6rem;
+}
+
+/* ─── Le coup de tampon ──────────────────────────────────────────────────────
+
+   Il arrive de haut, gros et transparent, s'écrase un peu trop puis se pose :
+   c'est le mouvement d'un vrai tampon, et l'excès à mi-course est ce qui donne
+   le poids. Court — un tampon ne flotte pas — et sans `steps()` : ici c'est le
+   geste qu'on imite, pas un affichage de décodeur. */
+.cos-stamp--slam {
+  animation: cos-slam 0.28s cubic-bezier(0.2, 1.1, 0.4, 1) both;
+  transform-origin: center;
+}
+
+@keyframes cos-slam {
+  0%   { transform: translate(-50%, -50%) rotate(-11deg) scale(2.6); opacity: 0; }
+  55%  { transform: translate(-50%, -50%) rotate(-11deg) scale(0.9); opacity: 1; }
+  78%  { transform: translate(-50%, -50%) rotate(-11deg) scale(1.06); }
+  100% { transform: translate(-50%, -50%) rotate(-11deg) scale(1); opacity: 1; }
+}
+
+/* Le tampon posé dans l'aperçu ne doit jamais bloquer la pose suivante. */
+.cos-stamp-host .cos-stamp--posed { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cos-stamp--slam { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
    Les promotions
 
    La pastille se pose SUR la vignette, pas à côté du prix. C'est ce qu'on voit
