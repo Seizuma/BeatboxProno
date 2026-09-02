@@ -18,6 +18,7 @@ import { shopRouter } from './routes/shop.js';
 import { missingWebhooks } from './lib/discord.js';
 import { touch } from './lib/presence.js';
 import { scheduleDailyReport } from './jobs/daily-report.js';
+import { scheduleShopTrend } from './jobs/shop-trend.js';
 import { PHOTO_DIR, UPLOAD_DIR } from './lib/photos.js';
 
 /**
@@ -141,4 +142,7 @@ app.listen(port, '0.0.0.0', () => {
   }
 
   scheduleDailyReport();
+// La vitrine se réordonne toute seule : popularité tous les deux jours,
+// promotions toutes les semaines. L'horloge est en base, pas dans le cron.
+scheduleShopTrend();
 });

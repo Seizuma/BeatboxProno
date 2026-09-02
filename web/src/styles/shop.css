@@ -66,27 +66,226 @@
 /* ---------------------------------------------------------------------------
    Les cadres
 
-   Il n'y a PLUS de règle de cadre ici. Elles sont engendrées depuis les dessins
-   de `lib/frames.js` et posées par `installFrames()` au démarrage — une grille
-   de pixels par cadre, et rien à tenir d'accord entre un catalogue et une
-   feuille de styles.
-
-   Ce qui reste ci-dessous, c'est ce que le dessin ne peut pas décider : la
-   largeur de bande selon la taille d'avatar. Elle doit être un multiple ENTIER
-   de la tuile de six pixels, faute de quoi le navigateur rééchantillonne et le
-   pixel se salit.
+   Règle commune : cinq pixels de large au maximum, collés à la photo. Les
+   cadres animés posent un `::before` en `outline` — une outline ne participe
+   pas au flux, donc elle ne peut pas décaler la ligne, quoi qu'il arrive.
    --------------------------------------------------------------------------- */
 
-/* `--cos-band` sert aux cadres animés qui posent un pseudo-élément : il doit se
-   caler exactement sur la bordure, et il n'a aucun autre moyen de la connaître. */
-.cos-frame--xs { --cos-band: 2px; }
-.cos-frame--sm { --cos-band: 6px; }
-.cos-frame--md { --cos-band: 6px; }
-.cos-frame--lg { --cos-band: 12px; }
+.cos-f-filet { border: 3px solid var(--c); }
 
-/* Le grand avatar du profil porte une bande double. Proportionnellement, c'est
-   la même épaisseur qu'un `sm` — un cadre de six pixels sur une photo de cent
-   douze aurait l'air d'un oubli. */
+/* Le bouton d'enregistrement d'une loopstation : trois pixels de rouge qui
+   battent. `steps(1)` et non une transition douce — un voyant est allumé ou
+   éteint, il ne fond pas. */
+/* Le voyant d'enregistrement : allumé longtemps, éteint brièvement. Un
+   clignotement à parts égales fait sapin de Noël ; celui-ci respire. */
+.cos-f-rec {
+  border: 5px solid var(--r);
+  animation: cos-blink 2.8s steps(1, end) infinite;
+}
+@keyframes cos-blink { 0%, 72% { border-color: var(--r); } 73%, 100% { border-color: var(--line); } }
+
+/* La tête de lecture qui fait le tour. Un bloc de trois pixels parcourt les
+   quatre côtés en quatre segments de durée égale ; `steps()` par côté donne le
+   déplacement saccadé d'un afficheur à segments. */
+/* La tête de lecture fait le tour en sept secondes. À deux, elle passait si
+   vite qu'on la prenait pour un scintillement ; lente, on la SUIT du regard,
+   ce qui est exactement ce qu'on veut d'un cadre qu'on porte en permanence. */
+.cos-f-track { border: 3px solid var(--line); }
+.cos-f-track::before {
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 5px;
+  background: var(--g);
+  top: -5px;
+  left: 0;
+  animation: cos-run 7s linear infinite;
+}
+@keyframes cos-run {
+  0%   { top: -5px; left: 0;    width: 34%; height: 5px; margin: 0; }
+  25%  { top: -5px; left: 66%;  width: 34%; height: 5px; margin: 0; }
+  25.1%{ top: 0;    left: 100%; width: 5px; height: 34%; margin-left: -5px; }
+  50%  { top: 66%;  left: 100%; width: 5px; height: 34%; margin-left: -5px; }
+  50.1%{ top: 100%; left: 66%;  width: 34%; height: 5px; margin-top: -5px; margin-left: 0; }
+  75%  { top: 100%; left: 0;    width: 34%; height: 5px; margin-top: -5px; }
+  75.1%{ top: 66%;  left: -5px; width: 5px; height: 34%; margin-top: 0; }
+  100% { top: 0;    left: -5px; width: 5px; height: 34%; }
+}
+
+/* Le chrono se remplit par le haut puis repart de zéro. Le remplissage est un
+   fond à arrêts francs : aucun dégradé, seulement deux blocs qui se poussent. */
+/* Quatre-vingt-dix secondes, à l'échelle : l'aiguille change de côté toutes
+   les trois secondes et fait le tour en douze. */
+.cos-f-clock { border: 4px solid var(--line); }
+.cos-f-clock::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--y);
+  animation: cos-turn 12s steps(4, end) infinite;
+}
+@keyframes cos-turn { to { transform: rotate(360deg); } }
+
+.cos-f-countdown { border: 4px solid var(--line); }
+.cos-f-countdown::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 4px solid var(--r);
+  animation: cos-drain 10s steps(8, end) infinite;
+}
+@keyframes cos-drain {
+  0%   { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 100% 0); }
+}
+
+/* L'onde : la couleur du filet monte et redescend. La plus douce du lot, et la
+   seule qu'on peut porter sans que l'œil y revienne sans cesse. */
+.cos-f-wave {
+  border: 5px solid var(--c);
+  animation: cos-wave 5s ease-in-out infinite;
+}
+@keyframes cos-wave { 0%, 100% { border-color: var(--line); } 50% { border-color: var(--c); } }
+
+/* Deux blocs qui se poursuivent en sens opposé. Ils se croisent deux fois par
+   tour, et c'est le seul moment où le cadre a l'air symétrique. */
+.cos-f-helix { border: 3px solid var(--line); }
+.cos-f-helix::before,
+.cos-f-helix::after {
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 5px;
+  top: -5px;
+  left: 0;
+  animation: cos-run 8s linear infinite;
+}
+.cos-f-helix::before { background: var(--m); }
+/* Un demi-tour de décalage : les deux blocs sont toujours à l'opposé l'un de
+   l'autre, et le cadre reste équilibré à chaque instant. */
+.cos-f-helix::after { background: var(--c); animation-delay: -4s; }
+
+/* Les fourmis. Un pointillé qui avance d'un cran deux fois par seconde :
+   `background-position` sur un motif à arrêts francs, pas un dégradé. */
+.cos-f-ants {
+  border: 5px solid transparent;
+  background-image: repeating-linear-gradient(90deg, var(--r) 0 5px, transparent 5px 10px),
+                    repeating-linear-gradient(90deg, var(--r) 0 5px, transparent 5px 10px),
+                    repeating-linear-gradient(0deg, var(--r) 0 5px, transparent 5px 10px),
+                    repeating-linear-gradient(0deg, var(--r) 0 5px, transparent 5px 10px);
+  background-size: 100% 5px, 100% 5px, 5px 100%, 5px 100%;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-clip: border-box;
+  animation: cos-ants 1.6s steps(2, end) infinite;
+}
+@keyframes cos-ants { to { background-position: 10px 0, -10px 100%, 0 -10px, 100% 10px; } }
+
+/* Le VU-mètre : seul le bord bas s'agite, en trois segments qui montent et
+   retombent à des rythmes différents. */
+.cos-f-vu {
+  border: 3px solid var(--line);
+  border-bottom-width: 6px;
+  animation: cos-vu 3.6s steps(3, end) infinite;
+}
+@keyframes cos-vu {
+  0%   { border-bottom-color: var(--g); }
+  33%  { border-bottom-color: var(--y); }
+  66%  { border-bottom-color: var(--r); }
+  100% { border-bottom-color: var(--g); }
+}
+
+/* L'ovation : des éclats blancs qui s'allument par à-coups aux quatre coins.
+   Le jury qui se lève, la distinction la plus rare du milieu. */
+.cos-f-ovation { border: 3px solid var(--line); }
+.cos-f-ovation::before,
+.cos-f-ovation::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 5px solid transparent;
+  animation: cos-spark 6s steps(1, end) infinite;
+}
+.cos-f-ovation::after { animation-delay: -3s; }
+@keyframes cos-spark {
+  0%, 88%  { border-color: transparent; }
+  90%      { border-top-color: var(--w, #e8e8e8); border-right-color: var(--w, #e8e8e8); }
+  94%      { border-bottom-color: var(--w, #e8e8e8); border-left-color: var(--w, #e8e8e8); border-top-color: transparent; border-right-color: transparent; }
+  96%, 100%{ border-color: transparent; }
+}
+
+/* Quatre éclats orange aux angles, rien sur les côtés. Le motif du badge en
+   négatif — et le seul cadre qui laisse trois côtés nus. */
+.cos-f-cube {
+  border: 5px solid transparent;
+  background-image: linear-gradient(var(--o), var(--o)), linear-gradient(var(--o), var(--o)),
+                    linear-gradient(var(--o), var(--o)), linear-gradient(var(--o), var(--o));
+  background-size: 42% 5px, 5px 42%, 42% 5px, 5px 42%;
+  background-position: 0 0, 0 0, 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-origin: border-box;
+}
+
+.cos-f-tricolore {
+  border: 5px solid var(--w, #e8e8e8);
+  border-left-color: var(--b);
+  border-right-color: var(--r);
+}
+
+/* Double filet or sur champ bleu, avec un reflet qui glisse. Ne s'affiche
+   correctement qu'avec deux bordures : l'outline en est une seconde qui ne
+   décale rien. */
+.cos-f-champion {
+  border: 5px solid var(--y);
+  outline: 3px solid var(--b);
+  outline-offset: 0;
+}
+.cos-f-champion::before {
+  content: '';
+  position: absolute;
+  width: 34%;
+  height: 5px;
+  background: var(--w, #e8e8e8);
+  top: -5px;
+  left: 0;
+  animation: cos-run 9s linear infinite;
+}
+
+/* Une ligne claire descend le long des deux montants. Le balayage d'un tube
+   cathodique mal réglé. */
+.cos-f-scan { border: 4px solid var(--line); }
+.cos-f-scan::before,
+.cos-f-scan::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 34%;
+  background: var(--c);
+  top: 0;
+  animation: cos-slide 5.5s linear infinite;
+}
+.cos-f-scan::before { left: -4px; }
+.cos-f-scan::after { right: -4px; animation-delay: -2.75s; }
+@keyframes cos-slide { 0% { top: -30%; } 100% { top: 100%; } }
+
+/* Quelqu'un qui a demandé moins d'animations à son système en a assez vu. On
+   coupe tout : les cadres gardent leur couleur au repos, ils restent
+   distincts, ils ne bougent plus. */
+@media (prefers-reduced-motion: reduce) {
+  .cos-frame,
+  .cos-frame::before,
+  .cos-frame::after { animation: none !important; }
+  .cos-f-track::before,
+  .cos-f-helix::before,
+  .cos-f-helix::after,
+  .cos-f-champion::before,
+  .cos-f-scan::before,
+  .cos-f-scan::after { display: none; }
+  .cos-f-rec { border-color: var(--r); }
+  .cos-f-wave { border-color: var(--c); }
+}
 
 /* ---------------------------------------------------------------------------
    Les effets de pseudo
@@ -623,3 +822,39 @@
 
 /* Une fenêtre étroite, pour ce qui n'a que trois lignes à dire. */
 .modal__panel--narrow { width: min(420px, 100%); }
+
+/* ---------------------------------------------------------------------------
+   Les promotions
+
+   La pastille se pose SUR la vignette, pas à côté du prix. C'est ce qu'on voit
+   en balayant une grille de vingt cartes, avant d'avoir lu un seul nom — et une
+   remise qu'il faut chercher ne sert à rien.
+   --------------------------------------------------------------------------- */
+
+.shop-card { position: relative; }
+
+.shop-card--promo { border-color: var(--g); }
+
+.shop-promo {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 4;
+  padding: 0.05rem 0.4rem;
+  background: var(--g);
+  color: var(--screen);
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  /* Aucun clic à intercepter : la carte entière reste cliquable dessous. */
+  pointer-events: none;
+}
+
+/* Le prix barré reste lisible mais s'efface derrière le nouveau : c'est le
+   montant à payer qui compte, l'ancien n'est qu'un point de comparaison. */
+.shop-card__was {
+  color: var(--ink-faint);
+  text-decoration-thickness: 1px;
+}
+
+.shop-card__price strong { color: var(--g); font-weight: normal; }

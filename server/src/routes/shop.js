@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { requireAuth } from '../lib/auth.js';
-import { ITEMS, SLOTS, itemById, slotById } from '../lib/cosmetics.js';
+import { requireUser } from '../lib/auth.js';
+import { ITEMS, SLOTS, discountedPrice, itemById, slotById } from '../lib/cosmetics.js';
+import { shopState } from '../lib/shop-trend.js';
 import { walletBalance } from '../lib/badges.js';
 
 export const shopRouter = Router();
@@ -15,8 +16,13 @@ const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /** Ce que le client reçoit après chaque opération : l'état complet, jamais un delta. */
 async function snapshot(userId) {
+    // La tendance et les promotions ne dépendent pas de la personne : elles
+    // partent aussi vers un visiteur déconnecté, qui doit voir la même vitrine
+    // que tout le monde — c'est même ce qui peut lui donner envie d'un compte.
+    const state = await shopState();
+
     if (!userId) {
-        return { balance: 0, owned: [], equipped: {}, items: ITEMS.length };
+        return { balance: 0, owned: [], equipped: {}, items: ITEMS.length, ...state };
     }
 
     const [entries, user] = await Promise.all([
@@ -38,6 +44,7 @@ async function snapshot(userId) {
         owned: entries.map((e) => e.itemId).filter(Boolean),
         equipped,
         items: ITEMS.length,
+        ...state,
     };
 }
 
@@ -57,7 +64,7 @@ shopRouter.get('/', guard(async (req, res) => {
  * même boutique, et un porte-monnaie de cent points paie deux objets à cent.
  * L'unicité (userId, itemId) attrape le doublon même si la vérification passe.
  */
-shopRouter.post('/buy', requireAuth, guard(async (req, res) => {
+shopRouter.post('/buy', requireUser, guard(async (req, res) => {
     const { itemId } = z.object({ itemId: z.string() }).parse(req.body);
     const item = itemById(itemId);
     if (!item) return res.status(404).json({ error: 'Objet inconnu.' });
@@ -65,6 +72,17 @@ shopRouter.post('/buy', requireAuth, guard(async (req, res) => {
     // Un objet gratuit n'a pas besoin d'une ligne d'achat : il appartient à tout
     // le monde par définition, et une ligne à zéro polluerait le livre.
     if (item.price === 0) return res.json(await snapshot(req.user.id));
+
+    /**
+     * Le prix effectif, remise comprise.
+     *
+     * Relu en base au moment de l'achat et non repris de ce que le client
+     * affiche : une promotion qui expire pendant qu'une page est restée ouverte
+     * ne doit pas permettre de payer le prix d'hier. Le débit inscrit au livre
+     * est donc toujours celui qui avait cours à la seconde de l'achat.
+     */
+    const { promos } = await shopState();
+    const price = discountedPrice(item.price, promos[itemId] ?? 0);
 
     try {
         await prisma.$transaction(async (tx) => {
@@ -79,13 +97,16 @@ shopRouter.post('/buy', requireAuth, guard(async (req, res) => {
                 select: { amount: true },
             });
             const balance = lines.reduce((n, l) => n + l.amount, 0);
-            if (balance < item.price) { const e = new Error('poor'); e.code = 402; throw e; }
+            if (balance < price) { const e = new Error('poor'); e.code = 402; throw e; }
 
             await tx.walletEntry.create({
                 data: {
                     userId: req.user.id,
                     kind: 'PURCHASE',
-                    amount: -item.price,
+                    // Le montant PAYÉ, pas le prix catalogue. Le livre de comptes
+                    // doit rester la trace exacte de ce qui s'est passé, y compris
+                    // dix ans après la fin de la promotion.
+                    amount: -price,
                     itemId,
                 },
             });
@@ -106,7 +127,7 @@ shopRouter.post('/buy', requireAuth, guard(async (req, res) => {
  * légitime, pas une erreur — et c'est la seule façon de revenir en arrière sans
  * racheter quoi que ce soit.
  */
-shopRouter.post('/equip', requireAuth, guard(async (req, res) => {
+shopRouter.post('/equip', requireUser, guard(async (req, res) => {
     const body = z.object({
         slot: z.string(),
         itemId: z.string().nullable(),

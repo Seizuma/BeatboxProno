@@ -6,7 +6,7 @@ import DiscordButton from '../components/DiscordButton.jsx';
 import { Badge, Preview } from '../components/Cosmetics.jsx';
 import CosmeticPreview from '../components/CosmeticPreview.jsx';
 import BadgeDetail from '../components/BadgeDetail.jsx';
-import { BADGES, SLOTS, itemsForSlot } from '../lib/cosmetics.js';
+import { BADGES, SLOTS, discountedPrice, itemsForSlot } from '../lib/cosmetics.js';
 
 /**
  * P470 · LA BOUTIQUE
@@ -35,6 +35,20 @@ export default function Shop() {
 
     const owned = useMemo(() => new Set(data?.owned ?? []), [data]);
     const worn = data?.equipped ?? {};
+    const promos = data?.promos ?? {};
+
+    /**
+     * L'ordre d'un rayon : les plus achetés d'abord.
+     *
+     * Le classement vient du serveur et ne bouge que tous les deux jours. Un
+     * objet absent de la tendance — ajouté au catalogue depuis le dernier calcul
+     * — se range à la fin plutôt que de disparaître : mieux vaut mal placé que
+     * pas là.
+     */
+    const rank = useMemo(() => {
+        const order = new Map((data?.trend ?? []).map((id, i) => [id, i]));
+        return (item) => order.get(item.id) ?? 9999;
+    }, [data]);
 
     async function run(action, body) {
         setBusy(body.itemId ?? body.slot);
@@ -76,6 +90,19 @@ export default function Shop() {
 
             {error && <p className="notice">{error}</p>}
 
+            {/* Une seule ligne pour toute la page : répéter l'échéance sur chaque
+                carte en promotion la rendrait invisible à force. */}
+            {Object.keys(promos).length > 0 && (
+                <p className="notice notice--ok" style={{ margin: 0 }}>
+                    {t('shop.promo.banner', {
+                        n: Object.keys(promos).length,
+                        date: data.promoEndsAt
+                            ? date(data.promoEndsAt, { weekday: 'long', day: 'numeric', month: 'long' })
+                            : '—',
+                    })}
+                </p>
+            )}
+
 
             {SLOTS.map((slot) => (
                 <section className="stack" key={slot.id}>
@@ -83,20 +110,39 @@ export default function Shop() {
                     <p className="faint" style={{ margin: 0 }}>{t(`shop.section.${slot.id}.lede`)}</p>
 
                     <div className="shop-grid">
-                        {itemsForSlot(slot.id).map((item) => {
+                        {[...itemsForSlot(slot.id)].sort((a, b) => rank(a) - rank(b)).map((item) => {
                             const has = owned.has(item.id) || item.price === 0;
                             const on = worn[slot.id] === item.id;
-                            const tooPoor = data.balance < item.price;
+                            const percent = promos[item.id] ?? 0;
+                            const price = discountedPrice(item.price, percent);
+                            const tooPoor = data.balance < price;
 
                             return (
-                                <article className={`shop-card${on ? ' shop-card--worn' : ''}`} key={item.id}>
+                                <article
+                                    className={`shop-card${on ? ' shop-card--worn' : ''}${percent ? ' shop-card--promo' : ''}`}
+                                    key={item.id}
+                                >
+                                    {/* La pastille de remise se pose sur la vignette et non
+                                        à côté du prix : c'est ce qu'on voit en balayant la
+                                        grille, avant même d'avoir lu un nom. */}
+                                    {percent > 0 && <span className="shop-promo">−{percent} %</span>}
+
                                     <div className="shop-card__stage">
                                         <Preview item={item} avatarUrl={user?.avatarUrl} lang={lang} />
                                     </div>
 
                                     <p className="shop-card__name">{item.name[lang] ?? item.name.en}</p>
                                     <p className="shop-card__price">
-                                        {item.price === 0 ? t('shop.free') : `${item.price} ${t('shop.points')}`}
+                                        {item.price === 0 ? (
+                                            t('shop.free')
+                                        ) : percent > 0 ? (
+                                            <>
+                                                <s className="shop-card__was">{item.price}</s>{' '}
+                                                <strong>{price}</strong> {t('shop.points')}
+                                            </>
+                                        ) : (
+                                            `${item.price} ${t('shop.points')}`
+                                        )}
                                         {item.animated && ` · ${t('shop.animated')}`}
                                     </p>
 

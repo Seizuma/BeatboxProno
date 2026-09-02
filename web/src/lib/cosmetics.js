@@ -228,6 +228,37 @@ export const ITEMS = [
       text: { en: 'AS SEEN ON TV', fr: 'VU À LA TÉLÉ' }, name: { en: 'As seen on TV', fr: 'Vu à la télé' } },
 ];
 
+/* --------------------------------------------------------------------------
+   Les promotions
+   -------------------------------------------------------------------------- */
+
+/**
+ * Le prix après remise.
+ *
+ * Vit ICI, dans le fichier dupliqué des deux côtés, pour une raison précise :
+ * le serveur débite ce montant et la vitrine l'affiche. Deux arrondis qui
+ * divergent d'un point donneraient un prix barré différent du prix payé — et
+ * c'est le genre de détail qui fait perdre confiance en une boutique bien plus
+ * vite qu'un bogue visible.
+ *
+ * Arrondi à l'entier supérieur : la remise reste vraie, et on ne facture jamais
+ * une fraction de point.
+ */
+export function discountedPrice(price, percent) {
+    if (!percent || price <= 0) return price;
+    const p = Math.min(50, Math.max(15, Math.round(percent)));
+    return Math.max(1, Math.ceil(price * (1 - p / 100)));
+}
+
+/** Les bornes d'une remise. Une remise sous 15 % ne se remarque pas ; au-delà
+ *  de 50 %, l'objet a l'air bradé plutôt que mis en avant. */
+export const PROMO_MIN = 15;
+export const PROMO_MAX = 50;
+
+/** Au plus dix objets en promotion à la fois : au-delà, ce n'est plus une
+ *  sélection, c'est un déstockage, et plus rien ne ressort. */
+export const PROMO_SLOTS = 10;
+
 export const itemById = (id) => (id ? ITEMS.find((i) => i.id === id) ?? null : null);
 export const itemsForSlot = (slot) => ITEMS.filter((i) => i.slot === slot);
 

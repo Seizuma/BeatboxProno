@@ -603,6 +603,7 @@ const DICT = {
 
     'shop.preview': 'Preview',
     'shop.preview.note': 'Shown with the rest of your kit. Nothing is bought or worn yet.',
+    'shop.promo.banner': '{n} items on sale until {date}. The kit rotates every week.',
     'shop.preview.noPrediction': 'File a prediction first: the preview shows your latest one.',
     'shop.preview.noBracket': 'Your latest prediction has no bracket to stamp.',
     'shop.stamp.hint': 'Click anywhere to stamp.',
@@ -1263,6 +1264,7 @@ const DICT = {
 
     'shop.preview': 'Aperçu',
     'shop.preview.note': 'Montré avec le reste de votre tenue. Rien n’est acheté ni porté pour autant.',
+    'shop.promo.banner': '{n} objets en promotion jusqu’au {date}. La sélection tourne chaque semaine.',
     'shop.preview.noPrediction': 'Déposez d’abord un pronostic : l’aperçu utilise votre dernier.',
     'shop.preview.noBracket': 'Votre dernier pronostic n’a pas de tableau à tamponner.',
     'shop.stamp.hint': 'Cliquez n’importe où pour tamponner.',
