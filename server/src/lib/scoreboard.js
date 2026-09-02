@@ -209,7 +209,21 @@ export async function buildScoreboard({
                         resolved: true,
                         qualifierCount: true,
                         entries: { select: { rank: true } },
-                        battles: { select: { played: true, contenderAId: true, contenderBId: true } },
+                        // `round` et `winnerId` en plus : le barème du top 4 lit
+                        // les deux dernières affiches pour savoir qui finit où.
+                        // Sans ces colonnes, `finalFour` ne voyait que des tours
+                        // `undefined`, n'attribuait aucune place, et le
+                        // dénominateur perdait 14 points par tableau — d'où des
+                        // précisions au-dessus de cent pour cent.
+                        battles: {
+                            select: {
+                                played: true,
+                                contenderAId: true,
+                                contenderBId: true,
+                                round: true,
+                                winnerId: true,
+                            },
+                        },
                     },
                 },
             },
