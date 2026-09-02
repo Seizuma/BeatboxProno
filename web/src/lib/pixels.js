@@ -101,12 +101,26 @@ const fill = (g, y0, y1, x0, x1, ch) => {
 // verticalement : une bande doit se raccorder à elle-même, donc le haut et le
 // bas de chaque dessin sont pensés pour se toucher sans couture visible.
 export const BAND_ART = {
-    faders: band((g) => {
-        for (let i = 0; i < 8; i += 1) {
-            const y = i * 8 + 1;
-            const h = 2 + ((i * 5) % 5);
-            fill(g, y, y + 6, 5, 6, 'd');
-            fill(g, y + h, y + h + 1, 3, 8, 'g');
+    /**
+     * Les lianes.
+     *
+     * Une tige qui serpente sur toute la hauteur, avec des feuilles qui partent
+     * alternativement à gauche et à droite. Le serpentement suit une sinusoïde
+     * dont la période divise soixante-quatre : sans ça, le raccord entre le bas
+     * et le haut de la bande ferait un décrochement visible à chaque répétition.
+     */
+    vines: band((g) => {
+        for (let y = 0; y < 64; y += 1) {
+            const x = 5 + Math.round(Math.sin((y / 64) * Math.PI * 4) * 3);
+            fill(g, y, y, x, x + 1, 'g');
+
+            // Une feuille tous les cinq pixels, du côté extérieur de la courbe.
+            if (y % 5 === 0) {
+                const droite = Math.cos((y / 64) * Math.PI * 4) > 0;
+                const l = 2 + (y % 3);
+                if (droite) fill(g, y, y + 1, x + 2, Math.min(11, x + 1 + l), 'g');
+                else fill(g, y, y + 1, Math.max(0, x - l), x - 1, 'g');
+            }
         }
     }),
     skyline: band((g) => {
@@ -127,9 +141,31 @@ export const BAND_ART = {
         const cs = ['r', 'y', 'g', 'c', 'm', 'w'];
         for (let i = 0; i < 10; i += 1) { const y = i * 6 + 1; const x = 1 + ((i * 5) % 6); fill(g, y, y + 3, x, x + 3, cs[i % 6]); }
     }),
+    /**
+     * Le rideau de scène.
+     *
+     * Le magenta uni ne faisait pas un rideau : il faisait une bande rose. Un
+     * tissu se lit à ses PLIS, c'est-à-dire à l'alternance de bandes verticales
+     * éclairées et de creux sombres, de largeurs inégales — un pli régulier
+     * ressemble à une palissade.
+     *
+     * Rouge pour la lumière, magenta pour le demi-ton, noir pour le creux :
+     * trois valeurs, et le velours apparaît.
+     */
     curtain: band((g) => {
-        for (let x = 0; x < 12; x += 3) { fill(g, 0, 63, x, x + 1, 'm'); fill(g, 0, 63, x + 2, x + 2, 'd'); }
-        for (let y = 0; y < 64; y += 9) fill(g, y, y, 0, 11, 'k');
+        // Largeurs irrégulières, mais dont la somme divise douze pour que le
+        // motif se raccorde d'un bord à l'autre de la bande.
+        const plis = [[0, 2, 'r'], [2, 3, 'm'], [3, 4, 'k'], [4, 6, 'r'], [6, 7, 'm'],
+        [7, 8, 'k'], [8, 10, 'r'], [10, 11, 'm'], [11, 12, 'k']];
+        for (const [x0, x1, c] of plis) fill(g, 0, 63, x0, x1 - 1, c);
+
+        // Pas de bande horizontale : j'en avais mis pour figurer le drapé, elles
+        // coupaient les plis net et ressemblaient à un défaut d'affichage. Un
+        // rideau vu de près n'a que des lignes verticales.
+        //
+        // La tringle, en revanche, en haut : c'est elle qui dit que le tissu
+        // pend au lieu de flotter.
+        fill(g, 0, 1, 0, 11, 'd');
     }),
     vu: band((g) => {
         for (let y = 63; y > 4; y -= 3) { const c = y > 30 ? 'g' : y > 14 ? 'y' : 'r'; fill(g, y - 1, y, 2, 9, c); }
@@ -147,15 +183,25 @@ export const BAND_ART = {
         for (let y = 0; y < 64; y += 2) fill(g, y, y, 3, 8, 'k');
         for (let y = 0; y < 64; y += 16) fill(g, y, y + 2, 1, 10, 'y');
     }),
-    cities: band((g) => {
-        const sets = [[3, 7, 4, 6], [5, 3, 8, 4], [6, 9, 3, 7]];
-        const cs = ['c', 'm', 'r'];
-        sets.forEach((set, i) => {
-            const base = (i + 1) * 21 - 1;
-            set.forEach((h, j) => fill(g, base - h, base, 1 + j * 3, 2 + j * 3, cs[i]));
-            fill(g, base + 1, base + 1, 0, 11, 'd');
-        });
+    /**
+     * La texture manquante.
+     *
+     * Le damier violet et noir qu'affichent les moteurs de jeu quand ils ne
+     * trouvent pas un fichier. C'est une blague d'atelier, et c'est aussi le
+     * seul motif du catalogue que personne n'a besoin de faire expliquer.
+     *
+     * Carreaux de quatre pixels : à deux, le damier grouille sur une bande
+     * étroite ; à huit, on n'en voit plus qu'un par écran.
+     */
+    missing: band((g) => {
+        for (let y = 0; y < 64; y += 1) {
+            for (let x = 0; x < 12; x += 1) {
+                const carre = (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0;
+                g[y][x] = carre ? 'm' : 'k';
+            }
+        }
     }),
+
 };
 
 /* --------------------------------------------------------------------------

@@ -46,8 +46,17 @@ const mirrorX = (g) => g.map((row) => [...row].reverse());
 const mirrorY = (g) => [...g].reverse();
 const transpose = (g) => g[0].map((_, x) => g.map((row) => row[x]));
 
-/** Une planche de 18 × 18 à partir d'un coin et d'une arête de 6 × 6. */
-function board(cornerLines, edgeLines) {
+/**
+ * Une planche de 18 × 18 à partir d'un coin et d'une arête de 6 × 6.
+ *
+ * `coins` permet de désigner explicitement les quatre angles au lieu de les
+ * déduire par symétrie. Deux cadres en ont besoin : le voyant d'enregistrement,
+ * dont le point rouge ne doit clignoter QUE dans l'angle haut-droit comme sur
+ * une caméra, et le tricolore, qui n'existe pas s'il est symétrique. Partout
+ * ailleurs la symétrie reste la règle — c'est elle qui garantit qu'on ne se
+ * trompe pas d'un pixel sur un seul angle.
+ */
+function board(cornerLines, edgeLines, coins = null) {
     const corner = rows(cornerLines);
     const edge = rows(edgeLines);
     const out = Array.from({ length: TILE * 3 }, () => Array(TILE * 3).fill('.'));
@@ -58,10 +67,17 @@ function board(cornerLines, edgeLines) {
         }
     };
 
-    put(corner, 0, 0);
-    put(mirrorX(corner), TILE * 2, 0);
-    put(mirrorY(corner), 0, TILE * 2);
-    put(mirrorY(mirrorX(corner)), TILE * 2, TILE * 2);
+    if (coins) {
+        put(rows(coins.hg), 0, 0);
+        put(rows(coins.hd), TILE * 2, 0);
+        put(rows(coins.bg), 0, TILE * 2);
+        put(rows(coins.bd), TILE * 2, TILE * 2);
+    } else {
+        put(corner, 0, 0);
+        put(mirrorX(corner), TILE * 2, 0);
+        put(mirrorY(corner), 0, TILE * 2);
+        put(mirrorY(mirrorX(corner)), TILE * 2, TILE * 2);
+    }
 
     put(edge, TILE, 0);
     put(mirrorY(edge), TILE, TILE * 2);
@@ -99,7 +115,7 @@ function dataUrl(cells) {
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-export const frameSource = (corner, edge) => dataUrl(board(corner, edge));
+export const frameSource = (corner, edge, coins = null) => dataUrl(board(corner, edge, coins));
 
 /* ---------------------------------------------------------------------------
    Le catalogue de dessins
@@ -122,11 +138,6 @@ export const FRAME_ART = {
         corner: ['wwwwww', 'ww....', 'ww....', 'w.....', 'w.....', 'w.....'],
         edge: ['......', '......', '......', '......', '......', '......'],
     },
-    'frame-rivets': {
-        tint: 'w',
-        corner: ['wwwwww', 'w.....', 'w.ww..', 'w.ww..', 'w.....', 'w.....'],
-        edge: ['wwwwww', '..ww..', '..ww..', '......', '......', '......'],
-    },
     'frame-grille': {
         tint: 'w',
         corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
@@ -147,11 +158,6 @@ export const FRAME_ART = {
         corner: ['cccccc', 'c.....', 'cccccc', 'c.c...', 'c.c...', 'c.c...'],
         edge: ['cccccc', '......', 'cccccc', '......', '......', '......'],
     },
-    'frame-vis': {
-        tint: 'w',
-        corner: ['.wwww.', 'w.ww.w', 'wwwwww', 'ww..ww', 'w.ww.w', '.wwww.'],
-        edge: ['..ww..', '......', '......', '......', '......', '......'],
-    },
     'frame-ruban': {
         tint: 'm',
         corner: ['..mmmm', '.mmmm.', 'mmmm..', 'mmm...', 'mm....', 'm.....'],
@@ -162,16 +168,56 @@ export const FRAME_ART = {
         corner: ['oooo..', 'ooo...', 'oo....', 'o.....', '......', '......'],
         edge: ['......', '......', '......', '......', '......', '......'],
     },
+    /**
+     * Le tricolore.
+     *
+     * Il n'avait pas de rouge du tout : deux bleus symétriques et du blanc. Un
+     * drapeau tricolore est asymétrique par nature — bleu à gauche, rouge à
+     * droite — et c'est précisément ce que la symétrie automatique interdisait.
+     * D'où les quatre coins désignés à la main.
+     */
     'frame-tricolore': {
         tint: 'w',
-        corner: ['bbbwww', 'bbb...', 'bbb...', 'bbb...', 'bbb...', 'bbb...'],
+        corner: ['bbbbbb', 'bbb...', 'bbb...', 'bbb...', 'bbb...', 'bbb...'],
         edge: ['wwwwww', 'wwwwww', '......', '......', '......', '......'],
+        coins: {
+            hg: ['bbbbbb', 'bbb...', 'bbb...', 'bbb...', 'bbb...', 'bbb...'],
+            hd: ['rrrrrr', '...rrr', '...rrr', '...rrr', '...rrr', '...rrr'],
+            bg: ['bbb...', 'bbb...', 'bbb...', 'bbb...', 'bbb...', 'bbbbbb'],
+            bd: ['...rrr', '...rrr', '...rrr', '...rrr', '...rrr', 'rrrrrr'],
+        },
     },
     'frame-cypher': {
         tint: 'm',
         corner: ['mm....', 'mm....', '......', '......', '......', '......'],
         edge: ['..mm..', '..mm..', '......', '......', '......', '......'],
     },
+    /**
+     * RGB.
+     *
+     * Le filet change de couleur par crans : rouge, vert, bleu. Trois planches,
+     * trois secondes. Rien de plus, et c'est le sujet — la seule chose que ce
+     * cadre raconte est qu'il change de couleur.
+     */
+    'frame-coeurs': {
+        tint: 'r',
+        corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+        edge: ['.rr.rr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..', '......'],
+    },
+
+    /**
+     * Les fleurs.
+     *
+     * Quatre pétales magenta autour d'un cœur jaune, répétés sur les arêtes.
+     * Le cœur est ce qui empêche le motif de se lire comme un simple losange :
+     * sans ces deux pixels, la fleur devient une croix.
+     */
+    'frame-fleurs': {
+        tint: 'm',
+        corner: ['mmmmmm', 'm.....', 'm.....', 'm.....', 'm.....', 'm.....'],
+        edge: ['..mm..', '.myym.', '.myym.', '..mm..', '......', '......'],
+    },
+
     'frame-cabine': {
         tint: 'g',
         corner: ['gggggg', 'ggggg.', 'gggg..', 'ggg...', 'gg....', 'g.....'],
@@ -197,26 +243,93 @@ export const FRAME_ART = {
 
 export const FRAME_ANIM = {
     /* --- Par crans --------------------------------------------------------- */
+    /**
+     * La lampe qui court.
+     *
+     * Le filet est désormais CONTINU sous la lampe. Auparavant l'arête se vidait
+     * entre deux passages, et le cadre paraissait cassé trois fois sur quatre —
+     * c'est le « cadre noir » qu'on voyait, en réalité un trou.
+     *
+     * Et deux fois plus vite : à quatre secondes, une lampe qui court n'a plus
+     * l'air de courir.
+     */
     'frame-course': {
-        tint: 'y', kind: 'steps', duration: 4,
+        tint: 'y', kind: 'steps', duration: 2,
         states: [
-            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-              edge: ['yy....', 'yy....', '......', '......', '......', '......'] },
-            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-              edge: ['..yy..', '..yy..', '......', '......', '......', '......'] },
-            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-              edge: ['....yy', '....yy', '......', '......', '......', '......'] },
-            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-              edge: ['......', '......', '......', '......', '......', '......'] },
+            {
+                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+                edge: ['yyyyyy', 'yy....', '......', '......', '......', '......']
+            },
+            {
+                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+                edge: ['yyyyyy', '..yy..', '......', '......', '......', '......']
+            },
+            {
+                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+                edge: ['yyyyyy', '....yy', '......', '......', '......', '......']
+            },
         ],
     },
+    /**
+     * RGB.
+     *
+     * Le filet passe du rouge au vert au bleu, par crans francs. Trois planches
+     * et trois secondes : c'est la seule chose que ce cadre raconte, autant
+     * qu'il la dise clairement.
+     */
+    'frame-rgb': {
+        tint: 'r', kind: 'steps', duration: 3,
+        states: [
+            {
+                corner: ['rrrrrr', 'rr....', 'r.....', 'r.....', 'r.....', 'r.....'],
+                edge: ['rrrrrr', 'r.....', '......', '......', '......', '......']
+            },
+            {
+                corner: ['gggggg', 'gg....', 'g.....', 'g.....', 'g.....', 'g.....'],
+                edge: ['gggggg', 'g.....', '......', '......', '......', '......']
+            },
+            {
+                corner: ['bbbbbb', 'bb....', 'b.....', 'b.....', 'b.....', 'b.....'],
+                edge: ['bbbbbb', 'b.....', '......', '......', '......', '......']
+            },
+        ],
+    },
+
+    /**
+     * Le voyant d'enregistrement.
+     *
+     * Le cadre entier clignotait en rouge, ce qui n'est pas ce que fait une
+     * caméra : le boîtier ne bat pas, seul son témoin bat. Le contour est donc
+     * fixe et blanc, et un unique point rouge s'allume dans l'angle haut-droit —
+     * là où tous les appareils le placent.
+     *
+     * C'est le premier cadre à utiliser les coins désignés : par symétrie, le
+     * point serait apparu aux quatre angles, et quatre témoins ne sont plus un
+     * témoin.
+     */
     'frame-rec': {
         tint: 'r', kind: 'steps', duration: 2.8,
         states: [
-            { corner: ['rrrrrr', 'r.....', 'r.rr..', 'r.rr..', 'r.....', 'r.....'],
-              edge: ['rrrrrr', '..rr..', '......', '......', '......', '......'] },
-            { corner: ['dddddd', 'd.....', 'd.....', 'd.....', 'd.....', 'd.....'],
-              edge: ['dddddd', '......', '......', '......', '......', '......'] },
+            {
+                corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
+                edge: ['wwwwww', '......', '......', '......', '......', '......'],
+                coins: {
+                    hg: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
+                    hd: ['wwwwww', '.rr..w', '.rr..w', '.....w', '.....w', '.....w'],
+                    bg: ['w.....', 'w.....', 'w.....', 'w.....', 'w.....', 'wwwwww'],
+                    bd: ['.....w', '.....w', '.....w', '.....w', '.....w', 'wwwwww'],
+                },
+            },
+            {
+                corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
+                edge: ['wwwwww', '......', '......', '......', '......', '......'],
+                coins: {
+                    hg: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
+                    hd: ['wwwwww', '.....w', '.....w', '.....w', '.....w', '.....w'],
+                    bg: ['w.....', 'w.....', 'w.....', 'w.....', 'w.....', 'wwwwww'],
+                    bd: ['.....w', '.....w', '.....w', '.....w', '.....w', 'wwwwww'],
+                },
+            },
         ],
     },
 
@@ -224,26 +337,36 @@ export const FRAME_ANIM = {
     'frame-braise': {
         tint: 'r', kind: 'fade', duration: 3.6,
         states: [
-            { corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
-              edge: ['r.r.r.', '......', '......', '......', '......', '......'] },
-            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-              edge: ['.y.y.y', '......', '......', '......', '......', '......'] },
+            {
+                corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+                edge: ['r.r.r.', '......', '......', '......', '......', '......']
+            },
+            {
+                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+                edge: ['.y.y.y', '......', '......', '......', '......', '......']
+            },
         ],
     },
     'frame-relais': {
         tint: 'm', kind: 'fade', duration: 6,
         states: [
-            { corner: ['mmmmmm', 'm.....', 'm.....', 'm.....', 'm.....', 'm.....'],
-              edge: ['mmm...', 'mmm...', '......', '......', '......', '......'] },
-            { corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'c.....', 'c.....'],
-              edge: ['...ccc', '...ccc', '......', '......', '......', '......'] },
+            {
+                corner: ['mmmmmm', 'm.....', 'm.....', 'm.....', 'm.....', 'm.....'],
+                edge: ['mmm...', 'mmm...', '......', '......', '......', '......']
+            },
+            {
+                corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'c.....', 'c.....'],
+                edge: ['...ccc', '...ccc', '......', '......', '......', '......']
+            },
         ],
     },
     'frame-souffle': {
         tint: 'w', kind: 'breathe', duration: 5.5,
         states: [
-            { corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-              edge: ['wwwwww', '..ww..', '......', '......', '......', '......'] },
+            {
+                corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
+                edge: ['wwwwww', '..ww..', '......', '......', '......', '......']
+            },
         ],
     },
 };
@@ -288,16 +411,16 @@ export function frameStylesheet() {
     out.push(tints.join('\n'));
 
     for (const [id, art] of Object.entries(FRAME_ART)) {
-        out.push(`.cos-f-${id.replace('frame-', '')}{border-image-source:${frameSource(art.corner, art.edge)}}`);
+        out.push(`.cos-f-${id.replace('frame-', '')}{border-image-source:${frameSource(art.corner, art.edge, art.coins)}}`);
     }
 
     for (const [id, art] of Object.entries(FRAME_ANIM)) {
         const key = id.replace('frame-', '');
-        const first = frameSource(art.states[0].corner, art.states[0].edge);
+        const first = frameSource(art.states[0].corner, art.states[0].edge, art.states[0].coins);
 
         if (art.kind === 'steps') {
             const frames = art.states
-                .map((s, i) => `${Math.round((i / art.states.length) * 100)}%{border-image-source:${frameSource(s.corner, s.edge)}}`)
+                .map((s, i) => `${Math.round((i / art.states.length) * 100)}%{border-image-source:${frameSource(s.corner, s.edge, s.coins)}}`)
                 .join('');
             out.push(`@keyframes cosf-${key}{${frames}}`);
             out.push(`.cos-f-${key}{border-image-source:${first};animation:cosf-${key} ${art.duration}s steps(1,end) infinite}`);
@@ -308,7 +431,7 @@ export function frameStylesheet() {
             // Deux dessins superposés, une opacité qui passe de l'un à l'autre.
             // Le pseudo-élément porte le second et se cale sur la bordure grâce à
             // un `inset` négatif de la largeur de bande.
-            const second = frameSource(art.states[1].corner, art.states[1].edge);
+            const second = frameSource(art.states[1].corner, art.states[1].edge, art.states[1].coins);
             out.push(`.cos-f-${key}{border-image-source:${first};position:relative}`);
             out.push(
                 `.cos-f-${key}::after{content:'';position:absolute;inset:calc(-1 * var(--cos-band,${TILE}px));` +

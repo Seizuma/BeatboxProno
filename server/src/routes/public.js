@@ -8,6 +8,27 @@ import { countViews, recordView } from '../lib/views.js';
 export const publicRouter = Router();
 
 /**
+ * L'ordre d'une compétition, du premier tour au dernier.
+ *
+ * La petite finale se joue AVANT la finale et s'affiche donc avant elle. C'est
+ * l'ordre du plateau et celui du calendrier ; tout autre choix demanderait une
+ * explication.
+ *
+ * Un tour absent de cette liste se range en tête plutôt que de disparaître —
+ * `indexOf` rend -1, ce qui est un défaut acceptable : mieux vaut un tour mal
+ * placé qu'un tour perdu.
+ */
+const ROUND_ORDER = [
+  'ROUND_OF_32',
+  'ROUND_OF_16',
+  'QUARTER',
+  'SEMI',
+  'SMALL_FINAL',
+  'FINAL',
+  'LEGACY',
+];
+
+/**
  * Express 4 n'attrape PAS le rejet d'un handler asynchrone.
  *
  * Ce n'est pas une erreur silencieuse, c'est pire : la requête reste
@@ -657,7 +678,13 @@ publicRouter.get('/artists/:slug', guard(async (req, res) => {
         qualifiedShare: b.cutSeen ? Math.round((b.cutThrough / b.cutSeen) * 100) : cut ? 0 : null,
         distribution,
         pickedToWin: b.pickedToWin,
-        byRound: [...b.byRound.entries()].map(([round, n]) => ({ round, n })),
+        // Dans l'ordre de la compétition, et non dans celui où les pronostics
+        // ont été rencontrés. Une Map conserve l'ordre d'INSERTION : la fiche
+        // affichait donc les tours dans un ordre qui ne dépendait que du hasard
+        // des lectures — finale avant quarts, selon les jours.
+        byRound: [...b.byRound.entries()]
+          .map(([round, n]) => ({ round, n }))
+          .sort((x, y) => ROUND_ORDER.indexOf(x.round) - ROUND_ORDER.indexOf(y.round)),
         judged: b.judged,
         correct: b.correct,
         accuracy: b.judged ? Math.round((b.correct / b.judged) * 100) : null,
