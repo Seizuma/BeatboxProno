@@ -670,15 +670,15 @@ const DICT = {
     'badge.PODIUM_1.name': 'Winner',
 
     'badge.PARTICIPANT.detail':
-      'One prediction filed on the competition. Whatever it scores.',
+      'One prediction filed on the competition.',
     'badge.BRONZE.detail':
-      'Top 60% of predictors. Only the highest tier reached is kept.',
+      'Top 60% of predictors.',
     'badge.SILVER.detail':
       'Top 30% of predictors.',
     'badge.GOLD.detail':
-      'Top 5% of predictors. On twenty players, that is first place alone.',
+      'Top 5% of predictors.',
     'badge.PODIUM_3.detail':
-      'Third best predictor. Ties share the place.',
+      'Third best predictor.',
     'badge.PODIUM_2.detail':
       'Second best predictor of the competition.',
     'badge.PODIUM_1.detail':
@@ -1294,7 +1294,7 @@ const DICT = {
     'shop.badges.lede':
       'Les badges ne s’achètent pas — ils tombent pour tout le monde à la clôture d’une compétition.',
 
-    'badge.PARTICIPANT': 'Wildcard — un pronostic déposé',
+    'badge.PARTICIPANT': 'Un pronostic déposé',
     'badge.BRONZE': 'Top 60 % de la compète',
     'badge.SILVER': 'Top 30 % de la compète',
     'badge.GOLD': 'Top 5 % de la compète',
