@@ -56,7 +56,7 @@ model User {
   // vers le même modèle : Prisma exige alors qu'on les nomme.
   notifications Notification[] @relation("Notified")
   triggered     Notification[] @relation("Actor")
-
+  stamps      GroupStamp[]
   viewsMade     ProfileView[] @relation("ProfileViewer")
   viewsReceived ProfileView[] @relation("ProfileViewed")
 }
@@ -140,6 +140,7 @@ model GroupStamp {
   x            Float
   y            Float
   createdAt    DateTime   @default(now())
+  stamps        GroupStamp[]
 
   @@unique([groupId, predictionId, authorId])
   @@index([groupId, predictionId])
@@ -343,7 +344,7 @@ model Prediction {
   scoredAt    DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  stamps        GroupStamp[]
   ranks   PredictedRank[]
   battles PredictedBattle[]
   podium  PredictedPodium[]
