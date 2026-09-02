@@ -140,7 +140,7 @@ model GroupStamp {
   x            Float
   y            Float
   createdAt    DateTime   @default(now())
-  stamps        GroupStamp[]
+  
 
   @@unique([groupId, predictionId, authorId])
   @@index([groupId, predictionId])
@@ -428,6 +428,7 @@ model Group {
   slug        String   @unique
   name        String
   description String?
+  stamps        GroupStamp[]
 
   // Le code d'invitation, porté par le groupe plutôt que par une table de
   // jetons : une invitation n'a ni destinataire ni échéance, elle ouvre la
