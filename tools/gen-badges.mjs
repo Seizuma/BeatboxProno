@@ -18,13 +18,25 @@ import { createCanvas } from 'canvas';
  */
 
 const SIZE = 48;          // largeur de l'image
-const HEIGHT = 62;        // hauteur : le cube en haut, jusqu'à trois marches en bas
+// Le cadre colle au cube. Les socles ont été retirés : ils ne distinguaient que
+// trois badges sur sept, occupaient un tiers de la hauteur de l'image, et le
+// rang se lit déjà à la couleur.
+const HEIGHT = 44;
 const FRAMES = 24;        // images pour un tour complet
-const CUBE_H = 44;        // hauteur réservée au cube
+const CUBE_H = 44;        // le cube occupe toute l'image
 const TILT = 0.62;        // caméra au-dessus
 
 const PAL = {
-  y: '#ffe400', o: '#e8531c', z: '#b06a2c', w: '#e8e8e8', d: '#3a3a3a', k: '#0b0b0b',
+  y: '#ffe400',   // or
+  o: '#e8531c',   // orange des paliers
+  z: '#b06a2c',   // bronze
+  // L'argent, et non le blanc d'avant. À #e8e8e8, la deuxième place se
+  // confondait avec l'encre du site et avec la wildcard en fil de fer. Un gris
+  // légèrement bleuté se lit comme un métal, pas comme une absence de couleur.
+  a: '#b9bdc6',
+  w: '#e8e8e8',   // encre, pour les arêtes
+  d: '#3a3a3a',
+  k: '#0b0b0b',
 };
 
 /* --- Géométrie ---------------------------------------------------------------- */
@@ -146,44 +158,11 @@ function segment(g, p0, p1, colour) {
   }
 }
 
-/* --- Le socle ------------------------------------------------------------------ */
-
-/**
- * Le socle ne tourne PAS.
- *
- * Un piédestal est un meuble : il est posé au sol, le trophée tourne dessus.
- * Le faire tourner avec le cube donnerait l'impression que toute la scène pivote,
- * et le regard n'aurait plus rien de fixe pour juger du mouvement.
- *
- * Trois marches empilées en projection isométrique, chacune plus large que la
- * précédente, éclairées comme le reste : dessus plein, face avant à moitié.
- */
-function plinth(g, steps, colour) {
-    /**
-     * Des barres PLATES, pas un socle isométrique.
-     *
-     * J'ai essayé l'escalier en projection : sous un cube de quarante-quatre
-     * pixels, chaque marche n'a que six pixels de haut, et trois losanges tramés
-     * empilés à cette échelle ne font pas un escalier — ils font un tas. On voit
-     * la matière, jamais les marches.
-     *
-     * Les barres plates du badge actuel ne prétendent rien : elles disent
-     * « une marche, deux, trois » d'un coup d'œil, à n'importe quelle taille,
-     * et tes joueurs les reconnaissent déjà. Le cube tourne au-dessus ; le
-     * podium n'a pas besoin d'être en trois dimensions pour se lire.
-     */
-    const TOP = CUBE_H + 3;
-    const H = 3;      // hauteur d'une barre
-    const GAP = 1;    // le vide qui les sépare, sans quoi elles se soudent
-
-    for (let s = 0; s < steps; s += 1) {
-        const halfW = 7 + s * 5;   // la plus large en bas, avec une marge au cadre
-        const y0 = TOP + s * (H + GAP);
-        for (let y = y0; y < y0 + H && y < g.length; y += 1) {
-            for (let x = SIZE / 2 - halfW; x < SIZE / 2 + halfW; x += 1) g[y][x] = colour;
-        }
-    }
-}
+/* --- Les socles ont disparu -----------------------------------------------
+   Ils ne distinguaient que trois badges sur sept, et le rang se lit déjà à la
+   couleur : bronze, argent, or. Les retirer rend un tiers de la hauteur de
+   l'image au cube, qui gagne d'autant en présence sur un mur de badges.
+   -------------------------------------------------------------------------- */
 
 /* --- Une image ------------------------------------------------------------------ */
 
@@ -191,14 +170,11 @@ function plinth(g, steps, colour) {
  * @param spec.colour  la couleur des faces pleines
  * @param spec.solid   les INDEX des faces pleines, sur le solide. Elles tournent
  *   avec lui et disparaissent quand elles passent derrière.
- * @param spec.pedestal  nombre de marches, ou 0
  */
 function frame(angle, spec) {
   const g = Array.from({ length: HEIGHT }, () => Array(SIZE).fill('.'));
   const cx = SIZE / 2;
   const cy = CUBE_H / 2;
-
-  if (spec.pedestal) plinth(g, spec.pedestal, spec.pedColour ?? spec.colour);
 
   const proj = V.map((v) => {
     const p = rotX(rotY(v, angle), TILT);
@@ -262,14 +238,25 @@ function frame(angle, spec) {
  * Avant et droite pour le premier palier : ce sont les deux faces qu'on voit
  * ensemble à l'angle de départ, donc celles qui se remarquent d'abord.
  */
+/**
+ * Le dessus est TOUJOURS plein sur les paliers bas.
+ *
+ * La caméra regarde d'au-dessus : la face du dessus ne passe jamais derrière.
+ * En la remplissant, on garantit qu'un Top 60 % ne se réduit jamais à un fil de
+ * fer — c'est ce qui le rendait indiscernable de la wildcard sur un tiers des
+ * images, et c'est le défaut qu'on corrige ici.
+ *
+ * Le palier se lit donc au nombre de faces LATÉRALES pleines : aucune, une,
+ * deux, toutes. Le dessus ne compte pas, il sert de socle de lecture.
+ */
 const SERIE = [
   ['PARTICIPANT', 'Wildcard', { colour: 'w', solid: [], edge: 'w' }],
-  ['BRONZE', 'Top 60 %', { colour: 'o', solid: [F.avant], edge: 'w' }],
-  ['SILVER', 'Top 30 %', { colour: 'o', solid: [F.avant, F.droite], edge: 'w' }],
+  ['BRONZE', 'Top 60 %', { colour: 'o', solid: [F.dessus, F.avant], edge: 'w' }],
+  ['SILVER', 'Top 30 %', { colour: 'o', solid: [F.dessus, F.avant, F.droite], edge: 'w' }],
   ['GOLD', 'Top 5 %', { colour: 'o', solid: TOUTES, edge: 'w' }],
-  ['PODIUM_3', '3e', { colour: 'z', solid: TOUTES, edge: 'd', pedestal: 1 }],
-  ['PODIUM_2', '2e', { colour: 'w', solid: TOUTES, edge: 'd', pedestal: 2 }],
-  ['PODIUM_1', '1er', { colour: 'y', solid: TOUTES, edge: 'd', pedestal: 3 }],
+  ['PODIUM_3', '3e', { colour: 'z', solid: TOUTES, edge: 'd' }],
+  ['PODIUM_2', '2e', { colour: 'a', solid: TOUTES, edge: 'd' }],
+  ['PODIUM_1', '1er', { colour: 'y', solid: TOUTES, edge: 'd' }],
 ];
 
 /* --- Sortie : un module JavaScript ------------------------------------------- */
