@@ -56,6 +56,9 @@ model User {
   // vers le même modèle : Prisma exige alors qu'on les nomme.
   notifications Notification[] @relation("Notified")
   triggered     Notification[] @relation("Actor")
+
+  viewsMade     ProfileView[] @relation("ProfileViewer")
+  viewsReceived ProfileView[] @relation("ProfileViewed")
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -82,6 +85,8 @@ model Artist {
   createdAt DateTime @default(now())
 
   entries   ContenderArtist[]
+
+  views ProfileView[]
 }
 
 // --- Événements ---------------------------------------------------------------
@@ -732,4 +737,62 @@ model WalletEntry {
   @@unique([userId, eventId])
   @@unique([userId, itemId])
   @@index([userId])
+}
+
+/// Une consultation de profil ou de fiche d'artiste.
+///
+/// Une ligne par visiteur, par cible et par JOURNÉE — jamais par clic. Compter
+/// les clics donnerait un nombre que n'importe qui fabrique en maintenant F5.
+model ProfileView {
+  id        String   @id @default(cuid())
+  viewerId  String
+  viewer    User     @relation("ProfileViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  /// La cible : un joueur OU un artiste, jamais les deux.
+  userId    String?
+  user      User?    @relation("ProfileViewed", fields: [userId], references: [id], onDelete: Cascade)
+  artistId  String?
+  artist    Artist?  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  /// La journée locale, au format AAAA-MM-JJ. Même unité que `Visit`.
+  day       String
+  createdAt DateTime @default(now())
+
+  /// Les deux unicités cohabitent grâce aux NULL de PostgreSQL : deux NULL ne
+  /// sont jamais égaux, donc une vue d'artiste échappe à la première et une vue
+  /// de joueur à la seconde. Le mécanisme de WalletEntry, déjà éprouvé.
+  @@unique([viewerId, userId, day])
+  @@unique([viewerId, artistId, day])
+  @@index([userId])
+  @@index([artistId])
+}
+
+/// Le classement de popularité de la boutique, recalculé tous les deux jours.
+///
+/// Remplacé en bloc à chaque calcul : il n'y a rien à conserver d'un classement
+/// périmé. Aucune clé étrangère vers un catalogue — celui-ci vit dans le code, et
+/// un objet retiré laisse une ligne que le prochain calcul balaiera.
+model ShopTrend {
+  itemId     String   @id
+  purchases  Int      @default(0)
+  position   Int
+
+  /// L'horloge des deux jours. C'est la DATE du dernier calcul qui décide du
+  /// prochain, jamais une planification cron — celle-ci dérive au premier
+  /// redémarrage tombant un jour impair.
+  computedAt DateTime @default(now())
+
+  @@index([position])
+}
+
+/// Les promotions de la semaine, tirées parmi les objets les moins achetés.
+model ShopPromo {
+  itemId   String   @id
+  percent  Int
+  startsAt DateTime @default(now())
+  endsAt   DateTime
+
+  /// La lecture filtre toujours sur « encore valable » : c'est cet index qui
+  /// porte chaque ouverture de la boutique.
+  @@index([endsAt])
 }
