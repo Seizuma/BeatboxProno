@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { itemById } from '../lib/cosmetics.js';
-import { BADGE_ART, BAND_ART, gridToSvg, gridToDataUrl } from '../lib/pixels.js';
+import { BAND_ART, gridToSvg, gridToDataUrl } from '../lib/pixels.js';
+import { BADGE_CODES, SCALES } from '../lib/badgeSprites.js';
 
 /**
  * Le rendu des cosmétiques.
@@ -44,16 +45,38 @@ export function PixelArt({ rows, scale = 3, label }) {
  * dessin, et il ne prétend pas être autre chose : un élément qui a l'air
  * cliquable sans l'être est pire qu'un élément inerte.
  */
+/**
+ * Un badge d'événement.
+ *
+ * ─── Ce n'est plus un dessin, c'est une bande d'images ──────────────────────
+ *
+ * Le badge était un tableau de pixels rendu en SVG. C'est désormais un cube qui
+ * tourne : vingt-quatre angles pré-calculés dans une bande, que le navigateur
+ * fait défiler par crans. Il n'y a donc plus rien à rendre — juste une boîte de
+ * la bonne taille portant la bonne classe.
+ *
+ * `scale` reste l'API d'avant, en multiples entiers du dessin. Un multiple
+ * fractionnaire ferait rééchantillonner le navigateur, et le pixel cesserait
+ * d'être un pixel.
+ *
+ * Avec `onClick`, il devient un vrai bouton — focus au clavier, touche Entrée,
+ * annonce vocale — et porte son intitulé en infobulle. Sans, ce n'est qu'une
+ * image, et il ne prétend pas être autre chose.
+ */
 export function Badge({ code, scale = 2, label, onClick }) {
-    const rows = BADGE_ART[code];
-    if (!rows) return null;
+    if (!BADGE_CODES.includes(code)) return null;
 
-    const art = <PixelArt rows={rows} scale={scale} label={onClick ? undefined : label} />;
+    const k = SCALES.includes(scale) ? scale : 2;
+    const art = (
+        <span
+            className={`cos-badge3d cos-badge3d--x${k} cos-badge3d--${code}`}
+            role={onClick ? undefined : 'img'}
+            aria-label={onClick ? undefined : label}
+        />
+    );
+
     if (!onClick) return art;
 
-    // Pas de `title` en plus de `data-label` : le navigateur ne sait pas qu'une
-    // bulle existe déjà et affichait les deux, superposées, disant la même
-    // chose. L'intitulé accessible passe par `aria-label`, invisible à l'œil.
     return (
         <button
             type="button"
@@ -66,6 +89,7 @@ export function Badge({ code, scale = 2, label, onClick }) {
         </button>
     );
 }
+
 
 /* ---------------------------------------------------------------------------
    L'avatar
@@ -125,26 +149,12 @@ export function bandImage(bandId) {
     return art ? gridToDataUrl(art, 4) : null;
 }
 
-export function Banded({ bandId, children, inline = false }) {
+export function Banded({ bandId, children }) {
     const item = itemById(bandId);
     const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
     const url = useMemo(() => (art ? gridToDataUrl(art, 4) : null), [art]);
 
     if (!url) return <>{children}</>;
-
-    // `inline` : les bandes se posent aux bords du CONTENEUR et non de la
-    // fenêtre. C'est le mode de l'aperçu de boutique, où le profil s'affiche
-    // dans une fenêtre modale — des bandes en position fixe iraient se coller
-    // aux bords de l'écran, derrière le voile, invisibles.
-    if (inline) {
-        return (
-            <div className="cos-banded-inline">
-                <div className="cos-band cos-band--left" style={{ backgroundImage: url }} aria-hidden="true" />
-                <div className="cos-band cos-band--right" style={{ backgroundImage: url }} aria-hidden="true" />
-                {children}
-            </div>
-        );
-    }
 
     // Les bandes vivent dans les MARGES de la fenêtre, pas dans la largeur du
     // profil : le contenu n'est plus enveloppé du tout, elles se posent à côté.
