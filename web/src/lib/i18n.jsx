@@ -655,6 +655,12 @@ const DICT = {
     'stamp.cancel': 'Cancel',
     'stamp.remove': 'Remove stamp',
     'stamp.hint': 'Click anywhere on the bracket to drop it. Escape to cancel.',
+    'group.stamp.by': 'Stamped by {name}',
+    'group.stamp.none': 'Wear a stamp to leave your mark here.',
+    'group.stamp.invite': 'You can stamp this prediction.',
+    'group.stamp.hint': 'Click anywhere on the card to stamp it.',
+    'group.stamp.remove': 'Remove my stamp',
+    'group.stamp.count': '{n} stamp(s)',
 
     'common.close': 'Close',
 
@@ -1294,7 +1300,7 @@ const DICT = {
     'shop.badges.lede':
       'Les badges ne s’achètent pas — ils tombent pour tout le monde à la clôture d’une compétition.',
 
-    'badge.PARTICIPANT': 'Un pronostic déposé',
+    'badge.PARTICIPANT': 'Wildcard — un pronostic déposé',
     'badge.BRONZE': 'Top 60 % de la compète',
     'badge.SILVER': 'Top 30 % de la compète',
     'badge.GOLD': 'Top 5 % de la compète',
@@ -1316,6 +1322,12 @@ const DICT = {
     'stamp.cancel': 'Annuler',
     'stamp.remove': 'Retirer le tampon',
     'stamp.hint': 'Cliquez où vous voulez sur le tableau pour le poser. Échap pour annuler.',
+    'group.stamp.by': 'Tamponné par {name}',
+    'group.stamp.none': 'Portez un tampon pour laisser votre marque ici.',
+    'group.stamp.invite': 'Vous pouvez tamponner ce pronostic.',
+    'group.stamp.hint': 'Cliquez où vous voulez sur la fiche pour tamponner.',
+    'group.stamp.remove': 'Retirer mon tampon',
+    'group.stamp.count': '{n} tampon(s)',
 
     'common.close': 'Fermer',
 

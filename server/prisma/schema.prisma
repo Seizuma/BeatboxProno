@@ -128,6 +128,23 @@ model Event {
   badges      BadgeAward[]
 }
 
+model GroupStamp {
+  id           String     @id @default(cuid())
+  groupId      String
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  predictionId String
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  itemId       String
+  x            Float
+  y            Float
+  createdAt    DateTime   @default(now())
+
+  @@unique([groupId, predictionId, authorId])
+  @@index([groupId, predictionId])
+}
+
 enum CategoryKind {
   SOLO         // éliminations -> bracket
   TAG_TEAM     // éliminations -> bracket

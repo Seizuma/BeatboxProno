@@ -193,15 +193,16 @@ export const FRAME_ART = {
         edge: ['..mm..', '..mm..', '......', '......', '......', '......'],
     },
     /**
-     * RGB.
+     * Les cœurs.
      *
-     * Le filet change de couleur par crans : rouge, vert, bleu. Trois planches,
-     * trois secondes. Rien de plus, et c'est le sujet — la seule chose que ce
-     * cadre raconte est qu'il change de couleur.
+     * Le coin porte le MÊME motif que l'arête. Un cadre de cœurs interrompu par
+     * quatre équerres n'est pas un cadre de cœurs, c'est un cadre ordinaire
+     * décoré. Le motif étant symétrique, la recopie miroir des angles le laisse
+     * intact — c'est ce qui rend l'astuce possible sans coins désignés.
      */
     'frame-coeurs': {
         tint: 'r',
-        corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+        corner: ['.rr.rr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..', '......'],
         edge: ['.rr.rr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..', '......'],
     },
 
@@ -212,9 +213,10 @@ export const FRAME_ART = {
      * Le cœur est ce qui empêche le motif de se lire comme un simple losange :
      * sans ces deux pixels, la fleur devient une croix.
      */
+    /** Les fleurs. Même principe : le motif ne s'interrompt pas dans les angles. */
     'frame-fleurs': {
         tint: 'm',
-        corner: ['mmmmmm', 'm.....', 'm.....', 'm.....', 'm.....', 'm.....'],
+        corner: ['..mm..', '.myym.', '.myym.', '..mm..', '......', '......'],
         edge: ['..mm..', '.myym.', '.myym.', '..mm..', '......', '......'],
     },
 
@@ -273,24 +275,24 @@ export const FRAME_ANIM = {
     /**
      * RGB.
      *
-     * Le filet passe du rouge au vert au bleu, par crans francs. Trois planches
-     * et trois secondes : c'est la seule chose que ce cadre raconte, autant
-     * qu'il la dise clairement.
+     * Pas trois états qui sautent : une teinte qui GLISSE, comme sur un clavier
+     * ou une barrette de mémoire. Or `border-image-source` ne s'interpole pas —
+     * trois planches donnaient un clignotement, jamais un dégradé.
+     *
+     * La sortie est une rotation de teinte appliquée à un cadre unique dessiné
+     * en rouge saturé. `hue-rotate` de zéro à trois cent soixante degrés
+     * parcourt tout le spectre sans un seul saut, et c'est une propriété qui
+     * S'INTERPOLE.
+     *
+     * Elle porte sur un pseudo-élément et non sur la boîte : sur la boîte, le
+     * filtre repeindrait aussi la photo de l'avatar.
      */
     'frame-rgb': {
-        tint: 'r', kind: 'steps', duration: 3,
+        tint: 'r', kind: 'hue', duration: 5,
         states: [
             {
                 corner: ['rrrrrr', 'rr....', 'r.....', 'r.....', 'r.....', 'r.....'],
                 edge: ['rrrrrr', 'r.....', '......', '......', '......', '......']
-            },
-            {
-                corner: ['gggggg', 'gg....', 'g.....', 'g.....', 'g.....', 'g.....'],
-                edge: ['gggggg', 'g.....', '......', '......', '......', '......']
-            },
-            {
-                corner: ['bbbbbb', 'bb....', 'b.....', 'b.....', 'b.....', 'b.....'],
-                edge: ['bbbbbb', 'b.....', '......', '......', '......', '......']
             },
         ],
     },
@@ -442,6 +444,18 @@ export function frameStylesheet() {
             continue;
         }
 
+        if (art.kind === 'hue') {
+            // Le cadre est porté par un pseudo-élément, seul à subir le filtre.
+            out.push(`.cos-f-${key}{position:relative}`);
+            out.push(
+                `.cos-f-${key}::after{content:'';position:absolute;inset:calc(-1 * var(--cos-band,${TILE}px));` +
+                `border:var(--cos-band,${TILE}px) solid transparent;border-image-slice:${TILE};` +
+                `border-image-repeat:repeat;border-image-source:${first};image-rendering:pixelated;` +
+                `pointer-events:none;animation:cosf-hue ${art.duration}s linear infinite}`
+            );
+            continue;
+        }
+
         if (art.kind === 'breathe') {
             out.push(`.cos-f-${key}{border-image-source:${first};animation:cosf-breathe ${art.duration}s ease-in-out infinite}`);
             continue;
@@ -451,6 +465,9 @@ export function frameStylesheet() {
 
     out.push(`@keyframes cosf-fade{0%,100%{opacity:0}50%{opacity:1}}`);
     out.push(`@keyframes cosf-breathe{0%,100%{opacity:.4}50%{opacity:1}}`);
+    // Linéaire et sur un tour complet : revenir en arrière ferait osciller la
+    // couleur au lieu de la faire tourner.
+    out.push(`@keyframes cosf-hue{from{filter:hue-rotate(0deg)}to{filter:hue-rotate(360deg)}}`);
 
     // Quelqu'un qui a demandé moins d'animations en a assez vu.
     out.push(

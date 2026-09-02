@@ -627,9 +627,10 @@
    Les badges
    --------------------------------------------------------------------------- */
 
-/* `.cos-badge` n'existe plus : un badge n'est plus un SVG dans une boîte, c'est
-   une bande d'images animée par la feuille engendrée de `badgeSprites.js`. Seul
-   le bouton qui l'enveloppe reste décrit ici. */
+.cos-badge {
+  display: inline-block;
+  line-height: 0;
+}
 
 /* Un badge cliquable est un BOUTON, pas une image avec un gestionnaire : c'est
    ce qui lui donne le focus au clavier, la touche Entrée et l'annonce vocale.
@@ -693,12 +694,6 @@
   left: auto;
   right: 0;
   transform: none;
-}
-
-/* Le badge en rotation ne doit pas se laisser écraser par une mise en page en
-   ligne : il a une taille propre, en multiples entiers de son dessin. */
-.cos-badge-btn .cos-badge3d {
-  display: block;
 }
 
 /* La fiche d'un badge.
@@ -961,7 +956,7 @@
 /* Le dessin ne se comprime pas, le texte se replie. Sans ces deux règles, un
    conteneur trop étroit écrasait le badge au lieu de faire passer le libellé
    à la ligne. */
-.shop-legend__item .cos-badge3d,
+.shop-legend__item .cos-badge,
 .shop-legend__item .cos-badge-btn {
   flex: 0 0 auto;
 }
@@ -1203,29 +1198,39 @@
 /* Les bandes confinées au conteneur, pour un profil rendu dans une fenêtre.
    La spécificité à deux classes l'emporte sur la règle qui cache les bandes
    sous 1280 px : ici elles n'ont pas de fenêtre à mesurer. */
+/* Les bandes d'aperçu portent leur PROPRE classe, sans rien hériter de
+   `.cos-band`. Celle-ci est en `position: fixed` : la moindre surcharge perdue
+   collait les bandes aux bords de la fenêtre, donc par-dessus l'en-tête et le
+   pied de la modale. Deux classes séparées, aucun arbitrage à gagner. */
 .cos-banded-inline {
   position: relative;
   padding: 0 4.4rem;
   min-height: 12rem;
+  /* Le conteneur borne ses bandes : même mal calculées, elles ne peuvent plus
+     sortir de la boîte du profil. */
+  overflow: hidden;
 }
 
-.cos-banded-inline .cos-band {
-  display: block;
+.cos-band-inline {
   position: absolute;
   top: 0;
   bottom: 0;
-  --band-w: 3rem;
-  width: var(--band-w);
-  background-size: var(--band-w) auto;
+  width: 3rem;
+  background-repeat: repeat-y;
+  background-position: top center;
+  background-size: 3rem auto;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.cos-banded-inline .cos-band--left {
+.cos-band-inline--left {
   left: 0.5rem;
 }
 
-.cos-banded-inline .cos-band--right {
+.cos-band-inline--right {
   right: 0.5rem;
-  left: auto;
+  transform: scaleX(-1);
 }
 
 /* La carte, à sa taille réelle d'aperçu. Le conteneur porte le tampon en
@@ -1321,4 +1326,27 @@
 .shop-card__price strong {
   color: var(--g);
   font-weight: normal;
+}
+
+/* ---------------------------------------------------------------------------
+   Les tampons de groupe
+
+   Posés par-dessus la fiche d'un pronostic, dans le repère de son canvas.
+   --------------------------------------------------------------------------- */
+
+/* La couche de pose ne couvre la fiche QUE pendant la pose : en permanence,
+   elle intercepterait les clics destinés aux bulles de commentaire. */
+.gs-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  cursor: crosshair;
+}
+
+/* Un tampon posé n'intercepte rien : il flotte au-dessus de la fiche, et une
+   cible invisible par-dessus une bulle la rendrait inutilisable. */
+.gs-mark {
+  z-index: 5;
+  pointer-events: none;
+  font-size: 0.95rem;
 }

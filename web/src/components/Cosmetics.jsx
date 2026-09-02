@@ -48,20 +48,12 @@ export function PixelArt({ rows, scale = 3, label }) {
 /**
  * Un badge d'événement.
  *
- * ─── Ce n'est plus un dessin, c'est une bande d'images ──────────────────────
+ * Ce n'est plus un dessin fixe mais une bande d'images : vingt-quatre angles
+ * pré-calculés que le navigateur fait défiler par crans. Il n'y a donc rien à
+ * rendre — juste une boîte de la bonne taille portant la bonne classe.
  *
- * Le badge était un tableau de pixels rendu en SVG. C'est désormais un cube qui
- * tourne : vingt-quatre angles pré-calculés dans une bande, que le navigateur
- * fait défiler par crans. Il n'y a donc plus rien à rendre — juste une boîte de
- * la bonne taille portant la bonne classe.
- *
- * `scale` reste l'API d'avant, en multiples entiers du dessin. Un multiple
- * fractionnaire ferait rééchantillonner le navigateur, et le pixel cesserait
- * d'être un pixel.
- *
- * Avec `onClick`, il devient un vrai bouton — focus au clavier, touche Entrée,
- * annonce vocale — et porte son intitulé en infobulle. Sans, ce n'est qu'une
- * image, et il ne prétend pas être autre chose.
+ * `scale` reste l'API d'avant, en multiples ENTIERS du dessin : un multiple
+ * fractionnaire ferait rééchantillonner le navigateur.
  */
 export function Badge({ code, scale = 2, label, onClick }) {
     if (!BADGE_CODES.includes(code)) return null;
@@ -89,7 +81,6 @@ export function Badge({ code, scale = 2, label, onClick }) {
         </button>
     );
 }
-
 
 /* ---------------------------------------------------------------------------
    L'avatar
@@ -149,12 +140,30 @@ export function bandImage(bandId) {
     return art ? gridToDataUrl(art, 4) : null;
 }
 
-export function Banded({ bandId, children }) {
+export function Banded({ bandId, children, inline = false }) {
     const item = itemById(bandId);
     const art = item && item.slot === 'band' ? BAND_ART[item.art] : null;
     const url = useMemo(() => (art ? gridToDataUrl(art, 4) : null), [art]);
 
     if (!url) return <>{children}</>;
+
+    // `inline` : les bandes se posent aux bords du CONTENEUR et non de la
+    // fenêtre. C'est le mode de l'aperçu de boutique, où le profil s'affiche
+    // dans une fenêtre modale — des bandes en position fixe iraient se coller
+    // aux bords de l'écran, derrière le voile, invisibles.
+    if (inline) {
+        return (
+            <div className="cos-banded-inline">
+                {/* Une classe DISTINCTE, et non `cos-band` redéclarée : celle-ci
+                    est en position fixe, et il suffisait qu'elle l'emporte pour
+                    que les bandes se collent aux bords de la FENÊTRE, donc
+                    par-dessus l'en-tête et le pied de la modale. */}
+                <div className="cos-band-inline cos-band-inline--left" style={{ backgroundImage: url }} aria-hidden="true" />
+                <div className="cos-band-inline cos-band-inline--right" style={{ backgroundImage: url }} aria-hidden="true" />
+                {children}
+            </div>
+        );
+    }
 
     // Les bandes vivent dans les MARGES de la fenêtre, pas dans la largeur du
     // profil : le contenu n'est plus enveloppé du tout, elles se posent à côté.

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
+import { itemById } from '../lib/cosmetics.js';
 import { buildScoreboard } from '../lib/scoreboard.js';
 import { notifyComment, notifyGroupJoin } from '../lib/notifications.js';
 import {
@@ -625,6 +626,121 @@ groupRouter.get('/:slug/predictions/:predictionId/comments', loadGroup, guard(as
     });
 
     res.json({ comments: comments.map((c) => shape(c, req.user.id, req.membership.role)) });
+}));
+
+/* --- Les tampons -----------------------------------------------------------
+ *
+ * Chacun peut poser SON tampon sur le pronostic d'un autre membre. C'est un
+ * geste social et non une annotation : un tampon ne dit rien de précis, il dit
+ * « je suis passé et j'en pense quelque chose ».
+ *
+ * Un seul par personne et par pronostic. C'est l'unicité qui donne son sens au
+ * geste : sans elle, un membre couvrirait une fiche de vingt tampons et la
+ * rendrait illisible ; avec elle, un mur de tampons est un mur de signatures.
+ * Reposer le sien le DÉPLACE — c'est ce qu'on attend en cliquant ailleurs.
+ * -------------------------------------------------------------------------- */
+
+const stampInput = z.object({
+    itemId: z.string().min(1).max(60),
+    // En fractions bornées, jamais en pixels : la fiche n'a pas la même largeur
+    // sur un téléphone et sur un écran large. Bornées ici et pas seulement dans
+    // l'interface — une API ne se fie pas à son client.
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+});
+
+groupRouter.get('/:slug/predictions/:predictionId/stamps', loadGroup, guard(async (req, res) => {
+    const prediction = await commentablePrediction(req.group, req.groupEventIds, req.params.predictionId);
+    if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable dans ce groupe.' });
+
+    const stamps = await prisma.groupStamp.findMany({
+        where: { groupId: req.group.id, predictionId: prediction.id },
+        orderBy: { createdAt: 'asc' },
+        include: {
+            author: {
+                select: {
+                    id: true,
+                    username: true,
+                    globalName: true,
+                    avatarUrl: true,
+                    equippedFrame: true,
+                    equippedNameFx: true,
+                },
+            },
+        },
+    });
+
+    res.json({
+        stamps: stamps.map((s) => ({
+            id: s.id,
+            itemId: s.itemId,
+            x: s.x,
+            y: s.y,
+            createdAt: s.createdAt,
+            author: s.author,
+            mine: s.authorId === req.user.id,
+        })),
+    });
+}));
+
+groupRouter.put('/:slug/predictions/:predictionId/stamp', loadGroup, guard(async (req, res) => {
+    const prediction = await commentablePrediction(req.group, req.groupEventIds, req.params.predictionId);
+    if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable dans ce groupe.' });
+
+    const { itemId, x, y } = stampInput.parse(req.body ?? {});
+
+    // On ne pose que ce qu'on possède. Le contrôle est ici et non dans
+    // l'interface : sans lui, n'importe quel identifiant de tampon posté à la
+    // main donnerait le tampon le plus cher du catalogue à tout le monde.
+    const item = itemById(itemId);
+    if (!item || item.slot !== 'stamp') {
+        return res.status(400).json({ error: 'Ce tampon n\'existe pas.' });
+    }
+    if (item.price > 0) {
+        const owned = await prisma.walletEntry.findFirst({
+            where: { userId: req.user.id, kind: 'PURCHASE', itemId },
+            select: { id: true },
+        });
+        if (!owned) return res.status(403).json({ error: 'Vous ne possédez pas ce tampon.' });
+    }
+
+    const stamp = await prisma.groupStamp.upsert({
+        where: {
+            groupId_predictionId_authorId: {
+                groupId: req.group.id,
+                predictionId: prediction.id,
+                authorId: req.user.id,
+            },
+        },
+        // Reposer déplace : on met à jour la position ET l'objet, puisqu'on a pu
+        // changer de tampon entre-temps.
+        update: { itemId, x, y },
+        create: {
+            groupId: req.group.id,
+            predictionId: prediction.id,
+            authorId: req.user.id,
+            itemId,
+            x,
+            y,
+        },
+    });
+
+    res.json({ stamp: { id: stamp.id, itemId, x, y, mine: true } });
+}));
+
+groupRouter.delete('/:slug/predictions/:predictionId/stamp', loadGroup, guard(async (req, res) => {
+    // Chacun retire le sien. Le propriétaire du groupe ne fait PAS le ménage
+    // ici, contrairement aux commentaires : un tampon ne porte pas de texte, il
+    // n'y a rien à modérer, et pouvoir effacer la marque d'un autre ouvrirait
+    // une petite guerre pour un geste censé être léger.
+    await prisma.groupStamp.deleteMany({
+        where: {
+            groupId: req.group.id,
+            predictionId: req.params.predictionId,
+            authorId: req.user.id,
+        },
+    });
+    res.json({ ok: true });
 }));
 
 groupRouter.post('/:slug/predictions/:predictionId/comments', loadGroup, guard(async (req, res) => {
