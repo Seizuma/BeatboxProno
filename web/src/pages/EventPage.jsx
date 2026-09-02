@@ -7,6 +7,7 @@ import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
 import WildcardHelp from '../components/WildcardHelp.jsx';
+import WildcardBoard from '../components/WildcardBoard.jsx';
 import { isWildcardCategory } from '../lib/wildcard.js';
 import PromptDialog from '../components/PromptDialog.jsx';
 import Modal from '../components/Modal.jsx';
@@ -752,7 +753,18 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
               </div>
             </div>
 
-            {RANKING_TYPES.includes(phase.type) ? (
+            {/* Une sélection n'a pas de plateau donné d'avance : le joueur
+                pioche lui-même dans le référentiel des artistes. Partout
+                ailleurs, la liste vient de l'organisateur. */}
+            {isWildcardCategory(category) ? (
+              <WildcardBoard
+                category={category}
+                phase={phase}
+                order={state.orders[phase.id] ?? []}
+                locked={isLocked}
+                onChange={(next) => changeOrder(phase, next)}
+              />
+            ) : RANKING_TYPES.includes(phase.type) ? (
               <RankingBoard
                 phase={phase}
                 contenders={contenders}

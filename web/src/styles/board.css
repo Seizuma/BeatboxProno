@@ -1127,6 +1127,48 @@ details.panel>summary .eyebrow {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   La pioche d'une sélection
+
+   À coller dans `web/src/styles/board.css`, à la suite des règles de plateau.
+   Préfixe `wc-` : rien ici ne peut entrer en collision avec l'existant.
+   --------------------------------------------------------------------------- */
+
+/* La liste de suggestions flotte au-dessus du plateau plutôt que de le
+   repousser : sans ça, chaque lettre tapée faisait sauter le classement de
+   trois centimètres. */
+.wc-suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--screen);
+}
+
+.wc-suggest__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wc-suggest__item:last-child { border-bottom: 0; }
+.wc-suggest__item:hover,
+.wc-suggest__item:focus-visible { background: var(--surface-2); outline: none; }
+.wc-suggest__item:disabled { opacity: 0.5; cursor: default; }
+.wc-suggest__item .faint { margin-left: auto; font-size: 0.82rem; }
+
 /* Sur téléphone, un Top 32 tient quatre colonnes dans 360 pixels : les photos
    reprennent leur ancienne taille plutôt que de manger le nom. */
 @media (max-width: 520px) {

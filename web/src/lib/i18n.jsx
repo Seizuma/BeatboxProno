@@ -455,6 +455,14 @@ const DICT = {
       'Three points for each artist you placed in your top {n} who really got through — whatever position you gave them. It is worth three times the usual qualification point, because here it is not a detail beside a ranking: it is the whole question.',
     'wc.note':
       'Both add up: calling a qualifier and placing them exactly pays 8 on that artist alone.',
+    'wc.board.title': 'Your top {n}',
+    'wc.board.lede':
+      'Nobody knows yet who sent a wildcard — that is the whole question. Pick the artists you think will get through, then order them.',
+    'wc.board.search': 'Add an artist',
+    'wc.board.placeholder': 'Type a name…',
+    'wc.board.none': 'No artist of this format under that name.',
+    'wc.board.count': '{picked} picked · {pool} proposed by the community',
+    'wc.board.empty': 'Nothing picked yet. Search for a name above.',
     'help.title': 'How points work',
     'help.matchup.title': 'A battle pays wherever it happens',
     'help.close': 'Got it',
@@ -1107,6 +1115,14 @@ const DICT = {
       'Trois points par artiste placé dans votre top {n} et réellement retenu — quel que soit le rang que vous lui avez donné. C’est trois fois le point de qualification habituel, parce qu’ici ce n’est pas un détail au bord d’un classement : c’est toute la question.',
     'wc.note':
       'Les deux se cumulent : deviner un qualifié ET le placer au bon rang rapporte 8 points sur ce seul artiste.',
+    'wc.board.title': 'Votre top {n}',
+    'wc.board.lede':
+      'Personne ne sait encore qui a envoyé une wildcard — c’est toute la question. Piochez les artistes que vous voyez passer, puis classez-les.',
+    'wc.board.search': 'Ajouter un artiste',
+    'wc.board.placeholder': 'Tapez un nom…',
+    'wc.board.none': 'Aucun artiste de ce format sous ce nom.',
+    'wc.board.count': '{picked} choisi(s) · {pool} proposé(s) par la communauté',
+    'wc.board.empty': 'Rien de choisi pour l’instant. Cherchez un nom ci-dessus.',
     'help.title': 'Comment marchent les points',
     'help.matchup.title': 'Un battle rapporte où qu’il se joue',
     'help.close': 'Compris',

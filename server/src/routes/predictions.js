@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
+import { withName } from '../lib/naming.js';
+import { isWildcardCategory } from '../lib/wildcard.js';
 
 export const predictionRouter = Router();
 predictionRouter.use(requireAuth);
@@ -133,6 +135,94 @@ predictionRouter.get('/mine', async (req, res) => {
 // --- Création -----------------------------------------------------------------
 
 /** Ouvre une nouvelle version. Peut recopier une version existante. */
+/**
+ * Piocher un artiste dans une catégorie de sélection.
+ *
+ * ─── Pourquoi le joueur crée des participants ───────────────────────────────
+ *
+ * Dans un événement à tableau, l'organisateur sait qui concourt : il compose la
+ * liste, les joueurs la classent. Une sélection sur vidéo, c'est l'inverse —
+ * au moment où l'on pronostique, PERSONNE ne sait qui a envoyé une wildcard.
+ * Demander à l'organisateur de saisir cent cinquante noms avant l'ouverture
+ * reviendrait à lui faire deviner la réponse pour poser la question.
+ *
+ * Le joueur pioche donc dans le référentiel des artistes, et le participant est
+ * créé à la volée s'il n'existe pas encore. La liste de la catégorie devient
+ * l'union de ce que tout le monde a proposé : exactement le plateau des gens
+ * que la communauté juge crédibles.
+ *
+ * ─── Pourquoi un participant et pas un artiste ──────────────────────────────
+ *
+ * Tout l'aval — les rangs pronostiqués, le score, la fiche d'un artiste, la
+ * saisie du résultat officiel — passe par `Contender`. Faire pointer les
+ * pronostics sur `Artist` demanderait de réécrire les six. On crée donc le
+ * participant manquant, et rien d'autre ne bouge.
+ *
+ * L'unicité est portée par la transaction : deux joueurs qui piochent le même
+ * artiste à la même seconde obtiennent le même participant, pas deux.
+ */
+predictionRouter.post('/categories/:categoryId/pool', async (req, res) => {
+  const { artistId } = z.object({ artistId: z.string().min(1) }).parse(req.body);
+
+  const category = await prisma.category.findUnique({
+    where: { id: req.params.categoryId },
+    include: {
+      event: { select: { status: true, predictionsCloseAt: true } },
+      phases: { select: { id: true, type: true } },
+    },
+  });
+  if (!category) return res.status(404).json({ error: 'Catégorie introuvable.' });
+
+  if (!isWildcardCategory(category)) {
+    return res.status(400).json({
+      error: "On ne pioche que dans une sélection. Ailleurs, c'est l'organisateur qui compose la liste.",
+    });
+  }
+
+  // Les mêmes conditions que pour enregistrer un pronostic : une compète fermée
+  // ne doit pas voir son plateau grossir.
+  if (!['OPEN'].includes(category.event.status)) {
+    return res.status(409).json({ error: 'Les pronostics sont fermés sur cet événement.' });
+  }
+  if (category.event.predictionsCloseAt && new Date() > category.event.predictionsCloseAt) {
+    return res.status(409).json({ error: 'La date butoir des pronostics est passée.' });
+  }
+
+  const artist = await prisma.artist.findUnique({
+    where: { id: artistId },
+    select: { id: true, name: true, kinds: true },
+  });
+  if (!artist) return res.status(404).json({ error: 'Artiste introuvable.' });
+
+  // Le format compte : on ne pioche pas un crew dans une sélection solo.
+  if (!(artist.kinds ?? []).includes(category.kind)) {
+    return res.status(400).json({
+      error: `${artist.name} n'est pas référencé dans le format ${category.kind}.`,
+    });
+  }
+
+  const contender = await prisma.$transaction(async (tx) => {
+    const existing = await tx.contender.findFirst({
+      where: { categoryId: category.id, artists: { some: { artistId: artist.id } } },
+      include: { artists: { include: { artist: true } } },
+    });
+    if (existing) return existing;
+
+    return tx.contender.create({
+      data: {
+        categoryId: category.id,
+        // Pas de nom propre : le participant suit celui de son artiste, et un
+        // changement de pseudo se propage partout au lieu d'être recopié ici.
+        name: null,
+        artists: { create: [{ artistId: artist.id }] },
+      },
+      include: { artists: { include: { artist: true } } },
+    });
+  });
+
+  res.status(201).json({ contender: withName(contender) });
+});
+
 predictionRouter.post('/categories/:categoryId', async (req, res) => {
   const { label, copyFrom } = z
     .object({ label: z.string().min(1).max(60).optional(), copyFrom: z.string().optional() })

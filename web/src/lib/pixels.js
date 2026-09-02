@@ -83,27 +83,47 @@ function stroke(g, [x0, y0], [x1, y1], ch, thickness = 1) {
    Le cube
    -------------------------------------------------------------------------- */
 
-// Quarante pixels de côté. Vingt suffisaient à faire une silhouette, pas à
-// porter des fractures lisibles : à cette taille elles mangeaient une facette
-// entière.
+/**
+ * La géométrie du cube.
+ *
+ * Quarante pixels de large. Vingt suffisaient à faire une silhouette, pas à
+ * porter des fractures lisibles : à cette taille elles mangeaient une facette
+ * entière.
+ *
+ * ─── Pourquoi il avait l'air écrasé ─────────────────────────────────────────
+ *
+ * Les arêtes verticales mesuraient vingt pixels, soit exactement la hauteur du
+ * losange du dessus. Un volume aussi haut que large en projection, c'est ce que
+ * l'œil lit comme une DALLE vue de dessus, pas comme un cube — et c'est le
+ * retour qu'on a eu, mot pour mot.
+ *
+ * Elles passent à vingt-six, soit 0,65 fois la largeur. Le rapport n'est pas
+ * une préférence : en projection deux pour un, c'est celui qui fait lire un
+ * cube plutôt qu'une brique. Le badge gagne six pixels de haut, ce qui ne
+ * change rien à sa place dans une rangée.
+ */
 const SIDE = 40;
-const FACE_TOP = [[20, 0], [40, 10], [20, 20], [0, 10]];
-const FACE_LEFT = [[0, 10], [20, 20], [20, 40], [0, 30]];
-const FACE_RIGHT = [[40, 10], [20, 20], [20, 40], [40, 30]];
+const RISE = 26;
+const TOP_H = 20;
+const H = TOP_H + RISE;
+
+const FACE_TOP = [[20, 0], [40, 10], [20, TOP_H], [0, 10]];
+const FACE_LEFT = [[0, 10], [20, TOP_H], [20, H], [0, 10 + RISE]];
+const FACE_RIGHT = [[40, 10], [20, TOP_H], [20, H], [40, 10 + RISE]];
 
 const EDGES = [
-    [[20, 0], [39, 10]], [[39, 10], [20, 20]], [[20, 20], [1, 10]], [[1, 10], [20, 0]],
-    [[0, 10], [0, 29]], [[39, 10], [39, 29]], [[20, 20], [20, 39]],
-    [[0, 29], [20, 39]], [[39, 29], [20, 39]],
+    [[20, 0], [39, 10]], [[39, 10], [20, TOP_H]], [[20, TOP_H], [1, 10]], [[1, 10], [20, 0]],
+    [[0, 10], [0, 9 + RISE]], [[39, 10], [39, 9 + RISE]], [[20, TOP_H], [20, H - 1]],
+    [[0, 9 + RISE], [20, H - 1]], [[39, 9 + RISE], [20, H - 1]],
 ];
 
 // Les fractures. Trois entailles obliques, une par facette, tracées en couleur
 // de fond : c'est ce qui donne au cube son air scindé sans copier la géométrie
-// de personne.
+// de personne. Les deux du bas suivent l'allongement des faces latérales.
 const CRACKS = [
     [[9, 8], [20, 14]],
-    [[6, 20], [13, 33]],
-    [[28, 17], [34, 27]],
+    [[6, 22], [13, 38]],
+    [[28, 19], [34, 32]],
 ];
 
 /**
@@ -115,11 +135,11 @@ const CRACKS = [
  * @param {string} [o.pedColor]
  */
 export function cube(o) {
-    const height = o.pedestal ? SIDE + 2 + o.pedestal * 3 : SIDE;
+    const height = o.pedestal ? H + 2 + o.pedestal * 3 : H;
     const g = blank(SIDE, height, o.field || '.');
 
     const faces = [[FACE_TOP, o.top], [FACE_LEFT, o.left], [FACE_RIGHT, o.right]];
-    for (let y = 0; y < SIDE; y += 1) {
+    for (let y = 0; y < H; y += 1) {
         for (let x = 0; x < SIDE; x += 1) {
             for (const [poly, fill] of faces) {
                 if (inPolygon(x + 0.5, y + 0.5, poly)) { if (fill) g[y][x] = fill; break; }
@@ -135,7 +155,7 @@ export function cube(o) {
     // podium.
     if (o.pedestal) {
         for (let s = 0; s < o.pedestal; s += 1) {
-            const y0 = SIDE + 2 + s * 3;
+            const y0 = H + 2 + s * 3;
             const half = 7 + s * 6;
             for (let y = y0; y < y0 + 3; y += 1) {
                 for (let x = 20 - half; x < 20 + half; x += 1) {
@@ -161,7 +181,11 @@ export const BADGE_ART = {
     GOLD: cube({ edge: 'w', left: 'o', right: 'o', top: 'o' }),
     PODIUM_3: cube({ edge: 'w', left: 'z', right: 'z', top: 'z', pedestal: 1, pedColor: 'z' }),
     PODIUM_2: cube({ edge: 'd', left: 'w', right: 'w', top: 'w', pedestal: 2, pedColor: 'w' }),
-    PODIUM_1: cube({ edge: 'b', left: 'y', right: 'y', top: 'y', pedestal: 3, pedColor: 'y', field: 'b' }),
+    // Sans champ de couleur. L'aplat bleu isolait le badge de la page au lieu de
+    // le distinguer des autres : sur un mur de badges, c'était le seul à traîner
+    // un rectangle derrière lui. L'or et les trois étages suffisent à dire qui
+    // a gagné.
+    PODIUM_1: cube({ edge: 'd', left: 'y', right: 'y', top: 'y', pedestal: 3, pedColor: 'y' }),
 };
 
 /* --------------------------------------------------------------------------
