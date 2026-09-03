@@ -365,6 +365,30 @@ export function badgeStylesheet() {
         );
     });
 
+    /**
+     * Sur écran étroit, chaque taille descend d'un cran.
+     *
+     * Trois badges en x2 font 288 pixels, plus leurs écarts : ils débordaient
+     * d'un panneau qui n'en offre que 290 sur un téléphone. Et une modale qui
+     * déborde emmène toute la page, parce que le document s'élargit et que le
+     * navigateur dézoome — c'est ce qui rendait le profil entier illisible.
+     *
+     * La classe garde son nom : c'est une adaptation d'encombrement, pas un
+     * changement de taille demandé par l'appelant, et le composant n'a pas à
+     * connaître la largeur de l'écran pour choisir sa classe.
+     */
+    const petit = [];
+    for (const k of SCALES) {
+        if (k === 1) continue;
+        const j = k - 1;
+        petit.push(
+            \`.cos-badge3d--x\${k}{width:\${SPRITE_W * j}px;height:\${SPRITE_H * j}px;\` +
+            \`background-size:\${FRAMES * SPRITE_W * j}px \${SPRITE_H * j}px;\` +
+            \`animation-name:cos-badge-x\${j}}\`
+        );
+    }
+    out.push(\`@media (max-width:560px){\${petit.join('')}}\`);
+
     // Sans animation, c'est la première image qui reste : un cube de trois
     // quarts, parfaitement lisible. Rien à prévoir de plus.
     out.push('@media (prefers-reduced-motion:reduce){.cos-badge3d{animation:none}}');
