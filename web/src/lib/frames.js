@@ -233,43 +233,61 @@ export const FRAME_ART = {
     /**
      * Les cœurs.
      *
-     * Un cœur tous les DOUZE pixels et non tous les six : à la fréquence
-     * précédente, un avatar en portait cinq par côté et le cadre grouillait.
-     * L'arête large divise le motif par deux sans élargir la bande.
+     * ─── Chaque ligne est son propre miroir ─────────────────────────────────
      *
-     * `uniform` empêche la symétrie de retourner le motif : sans elle, les
-     * cœurs du bas étaient à l'envers et ceux des montants couchés. Un cœur a
-     * un haut et un bas ; une équerre n'en avait pas, d'où la question qui ne
-     * s'était jamais posée.
+     * C'est la seule règle qui compte ici, et je l'avais manquée. La pointe du
+     * cœur tombait un demi-pixel à gauche de l'échancrure, ce qui ne se voit
+     * pas sur une grille de caractères mais saute aux yeux à l'écran : un cœur
+     * de travers ne se lit plus comme un cœur.
+     *
+     * Un pixel n'a pas de moitié. Sur une largeur PAIRE, l'axe passe entre deux
+     * colonnes, donc toute forme centrée doit avoir un nombre pair de pixels sur
+     * chaque ligne — d'où l'échancrure de deux et non de un.
+     *
+     * Le motif occupe les six lignes de la bande : à cette taille, une ligne
+     * gagnée sur la hauteur change beaucoup la lecture.
      */
     'frame-coeurs': {
-        tint: 'r', uniform: true,
-        corner: ['......', '.r.r..', '.rrrr.', '..rr..', '......', '......'],
-        edge: ['............', '...r.r......', '...rrrr.....', '....rr......', '............', '............'],
+        tint: 'r', uniform: true, repeat: 'space',
+        corner: ['rr..rr', 'rrrrrr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..'],
+        edge: [
+            '...rr..rr...',
+            '...rrrrrr...',
+            '...rrrrrr...',
+            '...rrrrrr...',
+            '....rrrr....',
+            '.....rr.....',
+        ],
         edgeV: [
-            '......', '......', '......', '......',
-            '.r.r..', '.rrrr.', '..rr..', '......',
-            '......', '......', '......', '......',
+            '......', '......', '......',
+            'rr..rr', 'rrrrrr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..',
+            '......', '......', '......',
         ],
     },
 
     /**
      * Les fleurs.
      *
-     * Quatre pétales magenta autour d'un cœur jaune, répétés sur les arêtes.
-     * Le cœur est ce qui empêche le motif de se lire comme un simple losange :
-     * sans ces deux pixels, la fleur devient une croix.
-     */
-    /**
-     * Les fleurs. Même principe : une tous les douze pixels, toujours debout.
+     * Une corolle pleine de six pixels avec deux pixels de cœur jaune. La
+     * version précédente était un anneau de quatre pixels : à l'écran, un
+     * anneau de cette taille se lit comme un carré évidé, pas comme une fleur.
+     * C'est le cœur jaune qui fait la différence, et il lui faut de la matière
+     * autour pour ressortir.
      */
     'frame-fleurs': {
-        tint: 'm', uniform: true,
-        corner: ['......', '..mm..', '.myym.', '..mm..', '......', '......'],
-        edge: ['............', '....mm......', '...myym.....', '....mm......', '............', '............'],
+        tint: 'm', uniform: true, repeat: 'space',
+        corner: ['..mm..', '.mmmm.', 'mmyymm', '.mmmm.', '..mm..', '......'],
+        edge: [
+            '.....mm.....',
+            '....mmmm....',
+            '...mmyymm...',
+            '....mmmm....',
+            '.....mm.....',
+            '............',
+        ],
         edgeV: [
-            '......', '......', '......', '......',
-            '..mm..', '.myym.', '..mm..', '......',
+            '......', '......', '......',
+            '..mm..', '.mmmm.', 'mmyymm', '.mmmm.', '..mm..',
             '......', '......', '......', '......',
         ],
     },
@@ -449,6 +467,19 @@ export function frameStylesheet() {
         `[class*="cos-f-"]{border-style:solid;border-color:transparent;` +
         `border-image-slice:${TILE};border-image-repeat:repeat;image-rendering:pixelated}`
     );
+
+    /**
+     * `space` pour les motifs figuratifs.
+     *
+     * `repeat` répète la tuile et TRONQUE la dernière : une tuile de douze
+     * pixels dans un côté de trente entre 2,47 fois, donc la troisième arrive
+     * coupée en deux. Sur un filet, personne ne le voit ; sur un cœur, ça donne
+     * une moitié de cœur, et c'est exactement ce qu'on voyait.
+     *
+     * `space` ne pose que des tuiles ENTIÈRES et répartit le reste en écarts
+     * égaux. Aucune mise à l'échelle, donc le pixel reste un pixel — ce que
+     * `round` aurait cassé en étirant la tuile pour la faire tomber juste.
+     */
     for (const [sel, w] of SIZES) {
         out.push(`${sel}[class*="cos-f-"]{border-width:${w}px;border-image-width:${w}px}`);
     }
@@ -461,7 +492,9 @@ export function frameStylesheet() {
     out.push(tints.join('\n'));
 
     for (const [id, art] of Object.entries(FRAME_ART)) {
-        out.push(`.cos-f-${id.replace('frame-', '')}{border-image-source:${frameSource(art.corner, art.edge, art)}}`);
+        const key = id.replace('frame-', '');
+        out.push(`.cos-f-${key}{border-image-source:${frameSource(art.corner, art.edge, art)}}`);
+        if (art.repeat) out.push(`.cos-f-${key}{border-image-repeat:${art.repeat}}`);
     }
 
     for (const [id, art] of Object.entries(FRAME_ANIM)) {
