@@ -56,33 +56,71 @@ const transpose = (g) => g[0].map((_, x) => g.map((row) => row[x]));
  * ailleurs la symétrie reste la règle — c'est elle qui garantit qu'on ne se
  * trompe pas d'un pixel sur un seul angle.
  */
-function board(cornerLines, edgeLines, coins = null) {
+function board(cornerLines, edgeLines, opts = {}) {
+    const { coins = null, uniform = false, edgeV = null } = opts;
     const corner = rows(cornerLines);
     const edge = rows(edgeLines);
-    const out = Array.from({ length: TILE * 3 }, () => Array(TILE * 3).fill('.'));
+
+    /**
+     * La largeur de l'arête.
+     *
+     * Six pixels par défaut : la tuile se répète tous les six pixels, ce qui est
+     * dense pour un motif figuratif — un cœur tous les six pixels sur le bord
+     * d'un avatar en fait cinq par côté, et ça grouille.
+     *
+     * Une arête de douze donne un motif deux fois moins fréquent sans toucher à
+     * la largeur de la BANDE, qui reste six. C'est possible parce que
+     * `border-image-slice` découpe par CÔTÉ : sur une planche de 24, une découpe
+     * à six laisse une région centrale de douze, et c'est elle qui se répète.
+     */
+    const EW = edge[0].length;
+    const SIDE = TILE * 2 + EW;
+    const out = Array.from({ length: SIDE }, () => Array(SIDE).fill('.'));
 
     const put = (tile, ox, oy) => {
-        for (let y = 0; y < TILE; y += 1) {
-            for (let x = 0; x < TILE; x += 1) out[oy + y][ox + x] = tile[y][x];
+        for (let y = 0; y < tile.length; y += 1) {
+            for (let x = 0; x < tile[y].length; x += 1) out[oy + y][ox + x] = tile[y][x];
         }
     };
 
     if (coins) {
         put(rows(coins.hg), 0, 0);
-        put(rows(coins.hd), TILE * 2, 0);
-        put(rows(coins.bg), 0, TILE * 2);
-        put(rows(coins.bd), TILE * 2, TILE * 2);
+        put(rows(coins.hd), TILE + EW, 0);
+        put(rows(coins.bg), 0, TILE + EW);
+        put(rows(coins.bd), TILE + EW, TILE + EW);
+    } else if (uniform) {
+        // Les quatre angles à l'identique, sans miroir : un motif figuratif —
+        // un cœur, une fleur — doit rester à l'endroit sur les quatre côtés.
+        // La symétrie le retournerait en bas et le coucherait sur les montants.
+        put(corner, 0, 0);
+        put(corner, TILE + EW, 0);
+        put(corner, 0, TILE + EW);
+        put(corner, TILE + EW, TILE + EW);
     } else {
         put(corner, 0, 0);
-        put(mirrorX(corner), TILE * 2, 0);
-        put(mirrorY(corner), 0, TILE * 2);
-        put(mirrorY(mirrorX(corner)), TILE * 2, TILE * 2);
+        put(mirrorX(corner), TILE + EW, 0);
+        put(mirrorY(corner), 0, TILE + EW);
+        put(mirrorY(mirrorX(corner)), TILE + EW, TILE + EW);
     }
 
     put(edge, TILE, 0);
-    put(mirrorY(edge), TILE, TILE * 2);
-    put(transpose(edge), 0, TILE);
-    put(mirrorX(transpose(edge)), TILE * 2, TILE);
+    put(uniform ? edge : mirrorY(edge), TILE, TILE + EW);
+
+    /**
+     * Les montants.
+     *
+     * Par défaut, la tuile horizontale pivotée d'un quart de tour : pour un
+     * motif abstrait — un filet, des créneaux — c'est exactement ce qu'on veut.
+     *
+     * Un motif figuratif, lui, se coucherait. Il fournit alors `edgeV`, sa
+     * propre tuile verticale, dessinée à l'endroit. Ce n'est pas une redite du
+     * dessin horizontal : c'est le même objet vu sur un montant, et il n'y a
+     * aucune transformation géométrique qui produise ça.
+     */
+    const gauche = edgeV ? rows(edgeV) : transpose(edge);
+    const droite = edgeV ? rows(edgeV) : mirrorX(transpose(edge));
+    put(gauche, 0, TILE);
+    put(droite, TILE + EW, TILE);
 
     return out;
 }
@@ -108,14 +146,14 @@ function dataUrl(cells) {
             x += n;
         }
     });
-    const size = TILE * 3;
+    const size = cells.length;
     const svg =
         `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' ` +
         `shape-rendering='crispEdges'>${rects}</svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-export const frameSource = (corner, edge, coins = null) => dataUrl(board(corner, edge, coins));
+export const frameSource = (corner, edge, opts = {}) => dataUrl(board(corner, edge, opts));
 
 /* ---------------------------------------------------------------------------
    Le catalogue de dessins
@@ -195,15 +233,24 @@ export const FRAME_ART = {
     /**
      * Les cœurs.
      *
-     * Le coin porte le MÊME motif que l'arête. Un cadre de cœurs interrompu par
-     * quatre équerres n'est pas un cadre de cœurs, c'est un cadre ordinaire
-     * décoré. Le motif étant symétrique, la recopie miroir des angles le laisse
-     * intact — c'est ce qui rend l'astuce possible sans coins désignés.
+     * Un cœur tous les DOUZE pixels et non tous les six : à la fréquence
+     * précédente, un avatar en portait cinq par côté et le cadre grouillait.
+     * L'arête large divise le motif par deux sans élargir la bande.
+     *
+     * `uniform` empêche la symétrie de retourner le motif : sans elle, les
+     * cœurs du bas étaient à l'envers et ceux des montants couchés. Un cœur a
+     * un haut et un bas ; une équerre n'en avait pas, d'où la question qui ne
+     * s'était jamais posée.
      */
     'frame-coeurs': {
-        tint: 'r',
-        corner: ['.rr.rr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..', '......'],
-        edge: ['.rr.rr', 'rrrrrr', 'rrrrrr', '.rrrr.', '..rr..', '......'],
+        tint: 'r', uniform: true,
+        corner: ['......', '.r.r..', '.rrrr.', '..rr..', '......', '......'],
+        edge: ['............', '...r.r......', '...rrrr.....', '....rr......', '............', '............'],
+        edgeV: [
+            '......', '......', '......', '......',
+            '.r.r..', '.rrrr.', '..rr..', '......',
+            '......', '......', '......', '......',
+        ],
     },
 
     /**
@@ -213,11 +260,18 @@ export const FRAME_ART = {
      * Le cœur est ce qui empêche le motif de se lire comme un simple losange :
      * sans ces deux pixels, la fleur devient une croix.
      */
-    /** Les fleurs. Même principe : le motif ne s'interrompt pas dans les angles. */
+    /**
+     * Les fleurs. Même principe : une tous les douze pixels, toujours debout.
+     */
     'frame-fleurs': {
-        tint: 'm',
-        corner: ['..mm..', '.myym.', '.myym.', '..mm..', '......', '......'],
-        edge: ['..mm..', '.myym.', '.myym.', '..mm..', '......', '......'],
+        tint: 'm', uniform: true,
+        corner: ['......', '..mm..', '.myym.', '..mm..', '......', '......'],
+        edge: ['............', '....mm......', '...myym.....', '....mm......', '............', '............'],
+        edgeV: [
+            '......', '......', '......', '......',
+            '..mm..', '.myym.', '..mm..', '......',
+            '......', '......', '......', '......',
+        ],
     },
 
     'frame-cabine': {
@@ -258,18 +312,12 @@ export const FRAME_ANIM = {
     'frame-course': {
         tint: 'y', kind: 'steps', duration: 2,
         states: [
-            {
-                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-                edge: ['yyyyyy', 'yy....', '......', '......', '......', '......']
-            },
-            {
-                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-                edge: ['yyyyyy', '..yy..', '......', '......', '......', '......']
-            },
-            {
-                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-                edge: ['yyyyyy', '....yy', '......', '......', '......', '......']
-            },
+            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+              edge: ['yyyyyy', 'yy....', '......', '......', '......', '......'] },
+            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+              edge: ['yyyyyy', '..yy..', '......', '......', '......', '......'] },
+            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+              edge: ['yyyyyy', '....yy', '......', '......', '......', '......'] },
         ],
     },
     /**
@@ -290,10 +338,8 @@ export const FRAME_ANIM = {
     'frame-rgb': {
         tint: 'r', kind: 'hue', duration: 5,
         states: [
-            {
-                corner: ['rrrrrr', 'rr....', 'r.....', 'r.....', 'r.....', 'r.....'],
-                edge: ['rrrrrr', 'r.....', '......', '......', '......', '......']
-            },
+            { corner: ['rrrrrr', 'rr....', 'r.....', 'r.....', 'r.....', 'r.....'],
+              edge: ['rrrrrr', 'r.....', '......', '......', '......', '......'] },
         ],
     },
 
@@ -309,6 +355,18 @@ export const FRAME_ANIM = {
      * point serait apparu aux quatre angles, et quatre témoins ne sont plus un
      * témoin.
      */
+    /**
+     * Le voyant d'enregistrement.
+     *
+     * Le point est DÉCOLLÉ du filet — un pixel de vide sur ses deux côtés — et
+     * passe de deux à trois pixels. Collé au cadre, il se lisait comme un
+     * épaississement de la bordure plutôt que comme une lampe ; l'écart est ce
+     * qui en fait un objet distinct.
+     *
+     * Seul l'angle haut-droit le porte, là où tous les appareils le placent.
+     * D'où les quatre coins désignés à la main : par symétrie, quatre témoins
+     * s'allumeraient, et quatre témoins ne sont plus un témoin.
+     */
     'frame-rec': {
         tint: 'r', kind: 'steps', duration: 2.8,
         states: [
@@ -317,7 +375,7 @@ export const FRAME_ANIM = {
                 edge: ['wwwwww', '......', '......', '......', '......', '......'],
                 coins: {
                     hg: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-                    hd: ['wwwwww', '.rr..w', '.rr..w', '.....w', '.....w', '.....w'],
+                    hd: ['wwwwww', '.....w', '.rrr.w', '.rrr.w', '.rrr.w', '.....w'],
                     bg: ['w.....', 'w.....', 'w.....', 'w.....', 'w.....', 'wwwwww'],
                     bd: ['.....w', '.....w', '.....w', '.....w', '.....w', 'wwwwww'],
                 },
@@ -339,36 +397,26 @@ export const FRAME_ANIM = {
     'frame-braise': {
         tint: 'r', kind: 'fade', duration: 3.6,
         states: [
-            {
-                corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
-                edge: ['r.r.r.', '......', '......', '......', '......', '......']
-            },
-            {
-                corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
-                edge: ['.y.y.y', '......', '......', '......', '......', '......']
-            },
+            { corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+              edge: ['r.r.r.', '......', '......', '......', '......', '......'] },
+            { corner: ['yyyyyy', 'y.....', 'y.....', 'y.....', 'y.....', 'y.....'],
+              edge: ['.y.y.y', '......', '......', '......', '......', '......'] },
         ],
     },
     'frame-relais': {
         tint: 'm', kind: 'fade', duration: 6,
         states: [
-            {
-                corner: ['mmmmmm', 'm.....', 'm.....', 'm.....', 'm.....', 'm.....'],
-                edge: ['mmm...', 'mmm...', '......', '......', '......', '......']
-            },
-            {
-                corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'c.....', 'c.....'],
-                edge: ['...ccc', '...ccc', '......', '......', '......', '......']
-            },
+            { corner: ['mmmmmm', 'm.....', 'm.....', 'm.....', 'm.....', 'm.....'],
+              edge: ['mmm...', 'mmm...', '......', '......', '......', '......'] },
+            { corner: ['cccccc', 'c.....', 'c.....', 'c.....', 'c.....', 'c.....'],
+              edge: ['...ccc', '...ccc', '......', '......', '......', '......'] },
         ],
     },
     'frame-souffle': {
         tint: 'w', kind: 'breathe', duration: 5.5,
         states: [
-            {
-                corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-                edge: ['wwwwww', '..ww..', '......', '......', '......', '......']
-            },
+            { corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
+              edge: ['wwwwww', '..ww..', '......', '......', '......', '......'] },
         ],
     },
 };
@@ -413,16 +461,16 @@ export function frameStylesheet() {
     out.push(tints.join('\n'));
 
     for (const [id, art] of Object.entries(FRAME_ART)) {
-        out.push(`.cos-f-${id.replace('frame-', '')}{border-image-source:${frameSource(art.corner, art.edge, art.coins)}}`);
+        out.push(`.cos-f-${id.replace('frame-', '')}{border-image-source:${frameSource(art.corner, art.edge, art)}}`);
     }
 
     for (const [id, art] of Object.entries(FRAME_ANIM)) {
         const key = id.replace('frame-', '');
-        const first = frameSource(art.states[0].corner, art.states[0].edge, art.states[0].coins);
+        const first = frameSource(art.states[0].corner, art.states[0].edge, art.states[0]);
 
         if (art.kind === 'steps') {
             const frames = art.states
-                .map((s, i) => `${Math.round((i / art.states.length) * 100)}%{border-image-source:${frameSource(s.corner, s.edge, s.coins)}}`)
+                .map((s, i) => `${Math.round((i / art.states.length) * 100)}%{border-image-source:${frameSource(s.corner, s.edge, s)}}`)
                 .join('');
             out.push(`@keyframes cosf-${key}{${frames}}`);
             out.push(`.cos-f-${key}{border-image-source:${first};animation:cosf-${key} ${art.duration}s steps(1,end) infinite}`);
@@ -433,7 +481,7 @@ export function frameStylesheet() {
             // Deux dessins superposés, une opacité qui passe de l'un à l'autre.
             // Le pseudo-élément porte le second et se cale sur la bordure grâce à
             // un `inset` négatif de la largeur de bande.
-            const second = frameSource(art.states[1].corner, art.states[1].edge, art.states[1].coins);
+            const second = frameSource(art.states[1].corner, art.states[1].edge, art.states[1]);
             out.push(`.cos-f-${key}{border-image-source:${first};position:relative}`);
             out.push(
                 `.cos-f-${key}::after{content:'';position:absolute;inset:calc(-1 * var(--cos-band,${TILE}px));` +

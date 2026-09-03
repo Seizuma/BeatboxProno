@@ -68,7 +68,7 @@ function stroke(g, [x0, y0], [x1, y1], ch, thickness = 1) {
     const sx = x0 < x1 ? 1 : -1;
     const sy = y0 < y1 ? 1 : -1;
     let err = dx - dy;
-    for (; ;) {
+    for (;;) {
         for (let k = 0; k < thickness; k += 1) {
             if (g[y0] && g[y0][x0 + k] !== undefined) g[y0][x0 + k] = ch;
         }
@@ -123,11 +123,6 @@ export const BAND_ART = {
             }
         }
     }),
-    skyline: band((g) => {
-        let y = 0; let i = 0;
-        const hs = [4, 7, 3, 9, 5, 6];
-        while (y < 64) { const h = hs[i % 6]; fill(g, y, y + h, 2, 9, 'd'); fill(g, y, y, 2, 9, 'c'); y += h + 2; i += 1; }
-    }),
     film: band((g) => {
         fill(g, 0, 63, 1, 10, 'd');
         for (let y = 1; y < 64; y += 4) { fill(g, y, y + 1, 2, 3, 'k'); fill(g, y, y + 1, 8, 9, 'k'); }
@@ -156,7 +151,7 @@ export const BAND_ART = {
         // Largeurs irrégulières, mais dont la somme divise douze pour que le
         // motif se raccorde d'un bord à l'autre de la bande.
         const plis = [[0, 2, 'r'], [2, 3, 'm'], [3, 4, 'k'], [4, 6, 'r'], [6, 7, 'm'],
-        [7, 8, 'k'], [8, 10, 'r'], [10, 11, 'm'], [11, 12, 'k']];
+                      [7, 8, 'k'], [8, 10, 'r'], [10, 11, 'm'], [11, 12, 'k']];
         for (const [x0, x1, c] of plis) fill(g, 0, 63, x0, x1 - 1, c);
 
         // Pas de bande horizontale : j'en avais mis pour figurer le drapé, elles
@@ -177,11 +172,6 @@ export const BAND_ART = {
             const y = i * 8 + 2; const left = i % 2 === 0; const c = cs[i % 6];
             for (let k = 0; k < 4; k += 1) fill(g, y + k, y + k, left ? 1 + k : 7, left ? 4 : 10 - k, c);
         }
-    }),
-    tape: band((g) => {
-        fill(g, 0, 63, 3, 8, 'd');
-        for (let y = 0; y < 64; y += 2) fill(g, y, y, 3, 8, 'k');
-        for (let y = 0; y < 64; y += 16) fill(g, y, y + 2, 1, 10, 'y');
     }),
     /**
      * La texture manquante.
