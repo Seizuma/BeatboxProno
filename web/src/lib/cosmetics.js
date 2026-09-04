@@ -107,7 +107,11 @@ export const ITEMS = [
 
        `css` reste la classe posée par FramedAvatar. Elle est engendrée avec la
        feuille, donc il n'y a rien à tenir d'accord à la main. */
-    { id: 'frame-filet', slot: 'frame', price: 15, css: 'cos-f-filet',
+    // Gratuit, et c'est le seul cadre à l'être : il faut un objet qu'on porte
+    // sans avoir rien gagné, sinon un compte neuf n'a aucune raison d'ouvrir la
+    // boutique. Le filet est le bon candidat — un trait d'un pixel, il habille
+    // sans rien promettre, et il ne dévalue aucun des payants.
+    { id: 'frame-filet', slot: 'frame', price: 0, css: 'cos-f-filet',
       name: { en: 'Hairline', fr: 'Filet' } },
     { id: 'frame-equerres', slot: 'frame', price: 25, css: 'cos-f-equerres',
       name: { en: 'Corner brackets', fr: 'Équerres' } },

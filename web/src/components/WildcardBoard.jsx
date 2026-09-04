@@ -36,20 +36,23 @@ import RankingBoard from './RankingBoard.jsx';
  *
  * ─── D'où vient le plateau personnel ────────────────────────────────────────
  *
- * De deux sources réunies :
+ * De la POCHE du pronostic : `pool`, une liste d'identifiants enregistrée avec
+ * le reste, qui contient tout ce que ce joueur a mis sur son plateau — classés
+ * compris.
  *
- *   — les participants que ce joueur a CLASSÉS, lus depuis son `order`. C'est
- *     la partie persistante : ses rangs sont enregistrés, donc son plateau se
- *     reconstitue au rechargement sans qu'on ait besoin de le stocker ailleurs.
- *   — ceux qu'il vient de piocher et n'a pas encore placés, tenus ici, le temps
- *     de la session.
+ * La première version la déduisait des rangs et gardait le reste en mémoire du
+ * navigateur. C'était faux dans les deux sens. Un nom cherché mais pas encore
+ * placé n'a pas de rang : rafraîchir la page effaçait une recherche de quinze
+ * noms, et rien ne prévenait puisque les noms déjà classés, eux, revenaient.
+ * Chercher un nom coûte du temps ; le classer n'en coûte aucun. Perdre le
+ * travail cher pour conserver le travail gratuit était l'inverse de ce qu'il
+ * fallait faire.
  *
- * La colonne « à placer » est un plan de travail, pas une partie du pronostic :
- * un nom qu'on n'a jamais classé ne dit rien de ce qu'on prévoit. Le perdre au
- * rechargement est donc cohérent — et c'est déjà le sort de tout ce qui n'a pas
- * été enregistré sur cette page.
+ * `order` reste lu en complément, et uniquement en repli : les pronostics
+ * déposés avant cette colonne n'ont pas de poche, et leur plateau doit
+ * continuer de s'afficher.
  */
-export default function WildcardBoard({ category, phase, order, onChange, locked }) {
+export default function WildcardBoard({ category, phase, order, onChange, pool, onPool, locked }) {
     const { t } = useI18n();
 
     const [artists, setArtists] = useState([]);
@@ -57,18 +60,8 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
     const [busy, setBusy] = useState(null);
     const [error, setError] = useState(null);
 
-    /**
-     * Les participants piochés cette session et pas encore classés.
-     *
-     * Uniquement ceux-là : les autres se déduisent de `order`. Tenir ici une
-     * liste complète obligerait à la garder d'accord avec les rangs à chaque
-     * glisser-déposer, et deux états qui décrivent la même chose finissent
-     * toujours par diverger.
-     */
-    const [picked, setPicked] = useState([]);
-
-    // Changement de catégorie : le plan de travail ne suit pas.
-    useEffect(() => { setPicked([]); setQuery(''); }, [category.id]);
+    // Changement de catégorie : la recherche en cours ne suit pas.
+    useEffect(() => { setQuery(''); }, [category.id]);
 
     useEffect(() => {
         api.get('/artists').then(({ artists: list }) => setArtists(list)).catch(() => { });
@@ -77,21 +70,23 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
     /**
      * Le plateau de CE joueur.
      *
-     * Une `Map` plutôt qu'une concaténation filtrée : un participant peut être à
-     * la fois classé et présent dans la pioche de session — on l'a placé après
-     * l'avoir cherché — et il ne doit apparaître qu'une fois.
+     * La poche fait foi, et l'ordre des identifiants qu'elle contient est celui
+     * dans lequel les noms ont été piochés : la colonne « à placer » garde donc
+     * l'ordre d'arrivée, et un nom fraîchement ajouté apparaît en bas plutôt
+     * qu'au milieu.
      *
-     * Les classés d'abord, dans l'ordre du référentiel, puis les piochés : c'est
-     * ce qui fait qu'un nom fraîchement ajouté arrive en bas de la colonne « à
-     * placer » plutôt qu'au milieu.
+     * `order` complète en repli, pour les pronostics enregistrés avant que la
+     * poche existe : leurs classés sont dans les rangs et nulle part ailleurs.
+     * Une `Map` plutôt qu'une concaténation filtrée, puisqu'un identifiant peut
+     * figurer dans les deux.
      */
     const mine = useMemo(() => {
-        const all = category.contenders ?? [];
+        const byId = new Map((category.contenders ?? []).map((c) => [c.id, c]));
         const map = new Map();
-        for (const c of all) if (order.includes(c.id)) map.set(c.id, c);
-        for (const c of picked) if (!map.has(c.id)) map.set(c.id, c);
+        for (const id of pool ?? []) if (byId.has(id)) map.set(id, byId.get(id));
+        for (const id of order) if (!map.has(id) && byId.has(id)) map.set(id, byId.get(id));
         return [...map.values()];
-    }, [category.contenders, order, picked]);
+    }, [category.contenders, order, pool]);
 
     /**
      * Les artistes déjà sur MON plateau : on ne me les repropose pas.
@@ -136,10 +131,12 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
             // et le serveur renvoie alors le même. C'est voulu : le référentiel
             // est commun, seul le plateau est personnel.
             //
-            // Et il atterrit dans le plan de travail, pas dans le classement :
-            // piocher, ce n'est pas classer. Le pousser d'office dans le top lui
-            // donnait la dernière place sans que personne l'ait demandé.
-            setPicked((p) => (p.some((c) => c.id === contender.id) ? p : [...p, contender]));
+            // Et il atterrit dans la poche, pas dans le classement : piocher,
+            // ce n'est pas classer. Le pousser d'office dans le top lui donnait
+            // la dernière place sans que personne l'ait demandé.
+            onPool(
+                (pool ?? []).includes(contender.id) ? (pool ?? []) : [...(pool ?? []), contender.id]
+            );
             setQuery('');
         } catch (e) {
             setError(e.message);
@@ -147,6 +144,19 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
             setBusy(null);
         }
     }
+
+    /**
+     * Sortir un participant du plateau.
+     *
+     * Des deux listes à la fois, et c'est ce qui distingue ce geste du « × » de
+     * la colonne classée : celui-là renvoie le nom dans « à placer », celui-ci
+     * le fait disparaître. Ne le retirer que de la poche laisserait un classé
+     * survivre par le repli sur `order` — il serait revenu tout seul.
+     */
+    const discard = (id) => {
+        onPool((pool ?? []).filter((x) => x !== id));
+        if (order.includes(id)) onChange(order.filter((x) => x !== id));
+    };
 
     const places = phase.qualifierCount ?? 0;
     const waiting = mine.length - order.length;
@@ -224,6 +234,7 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
                 contenders={mine}
                 order={order}
                 onChange={onChange}
+                onDiscard={locked ? undefined : discard}
                 locked={locked}
             />
 

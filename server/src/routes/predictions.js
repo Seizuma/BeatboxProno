@@ -42,6 +42,28 @@ const contentSchema = z.object({
     })
     .nullable()
     .optional(),
+
+  /**
+   * La pioche d'une sélection sur vidéo : { [phaseId]: [contenderId, ...] }.
+   *
+   * Le plateau que le joueur s'est constitué, classés compris. Il ne se déduit
+   * PAS des rangs : un nom cherché mais pas encore placé n'a pas de rang, et
+   * c'est justement lui qu'on perdait au rechargement.
+   *
+   * Les identifiants ne sont pas vérifiés contre la base, pour la même raison
+   * que le tampon : un participant supprimé par l'organisateur rendrait le
+   * pronostic indéposable, ce qui punirait le joueur d'une décision qui n'est
+   * pas la sienne. Le client ignore ce qu'il ne sait pas résoudre.
+   *
+   * Les bornes, en revanche, sont ici : cinq cents entrées par phase suffisent
+   * largement à une wildcard de GBB, et sans plafond la colonne accepterait
+   * n'importe quel volume.
+   */
+  pool: z
+    .record(z.string(), z.array(z.string().max(60)).max(500))
+    .nullable()
+    .optional(),
+
   ranks: z
     .array(z.object({ phaseId: z.string(), contenderId: z.string(), rank: z.number().int().min(1) }))
     .default([]),
@@ -360,7 +382,15 @@ predictionRouter.put('/:predictionId', async (req, res) => {
     // `undefined` laisse la colonne tranquille, `null` l'efface : c'est la
     // distinction que Prisma fait déjà, et elle tombe juste ici — un client qui
     // n'envoie pas la clé ne veut rien changer, un client qui envoie null retire.
-    const head = body.stamp === undefined ? {} : { stamp: body.stamp };
+    //
+    // La pioche suit la même règle. Elle en a d'autant plus besoin que seules
+    // les catégories wildcard l'envoient : partout ailleurs la clé est absente,
+    // et la traiter comme un effacement viderait le plateau du joueur au
+    // premier enregistrement fait depuis un autre écran.
+    const head = {
+      ...(body.stamp === undefined ? {} : { stamp: body.stamp }),
+      ...(body.pool === undefined ? {} : { pool: body.pool }),
+    };
 
     if (body.label) {
       await tx.prediction.update({

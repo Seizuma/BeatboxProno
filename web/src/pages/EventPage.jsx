@@ -14,6 +14,8 @@ import Modal from '../components/Modal.jsx';
 import { seedFromContenders } from '../lib/bracket.js';
 import useUnsavedGuard from '../lib/useUnsavedGuard.js';
 import BracketBoard from '../components/BracketBoard.jsx';
+import PhaseResult from '../components/PhaseResult.jsx';
+import ReadingBoards from '../components/ReadingBoards.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -49,11 +51,20 @@ function fingerprint(state) {
     ])
     .filter(([, list]) => list.length);
 
-  // Le tampon a quitté cette page : il se pose dans la fenêtre d'export, par sa
-  // propre route, et n'entre plus dans le contenu enregistré ici. Le garder dans
-  // l'empreinte signalerait une modification à chaque fois qu'on tamponne
-  // ailleurs, et le bouton « Enregistrer » resterait allumé sans rien à écrire.
-  return JSON.stringify({ orders, picks });
+  // La poche compte, elle. Piocher quinze noms sans en placer un seul est un
+  // vrai travail : si l'empreinte l'ignorait, le bouton « Enregistrer » resterait
+  // éteint et la page laisserait partir sans prévenir — exactement la perte
+  // qu'on cherche à empêcher.
+  //
+  // Les listes sont prises telles quelles, ordre compris : l'ordre de pioche
+  // est celui de la colonne « à placer », donc le changer EST une modification.
+  const pool = Object.fromEntries(
+    Object.entries(state?.pool ?? {}).filter(([, list]) => (list ?? []).length)
+  );
+
+  // Le tampon, lui, a quitté cette page : il se pose dans la fenêtre d'export,
+  // par sa propre route.
+  return JSON.stringify({ orders, picks, pool });
 }
 const key = (round, slot) => `${round}:${slot}`;
 
@@ -80,6 +91,10 @@ export default function EventPage() {
   const [naming, setNaming] = useState(null);
   // L'empreinte de chaque version telle qu'elle est enregistrée côté serveur.
   const [baseline, setBaseline] = useState({});
+  // Les lectures de la foule sur CET événement. Nulles tant que la compète
+  // n'est pas terminée : voir « sous-coté » face à un artiste qui n'a pas fini
+  // sa compète serait un verdict rendu à la mi-temps.
+  const [readings, setReadings] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -97,6 +112,31 @@ export default function EventPage() {
       .catch((e) => setError(e.message));
   }, [slug]);
 
+  /**
+   * Les lectures de la foule, chargées à part.
+   *
+   * Deux requêtes plutôt qu'une : elles sortent d'un calcul d'agrégation sur
+   * tous les pronostics déposés, qui n'a rien à faire dans la route qui sert
+   * l'éditeur. Les greffer là ralentirait chaque ouverture de page pour une
+   * information que la plupart des visites n'affichent jamais.
+   *
+   * Un échec est avalé : le tableau des joueurs n'est pas la raison d'être de
+   * cette page, et une compète sans assez d'avis renvoie simplement des listes
+   * vides que le composant sait taire.
+   */
+  useEffect(() => {
+    if (data?.event?.status !== 'FINISHED') {
+      setReadings(null);
+      return;
+    }
+    // « /scoreboard » et non « /stats » : les bloqueurs de pub coupent les
+    // requêtes contenant « /stats? » avant même qu'elles partent.
+    api
+      .get(`/scoreboard?event=${encodeURIComponent(slug)}`)
+      .then((board) => setReadings(board.readings ?? null))
+      .catch(() => setReadings(null));
+  }, [slug, data?.event?.status]);
+
   const category = useMemo(
     () => data?.event.categories.find((c) => c.id === activeId) ?? null,
     [data, activeId]
@@ -110,7 +150,7 @@ export default function EventPage() {
   const unsaved = useMemo(() => {
     const out = [];
     for (const [k, content] of Object.entries(draft)) {
-      const empty = fingerprint({ orders: {}, picks: {} });
+      const empty = fingerprint({ orders: {}, picks: {}, pool: {} });
       if (fingerprint(content) === (baseline[k] ?? empty)) continue;
 
       // Retrouver la catégorie : soit la clé provisoire, soit l'id de version.
@@ -151,7 +191,7 @@ export default function EventPage() {
   // l'éditeur reste utilisable, et la version est créée au premier
   // enregistrement. Sans cela, une catégorie neuve restait grisée.
   const stateKey = currentId ?? `new:${activeId}`;
-  const state = draft[stateKey] ?? { orders: {}, picks: {} };
+  const state = draft[stateKey] ?? { orders: {}, picks: {}, pool: {} };
   const eventClosed = event.status === 'FINISHED';
   // En cours : la compétition a démarré, les pronostics sont figés. On peut
   // encore tout consulter — versions comprises — mais plus rien modifier.
@@ -159,7 +199,7 @@ export default function EventPage() {
   const readOnly = eventClosed || eventLive;
 
   const update = (patch) =>
-    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
+    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {}, pool: {} }), ...patch } }));
 
   // La date butoir de l'événement ferme tout. Absente — wildcards ouvertes,
   // date de la compète encore inconnue — rien ne ferme globalement : seuls les
@@ -208,6 +248,10 @@ export default function EventPage() {
       battles: Object.values(state.picks).flatMap((byBattle) =>
         Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
       ),
+      // La poche des sélections sur vidéo. Envoyée telle quelle, y compris
+      // vide : c'est ce qui permet de retirer le dernier nom de son plateau.
+      pool: state.pool ?? {},
+
       // La clé `stamp` est délibérément ABSENTE. Le schéma la rend facultative,
       // et omise, le serveur conserve celle qui est en base. L'envoyer d'ici
       // effacerait le tampon posé entre-temps depuis la fenêtre d'export : cette
@@ -233,7 +277,7 @@ export default function EventPage() {
       label: 'Mon pronostic',
     });
     // Le contenu saisi sous la clé provisoire suit la nouvelle version.
-    setDraft((d) => ({ ...d, [prediction.id]: d[`new:${activeId}`] ?? { orders: {}, picks: {} } }));
+    setDraft((d) => ({ ...d, [prediction.id]: d[`new:${activeId}`] ?? { orders: {}, picks: {}, pool: {} } }));
     setCurrent((c) => ({ ...c, [activeId]: prediction.id }));
     return prediction.id;
   }
@@ -299,7 +343,7 @@ export default function EventPage() {
         // La feuille blanche est posée AVANT le rechargement : `readVersion`
         // renverrait un contenu vide de toute façon, mais l'écran garderait
         // l'ancien affiché le temps de l'aller-retour.
-        setDraft((d) => ({ ...d, [prediction.id]: { orders: {}, picks: {} } }));
+        setDraft((d) => ({ ...d, [prediction.id]: { orders: {}, picks: {}, pool: {} } }));
         await refreshVersions(activeId, prediction.id);
         setNaming(null);
         setFlash({ ok: true, at: Date.now(), text: t('draft.blank.done', { name: prediction.label }) });
@@ -551,6 +595,24 @@ export default function EventPage() {
         </div>
       )}
 
+      {/* Les lectures de la foule, sur l'événement et une fois qu'il est fini.
+
+          Elles vivaient en bas de la page de classement, où elles répondaient à
+          une question que cette page ne posait pas : le classement dit qui
+          marque le plus, celles-ci disent quels ARTISTES la foule a mal placés.
+          Sans filtre actif, elles mélangeaient de surcroît toutes les compètes
+          de l'histoire du site, et « sous-coté » n'y voulait plus dire
+          grand-chose.
+
+          Après le tableau du joueur et non avant : on vient ici pour son propre
+          pronostic, et ce que la foule a cru n'est intéressant qu'une fois qu'on
+          sait ce qu'on avait cru soi-même. */}
+      {eventClosed && readings?.sampled > 0 && (
+        <div className="stack" style={{ gap: '1.5rem', marginTop: '2rem' }}>
+          <ReadingBoards readings={readings} />
+        </div>
+      )}
+
       <Toast
         message={flash?.text}
         ok={flash?.ok}
@@ -761,8 +823,12 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 category={category}
                 phase={phase}
                 order={state.orders[phase.id] ?? []}
+                pool={state.pool?.[phase.id] ?? []}
                 locked={isLocked}
                 onChange={(next) => changeOrder(phase, next)}
+                onPool={(next) =>
+                  update({ pool: { ...(state.pool ?? {}), [phase.id]: next } })
+                }
               />
             ) : RANKING_TYPES.includes(phase.type) ? (
               <RankingBoard
@@ -785,6 +851,23 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 onChange={(picks) =>
                   update({ picks: { ...state.picks, [phase.id]: picks } })
                 }
+              />
+            )}
+
+            {/* Ce qui s'est réellement passé, sous le pronostic et non à sa
+                place : les deux ne valent que l'un en face de l'autre.
+
+                La condition est la publication de la PHASE, pas la fin de
+                l'événement — une compète publie ses wildcards des semaines
+                avant son tableau, et faire attendre la comparaison jusqu'au
+                bout la rendrait muette au moment où elle intéresse le plus.
+                Le composant se tait tout seul tant que rien n'est publié. */}
+            {phase.resolved && (
+              <PhaseResult
+                phase={phase}
+                contenders={contenders}
+                order={state.orders[phase.id] ?? []}
+                picks={state.picks[phase.id] ?? {}}
               />
             )}
           </section>
@@ -819,7 +902,12 @@ function readVersion(saved) {
       scoreB: b.scoreB,
     };
   }
-  return { orders, picks };
+  // La poche telle qu'elle a été enregistrée. Les pronostics antérieurs à cette
+  // colonne n'en ont pas : `{}` les laisse retomber sur leurs rangs, qui
+  // restent la source de vérité de ce qui est classé.
+  const pool = saved.pool && typeof saved.pool === 'object' ? saved.pool : {};
+
+  return { orders, picks, pool };
 }
 
 function hydrate({ event, myPredictions }) {

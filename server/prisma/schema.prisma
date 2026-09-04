@@ -354,6 +354,18 @@ model Prediction {
   /// interroger là-dedans. Même choix que `seedPairs` sur Phase.
   stamp     Json?
 
+  /// La pioche d'une sélection sur vidéo : { [phaseId]: [contenderId, ...] }.
+  ///
+  /// Le plateau que CE joueur s'est constitué, classés compris. Il ne se déduit
+  /// pas des rangs : un nom qu'on a cherché sans encore le placer n'a pas de
+  /// rang, et c'était tout le bug — la pioche disparaissait au rechargement.
+  ///
+  /// JSON plutôt qu'une table : rien n'a jamais à être interrogé là-dedans, on
+  /// lit toujours la liste entière d'un pronostic. Une table
+  /// `PredictedPoolEntry` aurait ajouté trois relations pour un tableau de
+  /// chaînes. Même raisonnement que `stamp` et `seedPairs`.
+  pool      Json?
+
   // Les fils de discussion ouverts sur ce pronostic, un par groupe privé.
   comments      GroupComment[]
   notifications Notification[]
