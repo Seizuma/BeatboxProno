@@ -588,7 +588,7 @@ const DICT = {
     'privacy.contact.lede':
       'Use the postbox on the home page, or reach the site owner on the Discord. There is one person behind this site, and they read everything.',
 
-    'shop.eyebrow': 'P470 · SHOP',
+    'shop.eyebrow': 'SHOP',
     'shop.title': 'The shop',
     'shop.balance': 'wallet',
     'shop.balance.lede':
@@ -1255,7 +1255,7 @@ const DICT = {
     'privacy.contact.lede':
       'Passez par la boîte à idées de la page d’accueil, ou joignez le responsable du site sur le Discord. Il y a une seule personne derrière ce site, et elle lit tout.',
 
-    'shop.eyebrow': 'P470 · BOUTIQUE',
+    'shop.eyebrow': 'BOUTIQUE',
     'shop.title': 'La boutique',
     'shop.balance': 'porte-monnaie',
     'shop.balance.lede':
@@ -1343,15 +1343,15 @@ const DICT = {
     'badge.PODIUM_1.name': 'Vainqueur',
 
     'badge.PARTICIPANT.detail':
-      'Un pronostic déposé sur la compétition. Quel que soit son score.',
+      'Un pronostic déposé sur la compétition.',
     'badge.BRONZE.detail':
-      'Top 60 % des pronostiqueurs. Seul le palier le plus haut atteint est conservé.',
+      'Top 60 % des pronostiqueurs.',
     'badge.SILVER.detail':
       'Top 30 % des pronostiqueurs.',
     'badge.GOLD.detail':
-      'Top 5 % des pronostiqueurs. Sur vingt joueurs, c’est la première place seule.',
+      'Top 5 % des pronostiqueurs.',
     'badge.PODIUM_3.detail':
-      'Troisième meilleur pronostiqueur. Les ex æquo partagent la place.',
+      'Troisième meilleur pronostiqueur.',
     'badge.PODIUM_2.detail':
       'Deuxième meilleur pronostiqueur de la compète.',
     'badge.PODIUM_1.detail':

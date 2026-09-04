@@ -73,8 +73,12 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
             });
             // Le participant peut déjà exister — quelqu'un d'autre l'a proposé.
             // On l'ajoute au plateau seulement s'il n'y est pas.
+            //
+            // Et on l'ajoute au PLATEAU seulement : piocher, ce n'est pas
+            // classer. L'artiste atterrit dans « à placer », et c'est le joueur
+            // qui décide ensuite du rang. Le pousser d'office dans le classement
+            // lui donnait la dernière place sans que personne l'ait demandé.
             setPool((p) => (p.some((c) => c.id === contender.id) ? p : [...p, contender]));
-            onChange([...order, contender.id]);
             setQuery('');
         } catch (e) {
             setError(e.message);
@@ -140,16 +144,24 @@ export default function WildcardBoard({ category, phase, order, onChange, locked
             </div>
 
             {/* Le classement, inchangé. La ligne de coupe passe au nombre de
-                places : au-dessus, ceux qu'on annonce qualifiés. */}
+                places : au-dessus, ceux qu'on annonce qualifiés.
+
+                Le plateau ENTIER lui est confié, et pas seulement les artistes
+                déjà classés : c'est lui qui répartit entre les deux colonnes.
+                Filtré sur `order`, retirer quelqu'un du classement le faisait
+                disparaître de la fiche — plus dans le top, plus dans « à
+                placer », et introuvable à la recherche puisqu'il restait
+                engagé. Un artiste piocché ne doit jamais pouvoir sortir de
+                l'écran. */}
             <RankingBoard
                 phase={phase}
-                contenders={pool.filter((c) => order.includes(c.id))}
+                contenders={pool}
                 order={order}
                 onChange={onChange}
                 locked={locked}
             />
 
-            {order.length === 0 && (
+            {pool.length === 0 && (
                 <p className="empty">{t('wc.board.empty')}</p>
             )}
         </div>

@@ -361,25 +361,18 @@ export const FRAME_ANIM = {
         ],
     },
 
-    /**
+        /**
      * Le voyant d'enregistrement.
      *
-     * Le cadre entier clignotait en rouge, ce qui n'est pas ce que fait une
-     * caméra : le boîtier ne bat pas, seul son témoin bat. Le contour est donc
-     * fixe et blanc, et un unique point rouge s'allume dans l'angle haut-droit —
-     * là où tous les appareils le placent.
+     * Le contour est ROUGE et fixe, de la même teinte que la lampe. Il était
+     * blanc, et le contraste blanc/rouge faisait lire le point comme un défaut
+     * du cadre plutôt que comme un témoin. En monochrome, ce qui bouge est le
+     * seul événement de l'image : la lampe apparaît et disparaît, le boîtier ne
+     * bouge pas — c'est exactement ce que fait une caméra.
      *
-     * C'est le premier cadre à utiliser les coins désignés : par symétrie, le
-     * point serait apparu aux quatre angles, et quatre témoins ne sont plus un
-     * témoin.
-     */
-    /**
-     * Le voyant d'enregistrement.
-     *
-     * Le point est DÉCOLLÉ du filet — un pixel de vide sur ses deux côtés — et
-     * passe de deux à trois pixels. Collé au cadre, il se lisait comme un
-     * épaississement de la bordure plutôt que comme une lampe ; l'écart est ce
-     * qui en fait un objet distinct.
+     * Le point reste DÉCOLLÉ du filet — un pixel de vide sur ses deux côtés.
+     * Maintenant qu'ils sont de la même couleur, cet écart est la seule chose
+     * qui les distingue : collé, la lampe deviendrait un épaississement.
      *
      * Seul l'angle haut-droit le porte, là où tous les appareils le placent.
      * D'où les quatre coins désignés à la main : par symétrie, quatre témoins
@@ -389,23 +382,23 @@ export const FRAME_ANIM = {
         tint: 'r', kind: 'steps', duration: 2.8,
         states: [
             {
-                corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-                edge: ['wwwwww', '......', '......', '......', '......', '......'],
+                corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+                edge: ['rrrrrr', '......', '......', '......', '......', '......'],
                 coins: {
-                    hg: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-                    hd: ['wwwwww', '.....w', '.rrr.w', '.rrr.w', '.rrr.w', '.....w'],
-                    bg: ['w.....', 'w.....', 'w.....', 'w.....', 'w.....', 'wwwwww'],
-                    bd: ['.....w', '.....w', '.....w', '.....w', '.....w', 'wwwwww'],
+                    hg: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+                    hd: ['rrrrrr', '.....r', '.rrr.r', '.rrr.r', '.rrr.r', '.....r'],
+                    bg: ['r.....', 'r.....', 'r.....', 'r.....', 'r.....', 'rrrrrr'],
+                    bd: ['.....r', '.....r', '.....r', '.....r', '.....r', 'rrrrrr'],
                 },
             },
             {
-                corner: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-                edge: ['wwwwww', '......', '......', '......', '......', '......'],
+                corner: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+                edge: ['rrrrrr', '......', '......', '......', '......', '......'],
                 coins: {
-                    hg: ['wwwwww', 'w.....', 'w.....', 'w.....', 'w.....', 'w.....'],
-                    hd: ['wwwwww', '.....w', '.....w', '.....w', '.....w', '.....w'],
-                    bg: ['w.....', 'w.....', 'w.....', 'w.....', 'w.....', 'wwwwww'],
-                    bd: ['.....w', '.....w', '.....w', '.....w', '.....w', 'wwwwww'],
+                    hg: ['rrrrrr', 'r.....', 'r.....', 'r.....', 'r.....', 'r.....'],
+                    hd: ['rrrrrr', '.....r', '.....r', '.....r', '.....r', '.....r'],
+                    bg: ['r.....', 'r.....', 'r.....', 'r.....', 'r.....', 'rrrrrr'],
+                    bd: ['.....r', '.....r', '.....r', '.....r', '.....r', 'rrrrrr'],
                 },
             },
         ],
@@ -481,13 +474,26 @@ export function frameStylesheet() {
      * `round` aurait cassé en étirant la tuile pour la faire tomber juste.
      */
     for (const [sel, w] of SIZES) {
-        out.push(`${sel}[class*="cos-f-"]{border-width:${w}px;border-image-width:${w}px}`);
+        // `--cos-band` EST la largeur de bande, et elle doit descendre jusqu'au
+        // pseudo-élément des cadres fondus : sans cette déclaration, celui-ci
+        // lisait son repli de six pixels pendant que la boîte en portait douze,
+        // et les deux dessins se voyaient l'un DANS l'autre au lieu de l'un SUR
+        // l'autre. Le symptôme n'apparaissait qu'en `lg`, la seule taille qui
+        // s'écarte de la tuile.
+        out.push(
+            `${sel}[class*="cos-f-"]{--cos-band:${w}px;border-width:${w}px;border-image-width:${w}px}`
+        );
     }
 
     // Sous cette taille, le dessin devient illisible : filet plein.
     const tints = [];
     for (const [id, art] of Object.entries({ ...FRAME_ART, ...FRAME_ANIM })) {
-        tints.push(`.cos-frame--xs.cos-f-${id.replace('frame-', '')}{border:2px solid ${PALETTE[art.tint]};border-image:none;animation:none}`);
+        const k = id.replace('frame-', '');
+        tints.push(`.cos-frame--xs.cos-f-${k}{border:2px solid ${PALETTE[art.tint]};border-image:none;animation:none}`);
+        // Le filet plein remplace le dessin : le second calque des cadres
+        // fondus n'a plus rien à recouvrir, et le laisser vivant repeignait un
+        // cadre de six pixels par-dessus une bordure de deux.
+        tints.push(`.cos-frame--xs.cos-f-${k}::after{display:none}`);
     }
     out.push(tints.join('\n'));
 
@@ -519,6 +525,7 @@ export function frameStylesheet() {
             out.push(
                 `.cos-f-${key}::after{content:'';position:absolute;inset:calc(-1 * var(--cos-band,${TILE}px));` +
                 `border:var(--cos-band,${TILE}px) solid transparent;border-image-slice:${TILE};` +
+                `border-image-width:var(--cos-band,${TILE}px);` +
                 `border-image-repeat:repeat;border-image-source:${second};image-rendering:pixelated;` +
                 `pointer-events:none;animation:cosf-fade ${art.duration}s ease-in-out infinite}`
             );
@@ -531,6 +538,7 @@ export function frameStylesheet() {
             out.push(
                 `.cos-f-${key}::after{content:'';position:absolute;inset:calc(-1 * var(--cos-band,${TILE}px));` +
                 `border:var(--cos-band,${TILE}px) solid transparent;border-image-slice:${TILE};` +
+                `border-image-width:var(--cos-band,${TILE}px);` +
                 `border-image-repeat:repeat;border-image-source:${first};image-rendering:pixelated;` +
                 `pointer-events:none;animation:cosf-hue ${art.duration}s linear infinite}`
             );

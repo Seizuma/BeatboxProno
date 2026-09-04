@@ -128,9 +128,64 @@ export const BAND_ART = {
         for (let y = 1; y < 64; y += 4) { fill(g, y, y + 1, 2, 3, 'k'); fill(g, y, y + 1, 8, 9, 'k'); }
         for (let y = 2; y < 64; y += 8) fill(g, y, y + 5, 4, 7, 'w');
     }),
+    /**
+     * Le câble.
+     *
+     * L'embout était un rectangle vert de six pixels sur six : ça ne
+     * ressemblait à rien de connu, et sur une bande qui se répète on le voyait
+     * huit fois par écran. C'est maintenant une XLR mâle — le connecteur de
+     * tous les micros, donc le seul embout qui a sa place à côté d'un site de
+     * beatbox.
+     *
+     * Ce qui la rend reconnaissable n'est pas le corps mais les TROIS BROCHES
+     * en triangle, deux en haut, une en bas. Tout le reste — manchon, loquet,
+     * bague, coquille — n'est là que pour les porter et donner l'échelle.
+     *
+     * Le connecteur est écrit ligne par ligne plutôt qu'en `fill` : à ce niveau
+     * de détail une suite d'appels ne se relit plus, alors qu'une grille se
+     * corrige à l'œil.
+     */
     cable: band((g) => {
-        for (let y = 0; y < 58; y += 1) { const x = 5 + Math.round(Math.sin(y / 5) * 3); fill(g, y, y, x, x + 1, 'w'); }
-        fill(g, 58, 63, 3, 8, 'g');
+        const HAUT = 44; // la ligne où commence le connecteur
+
+        // La gaine. L'amplitude du serpentement retombe à zéro sur les huit
+        // derniers pixels : un câble qui entrerait de biais dans un embout
+        // rigide aurait l'air arraché, alors qu'un vrai câble se redresse dans
+        // son manchon. C'est ce détail qui fait tenir l'ensemble.
+        for (let y = 0; y < HAUT; y += 1) {
+            const attenue = Math.min(1, (HAUT - y) / 8);
+            const x = 5 + Math.round(Math.sin(y / 5) * 3 * attenue);
+            fill(g, y, y, x, x + 1, 'w');
+        }
+
+        const XLR = [
+            '....dwwd....', // manchon : la gaine entre dans le connecteur
+            '...dwwwwd...',
+            '..dwwwwwwd..', // corps
+            '..dwwwwwwd..',
+            '..dwwkkwwd..', // le loquet de verrouillage
+            '..dwwwwwwd..',
+            '..dwwwwwwd..',
+            '..dddddddd..', // bague
+            '.dwwwwwwwwd.', // coquille, plus large que le corps
+            '.dwwwwwwwwd.',
+            '.dwkkkkkkwd.',
+            '.dwkkkkkkwd.',
+            '.dwyykkyywd.', // les deux broches du haut
+            '.dwyykkyywd.',
+            '.dwkkkkkkwd.',
+            '.dwkkyykkwd.', // la troisième, décalée : le triangle XLR
+            '.dwkkyykkwd.',
+            '.dwkkkkkkwd.',
+            '.dwwwwwwwwd.',
+            '..dddddddd..',
+        ];
+
+        XLR.forEach((ligne, i) => {
+            [...ligne].forEach((ch, x) => {
+                if (ch !== '.') g[HAUT + i][x] = ch;
+            });
+        });
     }),
     blocks: band((g) => {
         const cs = ['r', 'y', 'g', 'c', 'm', 'w'];
