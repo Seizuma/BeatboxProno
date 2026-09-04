@@ -148,9 +148,20 @@ predictionRouter.get('/mine', async (req, res) => {
  * reviendrait à lui faire deviner la réponse pour poser la question.
  *
  * Le joueur pioche donc dans le référentiel des artistes, et le participant est
- * créé à la volée s'il n'existe pas encore. La liste de la catégorie devient
- * l'union de ce que tout le monde a proposé : exactement le plateau des gens
- * que la communauté juge crédibles.
+ * créé à la volée s'il n'existe pas encore.
+ *
+ * ─── Ce référentiel est commun, le plateau d'un joueur ne l'est pas ──────────
+ *
+ * `Contender` est une table PARTAGÉE, et doit le rester : deux joueurs qui
+ * piochent Alem obtiennent le même participant, sinon le résultat officiel
+ * saisi par l'organisateur n'en récompenserait qu'un des deux. C'est tout le
+ * sens de la transaction ci-dessous.
+ *
+ * Mais la liste que voit un joueur sur son plateau n'est PAS cette table :
+ * c'est la petite sélection qu'il a lui-même retenue, et elle se déduit de ses
+ * propres rangs côté client. Confondre les deux donnait à chacun la pioche de
+ * tous les autres. Cette route ne renvoie donc jamais la liste entière, juste
+ * le participant demandé : à l'appelant de savoir ce qui est à lui.
  *
  * ─── Pourquoi un participant et pas un artiste ──────────────────────────────
  *
