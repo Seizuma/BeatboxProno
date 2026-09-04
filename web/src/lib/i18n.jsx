@@ -265,6 +265,8 @@ const DICT = {
     'export.share.unsupported': 'Your browser cannot share files. Download the image instead.',
     'export.hint':
       'The card carries the whole prediction: every ranking phase and every bracket round, with the picked winners and scores.',
+    'export.stamp.hint': 'Click on the card to drop your stamp.',
+    'export.stamp.none': 'Wear a stamp from the shop to mark this card.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
@@ -932,6 +934,8 @@ const DICT = {
     'export.share.unsupported': 'Votre navigateur ne sait pas partager de fichier. Téléchargez l’image à la place.',
     'export.hint':
       'La carte porte le pronostic entier : toutes les phases de classement et tous les tours du tableau, avec les vainqueurs choisis et les scores.',
+    'export.stamp.hint': 'Cliquez sur la carte pour poser votre tampon.',
+    'export.stamp.none': 'Portez un tampon depuis la boutique pour marquer cette carte.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',

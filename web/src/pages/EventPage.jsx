@@ -49,11 +49,11 @@ function fingerprint(state) {
     ])
     .filter(([, list]) => list.length);
 
-  // Le tampon compte comme une modification : le poser sans que rien ne le
-  // signale laisserait le bouton d'enregistrement éteint sur un changement réel.
-  const stamp = state?.stamp ?? null;
-
-  return JSON.stringify({ orders, picks, stamp });
+  // Le tampon a quitté cette page : il se pose dans la fenêtre d'export, par sa
+  // propre route, et n'entre plus dans le contenu enregistré ici. Le garder dans
+  // l'empreinte signalerait une modification à chaque fois qu'on tamponne
+  // ailleurs, et le bouton « Enregistrer » resterait allumé sans rien à écrire.
+  return JSON.stringify({ orders, picks });
 }
 const key = (round, slot) => `${round}:${slot}`;
 
@@ -159,7 +159,7 @@ export default function EventPage() {
   const readOnly = eventClosed || eventLive;
 
   const update = (patch) =>
-    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {}, stamp: null }), ...patch } }));
+    setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {} }), ...patch } }));
 
   // La date butoir de l'événement ferme tout. Absente — wildcards ouvertes,
   // date de la compète encore inconnue — rien ne ferme globalement : seuls les
@@ -208,9 +208,10 @@ export default function EventPage() {
       battles: Object.values(state.picks).flatMap((byBattle) =>
         Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
       ),
-      // `null` explicite et non `undefined` : c'est ainsi qu'on RETIRE un
-      // tampon. Omettre la clé laisserait le serveur conserver l'ancien.
-      stamp: state.stamp ?? null,
+      // La clé `stamp` est délibérément ABSENTE. Le schéma la rend facultative,
+      // et omise, le serveur conserve celle qui est en base. L'envoyer d'ici
+      // effacerait le tampon posé entre-temps depuis la fenêtre d'export : cette
+      // page ne le connaît plus, elle n'a donc rien à en dire.
     };
   }
 
@@ -637,11 +638,10 @@ export default function EventPage() {
 
 function CategoryEditor({ category, event, state, update, phaseLocked, locked }) {
   const { t } = useI18n();
-  // La session est relue ICI et non passée en propriété : le tampon porté est
-  // la seule chose dont cet éditeur ait besoin du compte, et le faire
-  // descendre depuis EventPage aurait ajouté une propriété à un composant qui
-  // en a déjà six.
-  const { user } = useSession();
+  // Plus aucune lecture de session ici : elle ne servait qu'au tampon porté,
+  // et le tampon a quitté cette page. Un abonnement au contexte qui ne sert à
+  // rien reste un abonnement — ce composant se rerendait à chaque changement
+  // de session pour une valeur qu'il n'utilise plus.
   const contenders = category.contenders;
 
   // Le jury de la catégorie. Vide tant que l'organisateur ne l'a pas saisi :
@@ -785,9 +785,6 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 onChange={(picks) =>
                   update({ picks: { ...state.picks, [phase.id]: picks } })
                 }
-                stamp={state.stamp ?? null}
-                stampId={user?.equippedStamp ?? null}
-                onStamp={(next) => update({ stamp: next })}
               />
             )}
           </section>
@@ -822,7 +819,7 @@ function readVersion(saved) {
       scoreB: b.scoreB,
     };
   }
-  return { orders, picks, stamp: saved.stamp ?? null };
+  return { orders, picks };
 }
 
 function hydrate({ event, myPredictions }) {

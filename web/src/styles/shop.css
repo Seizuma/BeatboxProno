@@ -839,54 +839,61 @@
    `.cos-band`. Celle-ci est en `position: fixed` : la moindre surcharge perdue
    collait les bandes aux bords de la fenêtre, donc par-dessus l'en-tête et le
    pied de la modale. Deux classes séparées, aucun arbitrage à gagner. */
+/* Le retrait redevient FIXE, et le `clamp` disparaît.
+
+   Le faire varier avec la fenêtre était une rustine sur un problème mal posé :
+   le profil est désormais rendu dans un plateau de 760 px puis réduit pour
+   tenir (`FitStage`), donc la largeur de ce conteneur ne dépend plus de
+   l'écran. Il est toujours dans ses conditions nominales, et 4,4 rem y veulent
+   dire la même chose sur un téléphone et sur un écran de bureau. */
 .cos-banded-inline {
   position: relative;
   padding: 0 4.4rem;
   min-height: 12rem;
   /* Le conteneur borne ses bandes : même mal calculées, elles ne peuvent plus
      sortir de la boîte du profil. */
-  overflow: hidden;
-}
-
-.cos-banded-inline {
-  position: relative;
-
-  /* Le retrait suit la largeur DISPONIBLE au lieu de basculer à un seul point
-     de rupture. L'ancienne règle réservait 4,4 rem de chaque côté jusqu'à
-     560 px puis 2 rem en dessous : entre les deux — un téléphone couché, une
-     petite tablette — le profil poussait la fenêtre, qui poussait le document,
-     et le navigateur dézoomait toute la page. `clamp` fait varier le retrait
-     en continu, il n'y a plus d'intervalle mal servi. */
-  padding: 0 clamp(1.4rem, 12vw, 4.4rem);
-  min-height: 12rem;
-
-  /* Le conteneur borne ses bandes ET son contenu : même mal calculées, ni les
-     unes ni l'autre ne peuvent sortir de la boîte du profil. */
   max-width: 100%;
   overflow: hidden;
 }
-
-.cos-banded-inline > * { max-width: 100%; }
 
 .cos-band-inline {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Même raison : la bande se resserre avec la fenêtre plutôt que de garder
-     3 rem imposés. `background-size: 100% auto` fait suivre le motif sans
-     qu'on ait à répéter la largeur à deux endroits — deux valeurs à tenir
-     d'accord finissent toujours par diverger. */
-  width: clamp(1.2rem, 9vw, 3rem);
+  width: 3rem;
   background-repeat: repeat-y;
   background-position: top center;
-  background-size: 100% auto;
+  background-size: 3rem auto;
   image-rendering: pixelated;
   pointer-events: none;
   z-index: 0;
 }
 
-.cos-band-inline--left { left: 0.4rem; }
-.cos-band-inline--right { right: 0.4rem; transform: scaleX(-1); }
+.cos-band-inline--left { left: 0.5rem; }
+.cos-band-inline--right { right: 0.5rem; transform: scaleX(-1); }
+
+/* ─── Le plateau à l'échelle ─────────────────────────────────────────────────
+
+   Il porte le vrai composant `Profile`, rendu à sa largeur de CONCEPTION puis
+   réduit pour tenir dans la fenêtre. C'est ce qui rend le débordement
+   impossible au lieu de le chasser élément par élément : sur un téléphone, une
+   page pensée pour 980 px ne rentre pas, et la découper pour en montrer le
+   tiers gauche est pire que de la montrer entière en petit.
+
+   Le conteneur découpe et porte la hauteur — posée en ligne par le composant,
+   seul à connaître le facteur de réduction, puisqu'une transformation ne
+   change pas la place occupée dans la mise en page.
+
+   `transform-origin` en haut à gauche : au centre, la réduction recentrerait
+   le contenu et laisserait une marge asymétrique. */
+.cos-fit {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.cos-fit__inner { transform-origin: top left; }
 
 /* La carte, à sa taille réelle d'aperçu. Le conteneur porte le tampon en
    surimpression, d'où le `relative`. */
@@ -981,31 +988,46 @@
   font-size: 0.95rem;
 }
 
+/* La barre de commandes des tampons, en tête de fiche.
+
+   Un plan AU-DESSUS des marques, et c'est le point : sans lui, un tampon posé
+   dans le coin haut-gauche recouvrait le bouton de retrait — donc précisément
+   la commande dont on a besoin quand on vient de mal viser. */
+.gs-bar {
+  position: relative;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
 /* ---------------------------------------------------------------------------
    Écrans étroits
 
-   Trois débordements mesurés sur un téléphone de 360 pixels, et trois causes
-   différentes. Regroupés ici plutôt que dispersés dans le fichier : ce sont
-   des corrections d'encombrement, pas des choix de style, et on veut pouvoir
-   les relire ensemble.
+   Des corrections d'encombrement, pas des choix de style : regroupées ici
+   plutôt que dispersées dans le fichier, pour qu'on puisse les relire ensemble.
+
+   L'aperçu de profil a quitté cette section. Son retrait ne dépend plus de la
+   largeur de l'écran du tout : il vit dans un plateau à l'échelle, à une
+   largeur constante. Un point de rupture de plus ne ferait que le contredire.
    --------------------------------------------------------------------------- */
 
 /* Le garde-fou, à TOUTE largeur et non plus sous 560 px seulement.
 
-   Une modale qui déborde emmène toute la page avec elle : le document
+   Une fenêtre qui déborde emmène toute la page avec elle : le document
    s'élargit, le navigateur dézoome, et c'est le profil qui devient illisible
-   alors que le fautif est ailleurs. Le confinement n'a aucun coût quand rien
-   ne déborde — il n'y avait pas de raison de le réserver aux petits écrans. */
+   alors que le fautif est ailleurs. Le confinement n'a aucun coût quand rien ne
+   déborde — il n'y avait pas de raison de le réserver aux petits écrans.
+
+   Il ne DÉCOUPE plus rien depuis que le plateau garantit qu'aucun aperçu ne
+   dépasse : c'est redevenu ce qu'il aurait toujours dû être, une ceinture et
+   non un ciseau. */
 .modal__body { overflow-x: hidden; }
 .modal__body > * { max-width: 100%; }
-
-/* ---------------------------------------------------------------------------
-   Écrans étroits
-
-   L'aperçu de profil a quitté cette section : son retrait est désormais un
-   `clamp` sur `.cos-banded-inline`, donc continu, et un point de rupture de
-   plus ne ferait que le contredire.
-   --------------------------------------------------------------------------- */
 
 @media (max-width: 560px) {
 

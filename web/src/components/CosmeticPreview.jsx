@@ -34,6 +34,67 @@ import {
  * Les cadres et les effets de pseudo gardent leurs vignettes : ils se jugent
  * sur une ligne, et une ligne suffit.
  */
+
+/* ---------------------------------------------------------------------------
+   Le plateau à l'échelle
+   --------------------------------------------------------------------------- */
+
+/**
+ * Un contenu rendu à sa largeur de CONCEPTION, puis réduit pour tenir.
+ *
+ * ─── Pourquoi pas du responsive ─────────────────────────────────────────────
+ *
+ * L'aperçu d'une bande montre le vrai composant `Profile` : une page entière,
+ * pensée pour une colonne de 980 px, glissée dans une fenêtre modale sur un
+ * écran de 360. La rendre adaptative reviendrait à rendre adaptatif tout ce
+ * qu'elle contient — grilles, tableaux, mur de badges — pour une fenêtre qu'on
+ * ouvre le temps de juger deux colonnes de pixels. J'ai d'abord cherché
+ * l'élément qui débordait, puis un autre ; la vraie leçon est qu'il y en aura
+ * toujours un de plus au prochain ajout au profil.
+ *
+ * Ici la question ne se pose plus. Le contenu a TOUJOURS 760 px de large, donc
+ * il est toujours dans ses conditions nominales, et c'est le facteur d'échelle
+ * qui absorbe la différence. Un profil deux fois plus petit reste lisible ; un
+ * profil tronqué ne l'est pas — et c'est ce qu'on avait.
+ *
+ * La hauteur est reportée sur le conteneur : une transformation ne change pas
+ * la place occupée dans la mise en page, et sans ce report la fenêtre gardait
+ * la hauteur pleine avec un grand vide en bas.
+ */
+function FitStage({ width = 760, children }) {
+    const box = useRef(null);
+    const inner = useRef(null);
+    const [scale, setScale] = useState(1);
+    const [height, setHeight] = useState(0);
+
+    useLayoutEffect(() => {
+        const measure = () => {
+            if (!box.current || !inner.current) return;
+            const k = Math.min(1, box.current.clientWidth / width);
+            setScale(k);
+            setHeight(inner.current.offsetHeight * k);
+        };
+        measure();
+
+        // Deux observateurs : la fenêtre change de largeur, et le profil change
+        // de hauteur quand ses données arrivent. Ni `offsetHeight` ni le
+        // rectangle observé ne tiennent compte de la transformation, donc la
+        // mesure ne se redéclenche jamais elle-même — pas de boucle.
+        const ro = new ResizeObserver(measure);
+        if (box.current) ro.observe(box.current);
+        if (inner.current) ro.observe(inner.current);
+        return () => ro.disconnect();
+    }, [width]);
+
+    return (
+        <div ref={box} className="cos-fit" style={{ height: height || undefined }}>
+            <div ref={inner} className="cos-fit__inner" style={{ width, transform: `scale(${scale})` }}>
+                {children}
+            </div>
+        </div>
+    );
+}
+
 export default function CosmeticPreview({ item, worn, user, lang, t, onClose }) {
     if (!item) return null;
 
@@ -46,8 +107,16 @@ export default function CosmeticPreview({ item, worn, user, lang, t, onClose }) 
             <Modal wide title={title} subtitle={subtitle} onClose={onClose} footer={<Close t={t} onClose={onClose} />}>
                 {/* Le vrai composant de profil, dans une fenêtre. `preview`
                     emprunte la bande, confine ses bords, et retire ce qui n'a
-                    rien à faire dans un aperçu — déconnexion, zone dangereuse. */}
-                <Profile preview={{ band: item.id }} />
+                    rien à faire dans un aperçu — déconnexion, zone dangereuse.
+
+                    Enveloppé dans un plateau à l'échelle : le profil garde ses
+                    760 px de conception et c'est la réduction qui le fait
+                    tenir. Laissé à la largeur de la fenêtre, il débordait sur
+                    téléphone — et une fenêtre qui déborde emmène la page avec
+                    elle. */}
+                <FitStage width={760}>
+                    <Profile preview={{ band: item.id }} />
+                </FitStage>
                 <Note t={t} />
             </Modal>
         );

@@ -102,6 +102,27 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
 
             {data && (
                 <div ref={canvas} className={`canvas${placing ? ' canvas--placing' : ''}`}>
+                    {/* Les tampons partagent le repère du canvas avec les
+                        bulles : leurs positions sont des fractions de la même
+                        boîte, donc les deux restent d'accord à toute largeur.
+
+                        Ils se rendent AVANT la fiche, et c'est le point de ce
+                        changement : leur barre de commandes — dont le retrait —
+                        était en fin de canvas, c'est-à-dire sous deux écrans de
+                        tableau. Un bouton qu'il faut chercher dix secondes
+                        n'existe pas. Les marques et la couche de pose sont en
+                        position absolue : l'ordre du document ne change rien à
+                        leur placement, seulement à celui de la barre. */}
+                    {groupSlug && (
+                        <GroupStamps
+                            predictionId={predictionId}
+                            groupSlug={groupSlug}
+                            canvasRef={canvas}
+                            placing={stamping}
+                            onPlacingEnd={() => setStamping(false)}
+                        />
+                    )}
+
                     <Body prediction={data} />
 
                     {groupSlug && (
@@ -112,19 +133,6 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                             canvasRef={canvas}
                             placing={placing}
                             onPlacingEnd={() => setPlacing(false)}
-                        />
-                    )}
-
-                    {/* Les tampons partagent le repère du canvas avec les
-                        bulles : leurs positions sont des fractions de la même
-                        boîte, donc les deux restent d'accord à toute largeur. */}
-                    {groupSlug && (
-                        <GroupStamps
-                            predictionId={predictionId}
-                            groupSlug={groupSlug}
-                            canvasRef={canvas}
-                            placing={stamping}
-                            onPlacingEnd={() => setStamping(false)}
                         />
                     )}
                 </div>

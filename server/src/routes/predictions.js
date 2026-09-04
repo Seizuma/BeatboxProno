@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
 import { withName } from '../lib/naming.js';
 import { isWildcardCategory } from '../lib/wildcard.js';
+import { itemById } from '../lib/cosmetics.js';
 
 export const predictionRouter = Router();
 predictionRouter.use(requireAuth);
@@ -410,6 +411,78 @@ predictionRouter.patch('/:predictionId', async (req, res) => {
     data: { label },
   });
   res.json({ prediction: updated });
+});
+
+/**
+ * Poser ou retirer le tampon d'un pronostic.
+ *
+ * ─── Pourquoi une route à part ──────────────────────────────────────────────
+ *
+ * `PUT /:predictionId` réécrit le contenu ENTIER : classements, affiches,
+ * tampon. La fenêtre d'export ne connaît que le tampon ; l'y faire passer
+ * enverrait des tableaux vides et effacerait le pronostic. Une route qui ne
+ * touche qu'un champ ne peut pas en abîmer un autre.
+ *
+ * ─── Pourquoi aucune fermeture ne s'y applique ──────────────────────────────
+ *
+ * `eventGate` interdit d'écrire un pronostic après le coup d'envoi, et c'est
+ * juste : ce serait parier sur une battle déjà jouée. Un tampon ne dit rien du
+ * résultat, il décore une carte qu'on partage le plus souvent APRÈS la compète.
+ * Lui appliquer la même barrière reviendrait à interdire de signer sa propre
+ * affiche.
+ *
+ * L'appartenance est vérifiée deux fois : `loadMine` pour le pronostic, le
+ * porte-monnaie pour l'objet. Sans le second contrôle, un identifiant posté à la
+ * main donnerait le tampon le plus cher du catalogue à tout le monde — c'est
+ * déjà la règle des tampons de groupe, et elle vaut ici pour la même raison.
+ */
+predictionRouter.put('/:predictionId/stamp', async (req, res) => {
+  const parsed = z
+    .object({
+      stamp: z
+        .object({
+          id: z.string().min(1).max(60),
+          // Des FRACTIONS bornées, jamais des pixels : la carte n'a pas la même
+          // largeur à l'aperçu et à l'export, et l'aperçu lui-même dépend de
+          // l'écran. Bornées ici et pas seulement dans l'interface — une API ne
+          // se fie pas à son client.
+          x: z.number().min(0).max(1),
+          y: z.number().min(0).max(1),
+        })
+        .nullable(),
+    })
+    .safeParse(req.body);
+
+  if (!parsed.success) return res.status(400).json({ error: 'Tampon mal formé.' });
+
+  const prediction = await loadMine(req.params.predictionId, req.user.id);
+  if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
+
+  const { stamp } = parsed.data;
+
+  if (stamp) {
+    const item = itemById(stamp.id);
+    if (!item || item.slot !== 'stamp') {
+      return res.status(400).json({ error: "Ce tampon n'existe pas." });
+    }
+    if (item.price > 0) {
+      const owned = await prisma.walletEntry.findFirst({
+        where: { userId: req.user.id, kind: 'PURCHASE', itemId: item.id },
+        select: { id: true },
+      });
+      if (!owned) return res.status(403).json({ error: 'Vous ne possédez pas ce tampon.' });
+    }
+  }
+
+  // `null` efface la colonne, exactement comme dans le PUT de contenu : c'est la
+  // distinction que Prisma fait entre `undefined` — ne rien changer — et `null`.
+  const updated = await prisma.prediction.update({
+    where: { id: prediction.id },
+    data: { stamp },
+    select: { id: true, stamp: true },
+  });
+
+  res.json({ stamp: updated.stamp ?? null });
 });
 
 // --- Dépôt --------------------------------------------------------------------
