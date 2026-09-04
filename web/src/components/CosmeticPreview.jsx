@@ -175,7 +175,7 @@ export default function CosmeticPreview({ item, worn, user, lang, t, onClose }) 
                             ) : (
                                 <span className={`cos-frame cos-frame--sm${rank === 1 ? frameClass : ''}`} />
                             )}
-                            <span>{rank === 1 ? <Name fxId={nameFx}>{pseudo}</Name> : 'NaPoM'}</span>
+                            <span>{rank === 1 ? <Name fxId={nameFx}>{pseudo}</Name> : 'Cimak'}</span>
                             <span className="shop-live__pts">{rank === 1 ? 304 : 288}</span>
                         </span>
                     ))}
