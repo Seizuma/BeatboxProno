@@ -27,6 +27,13 @@ const key = (round, slot) => `${round}:${slot}`;
  * d'accord. Ce qu'on apporte est plus simple et n'existe nulle part ailleurs —
  * la ligne à ligne entre ce que le joueur a annoncé et ce qui est arrivé.
  *
+ * ─── Il ne porte pas son propre titre ───────────────────────────────────────
+ *
+ * Il est monté dans une fenêtre, qui l'annonce déjà avec la catégorie et la
+ * phase. Le répéter en tête du contenu ferait lire deux fois la même chose à
+ * trois centimètres d'intervalle. Le compteur, lui, reste : « 8/8 qualifiés
+ * trouvés » est un résultat, pas un intitulé.
+ *
  * ─── La condition d'affichage est `resolved`, pas la fin de l'événement ─────
  *
  * Une compète publie ses phases une à une : les wildcards tombent des semaines
@@ -94,14 +101,13 @@ function RankingResult({ phase, byId, order, t }) {
 
     return (
         <div className="stack" style={{ gap: '0.6rem' }}>
-            <div className="spread">
-                <p className="eyebrow" style={{ margin: 0 }}>{t('result.title')}</p>
-                {found != null && (
+            {found != null && (
+                <p className="row" style={{ margin: 0, justifyContent: 'flex-end' }}>
                     <span className="tag tag--done">
                         {t('result.hits', { n: found, total: qualified.length })}
                     </span>
-                )}
-            </div>
+                </p>
+            )}
 
             <div className="panel panel--flush">
                 <table>
@@ -192,12 +198,11 @@ function BracketResult({ phase, byId, picks, t }) {
 
     return (
         <div className="stack" style={{ gap: '0.6rem' }}>
-            <div className="spread">
-                <p className="eyebrow" style={{ margin: 0 }}>{t('result.title')}</p>
+            <p className="row" style={{ margin: 0, justifyContent: 'flex-end' }}>
                 <span className="tag tag--done">
                     {t('result.winners', { n: winners, total: played.length })}
                 </span>
-            </div>
+            </p>
 
             <div className="panel panel--flush">
                 <table>

@@ -122,6 +122,7 @@ const DICT = {
     'bracket.round.LEGACY': 'Legacy',
 
     'result.title': 'Official result',
+    'result.open': 'See the result',
     'result.empty': 'Result not published yet.',
     'result.col.rank': 'Place',
     'result.col.artist': 'Artist',
@@ -414,6 +415,13 @@ const DICT = {
     'stats.col.actual': 'Actual',
     'stats.col.gap': 'Gap',
     'stats.col.voters': 'Voices',
+    'stats.results.open': 'Result statistics',
+    'stats.results.title': 'Result statistics',
+    'stats.results.subtitle': 'How the crowd read this event',
+    'stats.results.sampled': '{n} contenders measured',
+    'stats.all': 'Every contender',
+    'stats.all.lede':
+      'Real place, average predicted place, and the gap between the two — for every contender of a published phase.',
     'event.deadline': 'Predictions close {date}',
     'event.deadline.none': 'No closing date yet — phases lock as they start',
     'event.deadline.passed': 'Predictions are closed',
@@ -811,6 +819,7 @@ const DICT = {
     'bracket.round.LEGACY': 'Legacy',
 
     'result.title': 'Résultat officiel',
+    'result.open': 'Voir le résultat',
     'result.empty': 'Résultat pas encore publié.',
     'result.col.rank': 'Place',
     'result.col.artist': 'Artiste',
@@ -1104,6 +1113,13 @@ const DICT = {
     'stats.col.actual': 'Réel',
     'stats.col.gap': 'Écart',
     'stats.col.voters': 'Avis',
+    'stats.results.open': 'Statistiques des résultats',
+    'stats.results.title': 'Statistiques des résultats',
+    'stats.results.subtitle': 'Comment la foule a lu cet événement',
+    'stats.results.sampled': '{n} participants mesurés',
+    'stats.all': 'Tous les participants',
+    'stats.all.lede':
+      'Place réelle, place moyenne pronostiquée, et l’écart entre les deux — pour chaque participant d’une phase publiée.',
     'event.deadline': 'Pronostics fermés {date}',
     'event.deadline.none': 'Pas encore de date de fermeture — chaque phase se verrouille à son coup d’envoi',
     'event.deadline.passed': 'Les pronostics sont fermés',

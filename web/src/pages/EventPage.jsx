@@ -15,7 +15,7 @@ import { seedFromContenders } from '../lib/bracket.js';
 import useUnsavedGuard from '../lib/useUnsavedGuard.js';
 import BracketBoard from '../components/BracketBoard.jsx';
 import PhaseResult from '../components/PhaseResult.jsx';
-import ReadingBoards from '../components/ReadingBoards.jsx';
+import ResultStats from '../components/ResultStats.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -91,10 +91,10 @@ export default function EventPage() {
   const [naming, setNaming] = useState(null);
   // L'empreinte de chaque version telle qu'elle est enregistrée côté serveur.
   const [baseline, setBaseline] = useState({});
-  // Les lectures de la foule sur CET événement. Nulles tant que la compète
-  // n'est pas terminée : voir « sous-coté » face à un artiste qui n'a pas fini
-  // sa compète serait un verdict rendu à la mi-temps.
-  const [readings, setReadings] = useState(null);
+  // La fenêtre de statistiques est-elle ouverte ? Elle charge ses propres
+  // données à l'ouverture : une agrégation sur tous les pronostics déposés n'a
+  // pas à être payée par les visites qui ne l'affichent jamais.
+  const [statsOpen, setStatsOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -111,31 +111,6 @@ export default function EventPage() {
       })
       .catch((e) => setError(e.message));
   }, [slug]);
-
-  /**
-   * Les lectures de la foule, chargées à part.
-   *
-   * Deux requêtes plutôt qu'une : elles sortent d'un calcul d'agrégation sur
-   * tous les pronostics déposés, qui n'a rien à faire dans la route qui sert
-   * l'éditeur. Les greffer là ralentirait chaque ouverture de page pour une
-   * information que la plupart des visites n'affichent jamais.
-   *
-   * Un échec est avalé : le tableau des joueurs n'est pas la raison d'être de
-   * cette page, et une compète sans assez d'avis renvoie simplement des listes
-   * vides que le composant sait taire.
-   */
-  useEffect(() => {
-    if (data?.event?.status !== 'FINISHED') {
-      setReadings(null);
-      return;
-    }
-    // « /scoreboard » et non « /stats » : les bloqueurs de pub coupent les
-    // requêtes contenant « /stats? » avant même qu'elles partent.
-    api
-      .get(`/scoreboard?event=${encodeURIComponent(slug)}`)
-      .then((board) => setReadings(board.readings ?? null))
-      .catch(() => setReadings(null));
-  }, [slug, data?.event?.status]);
 
   const category = useMemo(
     () => data?.event.categories.find((c) => c.id === activeId) ?? null,
@@ -595,23 +570,24 @@ export default function EventPage() {
         </div>
       )}
 
-      {/* Les lectures de la foule, sur l'événement et une fois qu'il est fini.
+      {/* Les lectures de la foule, derrière un bouton et non dépliées.
 
           Elles vivaient en bas de la page de classement, où elles répondaient à
           une question que cette page ne posait pas : le classement dit qui
           marque le plus, celles-ci disent quels ARTISTES la foule a mal placés.
-          Sans filtre actif, elles mélangeaient de surcroît toutes les compètes
-          de l'histoire du site, et « sous-coté » n'y voulait plus dire
-          grand-chose.
-
-          Après le tableau du joueur et non avant : on vient ici pour son propre
-          pronostic, et ce que la foule a cru n'est intéressant qu'une fois qu'on
-          sait ce qu'on avait cru soi-même. */}
-      {eventClosed && readings?.sampled > 0 && (
-        <div className="stack" style={{ gap: '1.5rem', marginTop: '2rem' }}>
-          <ReadingBoards readings={readings} />
+          Rattachées à l'événement, elles retrouvent un cadre — mais dépliées
+          sous l'éditeur, trois tableaux plus la liste complète des participants
+          enterraient le pronostic du joueur, qui est la raison pour laquelle on
+          est venu. Un bouton laisse chacun décider de l'ordre. */}
+      {eventClosed && (
+        <div className="row" style={{ marginTop: '2rem' }}>
+          <button className="btn" onClick={() => setStatsOpen(true)}>
+            {t('stats.results.open')}
+          </button>
         </div>
       )}
+
+      {statsOpen && <ResultStats slug={slug} onClose={() => setStatsOpen(false)} />}
 
       <Toast
         message={flash?.text}
@@ -700,6 +676,12 @@ export default function EventPage() {
 
 function CategoryEditor({ category, event, state, update, phaseLocked, locked }) {
   const { t } = useI18n();
+  // La phase dont on regarde le résultat, ou null. L'état vit ICI et non dans
+  // EventPage : la comparaison a besoin des participants, du classement et des
+  // affiches de la catégorie ouverte, c'est-à-dire de tout ce que ce composant
+  // tient déjà. Le remonter d'un cran obligerait à faire redescendre quatre
+  // propriétés pour rien.
+  const [resultFor, setResultFor] = useState(null);
   // Plus aucune lecture de session ici : elle ne servait qu'au tampon porté,
   // et le tampon a quitté cette page. Un abonnement au contexte qui ne sert à
   // rien reste un abonnement — ce composant se rerendait à chaque changement
@@ -812,6 +794,17 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 <span className="tag">{t(`rule.${phase.type}`)}</span>
                 {phase.resolved && <span className="tag tag--done">{t('event.phase.resolved')}</span>}
                 {isLocked && !phase.resolved && <span className="tag">{t('event.phase.closed')}</span>}
+                {/* Le résultat s'ouvre, il ne s'impose pas. Déplié sous le
+                    tableau, il doublait la hauteur de chaque phase et repoussait
+                    la phase suivante hors de l'écran — sur téléphone, faire
+                    défiler deux tableaux pour atteindre la catégorie d'après
+                    est un prix qu'on ne paie pas volontiers pour une information
+                    qu'on a déjà lue une fois. */}
+                {phase.resolved && (
+                  <button className="btn btn--small" onClick={() => setResultFor(phase)}>
+                    {t('result.open')}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -854,26 +847,44 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
               />
             )}
 
-            {/* Ce qui s'est réellement passé, sous le pronostic et non à sa
-                place : les deux ne valent que l'un en face de l'autre.
-
-                La condition est la publication de la PHASE, pas la fin de
-                l'événement — une compète publie ses wildcards des semaines
-                avant son tableau, et faire attendre la comparaison jusqu'au
-                bout la rendrait muette au moment où elle intéresse le plus.
-                Le composant se tait tout seul tant que rien n'est publié. */}
-            {phase.resolved && (
-              <PhaseResult
-                phase={phase}
-                contenders={contenders}
-                order={state.orders[phase.id] ?? []}
-                picks={state.picks[phase.id] ?? {}}
-              />
-            )}
           </section>
         );
       })}
 
+      {/* Une seule fenêtre pour toutes les phases : ce qui change d'une phase à
+          l'autre est son contenu, pas sa présence. En monter une par phase
+          empilerait autant de pièges à focus et de blocages de défilement, tous
+          inertes sauf un.
+
+          La condition est la publication de la PHASE et non la fin de
+          l'événement : une compète publie ses wildcards des semaines avant son
+          tableau, et attendre la fin rendrait la comparaison muette au moment où
+          elle intéresse le plus. La censure côté serveur garantit qu'une phase
+          non publiée n'expose ni rangs ni vainqueurs. */}
+      {resultFor && (
+        <Modal
+          wide
+          subtitle={`${category.name} — ${resultFor.name}`}
+          title={t('result.title')}
+          onClose={() => setResultFor(null)}
+          footer={
+            <button
+              className="btn btn--ghost"
+              onClick={() => setResultFor(null)}
+              style={{ marginLeft: 'auto' }}
+            >
+              {t('thread.close')}
+            </button>
+          }
+        >
+          <PhaseResult
+            phase={resultFor}
+            contenders={contenders}
+            order={state.orders[resultFor.id] ?? []}
+            picks={state.picks[resultFor.id] ?? {}}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

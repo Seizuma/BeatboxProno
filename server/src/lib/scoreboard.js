@@ -134,6 +134,9 @@ function maxOnResolved(category) {
  * @param {boolean}       pad           fait figurer à zéro les `userIds` qui
  *                                      n'ont encore rien déposé
  * @param {boolean}       readings      calcule les palmarès de lecture
+ * @param {boolean}       readingsAll   ajoute la liste COMPLÈTE des participants
+ *                                      mesurés, et pas seulement les cinq têtes
+ *                                      de chaque palmarès
  * @param {number}        take          nombre de lignes maximum
  */
 export async function buildScoreboard({
@@ -143,12 +146,13 @@ export async function buildScoreboard({
     userIds = null,
     pad = false,
     readings = true,
+    readingsAll = false,
     take = 200,
 } = {}) {
     const empty = {
         totals: { players: 0, submitted: 0, points: 0, possible: 0, precision: null },
         players: [],
-        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 },
+        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, all: [] },
     };
 
     // Un groupe sans membre, ou sans périmètre. Une liste d'événements vide ne
@@ -328,7 +332,7 @@ export async function buildScoreboard({
     };
 
     if (!readings) {
-        return { totals, players, readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 } };
+        return { totals, players, readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, all: [] } };
     }
 
     // --- Précision et upsets --------------------------------------------------
@@ -391,19 +395,44 @@ export async function buildScoreboard({
     const byAccuracy = [...rows].sort((x, y) => Math.abs(x.delta) - Math.abs(y.delta));
     const bySurprise = [...rows].sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
 
-    const [wellRead, overRated, underRated] = await Promise.all([
+    const [wellRead, overRated, underRated, all] = await Promise.all([
         // Les mieux lus : l'écart le plus faible entre attendu et réel.
         decorate(byAccuracy.slice(0, 5)),
         // Surcotés : on les attendait haut, ils ont fini bas (delta négatif).
         decorate(bySurprise.filter((r) => r.delta < 0).slice(0, 5)),
         // Sous-cotés : on les attendait bas, ils ont fini haut (delta positif).
         decorate(bySurprise.filter((r) => r.delta > 0).slice(0, 5)),
+
+        /**
+         * Tout le monde, sur demande.
+         *
+         * Les trois palmarès répondent à « qui a surpris » ; celle-ci répond à
+         * « et les autres ? ». Un top 5 sur cent participants cache
+         * quatre-vingt-quinze lignes, et c'est précisément celles-là qu'on
+         * cherche quand on veut savoir comment la foule a lu SON favori.
+         *
+         * Sur demande et non par défaut : cette route sert aussi le classement
+         * du site, tous événements confondus, où la liste complète ferait
+         * plusieurs centaines de lignes que personne n'a demandées. Le tri est
+         * celui du résultat — par compète, puis par place réelle — parce qu'on
+         * y cherche un nom, alors que dans les palmarès on lit un verdict.
+         */
+        readingsAll
+            ? decorate([...rows].sort((x, y) => x.actual - y.actual)).then((list) =>
+                list.sort(
+                    (x, y) =>
+                        x.event.localeCompare(y.event) ||
+                        x.category.localeCompare(y.category) ||
+                        x.actual - y.actual
+                )
+            )
+            : Promise.resolve([]),
     ]);
 
     return {
         totals,
         players,
-        readings: { wellRead, overRated, underRated, sampled: rows.length },
+        readings: { wellRead, overRated, underRated, sampled: rows.length, all },
     };
 }
 
