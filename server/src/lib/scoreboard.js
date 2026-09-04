@@ -239,7 +239,17 @@ export async function buildScoreboard({
         readings
             ? prisma.phaseEntry.findMany({
                 where: { phase: { resolved: true, ...phaseScope } },
-                select: { phaseId: true, contenderId: true, rank: true },
+                select: {
+                    phaseId: true,
+                    contenderId: true,
+                    rank: true,
+                    // Le nom et le rang de la phase, parce qu'une catégorie peut
+                    // en publier plusieurs — un placement PUIS des éliminations.
+                    // Sans eux, le même participant apparaissait deux fois avec
+                    // deux places différentes, et rien ne disait laquelle
+                    // était laquelle.
+                    phase: { select: { name: true, position: true } },
+                },
             })
             : [],
 
@@ -359,6 +369,9 @@ export async function buildScoreboard({
         const expected = bucket.sum / bucket.n;
         rows.push({
             contenderId: entry.contenderId,
+            phaseId: entry.phaseId,
+            phase: entry.phase?.name ?? '',
+            phasePosition: entry.phase?.position ?? 0,
             actual: entry.rank,
             expected: Math.round(expected * 10) / 10,
             // Positif : il a fini MIEUX que prévu. Négatif : moins bien.
@@ -433,11 +446,17 @@ export async function buildScoreboard({
          * y cherche un nom, alors que dans les palmarès on lit un verdict.
          */
         readingsAll
-            ? decorate([...rows].sort((x, y) => x.actual - y.actual)).then((list) =>
+            ? decorate(rows).then((list) =>
+                // Compète, puis catégorie, puis phase dans son ordre de
+                // déroulement, puis place. La phase est intercalée avant la
+                // place : sans elle, deux classements d'une même catégorie
+                // s'entrelaçaient place à place, et la liste alternait entre
+                // deux échelles qui n'ont rien à voir.
                 list.sort(
                     (x, y) =>
                         x.event.localeCompare(y.event) ||
                         x.category.localeCompare(y.category) ||
+                        x.phasePosition - y.phasePosition ||
                         x.actual - y.actual
                 )
             )

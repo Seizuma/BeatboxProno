@@ -26,15 +26,19 @@ import ArtistFigure from './ArtistFigure.jsx';
  * @param {object} readings  { wellRead, underRated, overRated, sampled }
  * @param {boolean} [showEvent]  affiche l'événement sous chaque nom. Inutile
  *   quand tout vient de la même compète, indispensable sinon.
+ * @param {boolean} [showCategory]  affiche la catégorie sous chaque nom. À
+ *   couper quand un onglet l'annonce déjà : répétée trente fois, elle occupe
+ *   une ligne par participant pour une information qui ne change pas.
  */
-export default function ReadingBoards({ readings, showEvent = false }) {
+export default function ReadingBoards({ readings, showEvent = false, showCategory = true }) {
     if (!readings || !(readings.sampled > 0)) return null;
 
+    const commun = { showEvent, showCategory };
     return (
         <>
-            <ReadingBoard which="wellRead" rows={readings.wellRead} showEvent={showEvent} />
-            <ReadingBoard which="underRated" rows={readings.underRated} tone="ok" showEvent={showEvent} />
-            <ReadingBoard which="overRated" rows={readings.overRated} tone="warn" showEvent={showEvent} />
+            <ReadingBoard which="wellRead" rows={readings.wellRead} {...commun} />
+            <ReadingBoard which="underRated" rows={readings.underRated} tone="ok" {...commun} />
+            <ReadingBoard which="overRated" rows={readings.overRated} tone="warn" {...commun} />
         </>
     );
 }
@@ -43,7 +47,7 @@ export default function ReadingBoards({ readings, showEvent = false }) {
  * Un palmarès de lecture. L'écart est signé — positif, l'artiste a fini mieux
  * que prévu.
  */
-function ReadingBoard({ which, rows, tone, showEvent }) {
+function ReadingBoard({ which, rows, tone, showEvent, showCategory }) {
     const { t } = useI18n();
     if (!rows?.length) return null;
 
@@ -73,19 +77,25 @@ function ReadingBoard({ which, rows, tone, showEvent }) {
                     </thead>
                     <tbody>
                         {rows.map((r) => (
-                            <tr key={r.contenderId}>
+                            // La clé porte la phase quand elle existe : un
+                            // participant classé dans deux phases d'une même
+                            // catégorie donnerait sinon deux lignes de clé
+                            // identique, dont React n'en garderait qu'une.
+                            <tr key={r.phaseId ? `${r.contenderId}:${r.phaseId}` : r.contenderId}>
                                 <td>
                                     <span className="stat-row">
                                         <ArtistFigure src={r.imageUrl} name={r.name} size="xs" />
                                         <span>
                                             {r.name}
-                                            {/* La catégorie suffit quand tout vient de la même
-                                                compète ; répéter le nom de l'événement à chaque
-                                                ligne d'une page qui lui est déjà consacrée est du
-                                                bruit. */}
-                                            <span className="faint data" style={{ fontSize: '0.78rem', display: 'block' }}>
-                                                {showEvent ? `${r.event} · ${r.category}` : r.category}
-                                            </span>
+                                            {/* Ni l'événement ni la catégorie quand un cadre les
+                                                annonce déjà — page consacrée à une compète, onglet
+                                                consacré à une catégorie. Répétée à chaque ligne,
+                                                l'information devient du bruit. */}
+                                            {(showEvent || showCategory) && (
+                                                <span className="faint data" style={{ fontSize: '0.78rem', display: 'block' }}>
+                                                    {showEvent ? `${r.event} · ${r.category}` : r.category}
+                                                </span>
+                                            )}
                                         </span>
                                     </span>
                                 </td>
