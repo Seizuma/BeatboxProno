@@ -63,7 +63,12 @@ function ReadingBoard({ which, rows, tone, showEvent }) {
                             <th className="num">{t('stats.col.expected')}</th>
                             <th className="num">{t('stats.col.actual')}</th>
                             <th className="num">{t('stats.col.gap')}</th>
-                            <th className="num">{t('stats.col.voters')}</th>
+                            {/* Le nombre d'avis cède la place sous 620 px :
+                                cinq colonnes de chiffres sur un téléphone se
+                                lisent moins bien qu'aucune, et celle-ci est la
+                                seule qui ne participe pas au verdict — elle dit
+                                la fiabilité de la mesure, pas son résultat. */}
+                            <th className="num col-opt">{t('stats.col.voters')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -89,7 +94,7 @@ function ReadingBoard({ which, rows, tone, showEvent }) {
                                 <td className="num" style={{ color, fontWeight: 600 }}>
                                     {r.delta > 0 ? `+${r.delta}` : r.delta}
                                 </td>
-                                <td className="num muted">{r.voters}</td>
+                                <td className="num muted col-opt">{r.voters}</td>
                             </tr>
                         ))}
                     </tbody>

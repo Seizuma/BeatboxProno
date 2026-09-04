@@ -434,6 +434,25 @@ export default function EventPage() {
                 : t('event.deadline.none')}
           </span>
         </p>
+
+        {/* Les statistiques de lecture, EN TÊTE et non en pied de page.
+
+            Elles étaient sous la barre d'action, c'est-à-dire après quatre
+            tableaux de vingt lignes : sur une compète terminée, atteindre le
+            bouton demandait de traverser toute la page — et il fallait déjà
+            savoir qu'il existait pour aller le chercher.
+
+            Ici il tombe dans le même regard que le titre et la date, avec la
+            surbrillance qui dit qu'il y a du neuf à lire. Une compète finie
+            change de sujet : on ne vient plus remplir un pronostic, on vient
+            voir ce qui s'est passé. La page doit le dire tout de suite. */}
+        {eventClosed && (
+          <p className="row" style={{ marginTop: '0.8rem' }}>
+            <button className="btn btn--primary btn--beacon" onClick={() => setStatsOpen(true)}>
+              {t('stats.results.open')}
+            </button>
+          </p>
+        )}
       </header>
 
       <nav
@@ -567,23 +586,6 @@ export default function EventPage() {
           <span className="faint" style={{ fontSize: '0.8rem', marginLeft: 'auto' }}>
             {t('event.editable')}
           </span>
-        </div>
-      )}
-
-      {/* Les lectures de la foule, derrière un bouton et non dépliées.
-
-          Elles vivaient en bas de la page de classement, où elles répondaient à
-          une question que cette page ne posait pas : le classement dit qui
-          marque le plus, celles-ci disent quels ARTISTES la foule a mal placés.
-          Rattachées à l'événement, elles retrouvent un cadre — mais dépliées
-          sous l'éditeur, trois tableaux plus la liste complète des participants
-          enterraient le pronostic du joueur, qui est la raison pour laquelle on
-          est venu. Un bouton laisse chacun décider de l'ordre. */}
-      {eventClosed && (
-        <div className="row" style={{ marginTop: '2rem' }}>
-          <button className="btn" onClick={() => setStatsOpen(true)}>
-            {t('stats.results.open')}
-          </button>
         </div>
       )}
 

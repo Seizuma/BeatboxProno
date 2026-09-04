@@ -10,6 +10,7 @@ import {
     finalFour,
 } from './scoring.js';
 import { isWildcardCategory } from './wildcard.js';
+import { contenderName } from './naming.js';
 
 /**
  * Le moteur du classement.
@@ -366,6 +367,20 @@ export async function buildScoreboard({
         });
     }
 
+    /**
+     * Ajoute nom, photo, catégorie et compète aux lignes mesurées.
+     *
+     * Le nom passe par `contenderName` et non par la colonne `Contender.name`,
+     * qui est VIDE dès que le participant suit son artiste — c'est-à-dire dans
+     * la quasi-totalité des cas, puisqu'on ne la renseigne que pour un crew ou
+     * un duo au pseudonyme propre. Les palmarès affichaient donc une photo, une
+     * catégorie, et pas de nom. Le défaut ne se voyait pas tant qu'on ne
+     * montrait que cinq lignes par tableau ; la liste complète l'a mis en pleine
+     * lumière.
+     *
+     * D'où aussi le `name` demandé sur l'artiste : la requête ne remontait que
+     * `imageUrl`, et la résolution n'aurait rien eu à résoudre.
+     */
     const decorate = async (list) => {
         const ids = list.map((r) => r.contenderId);
         if (ids.length === 0) return [];
@@ -373,7 +388,7 @@ export async function buildScoreboard({
             where: { id: { in: ids } },
             include: {
                 category: { select: { name: true, event: { select: { name: true, year: true } } } },
-                artists: { include: { artist: { select: { imageUrl: true } } } },
+                artists: { include: { artist: { select: { name: true, imageUrl: true } } } },
             },
         });
         const contenderById = new Map(contenders.map((c) => [c.id, c]));
@@ -383,7 +398,7 @@ export async function buildScoreboard({
                 if (!c) return null;
                 return {
                     ...r,
-                    name: c.name,
+                    name: contenderName(c),
                     category: c.category.name,
                     event: `${c.category.event.name} ${c.category.event.year}`,
                     imageUrl: c.imageUrl ?? c.artists[0]?.artist?.imageUrl ?? null,
