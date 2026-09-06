@@ -301,6 +301,25 @@ predictionRouter.post('/categories/:categoryId', async (req, res) => {
       label: label ?? `Version ${drafts + 1}`,
       ...(source
         ? {
+          /**
+           * La poche des sélections sur vidéo suit la copie.
+           *
+           * Elle manquait, et sur une catégorie wildcard c'était toute la
+           * version qui manquait : le plateau d'un joueur EST sa poche, les
+           * rangs n'en décrivent que la partie déjà classée. Dupliquer une
+           * version avec quinze noms piochés dont quatre placés donnait un
+           * brouillon à quatre noms, les onze autres évaporés — et il fallait
+           * les rechercher un par un pour comprendre ce qui s'était passé.
+           *
+           * `undefined` quand la source n'en a pas : Prisma laisse alors la
+           * colonne à NULL, ce qui est la bonne valeur pour un pronostic qui
+           * n'a jamais eu de poche.
+           *
+           * Le tampon, lui, ne suit PAS, et c'est délibéré : il marque une carte
+           * précise, celle qu'on a partagée. Une copie est une carte neuve.
+           */
+          pool: source.pool ?? undefined,
+
           ranks: {
             create: source.ranks.map(({ phaseId, contenderId, rank }) => ({
               phaseId,

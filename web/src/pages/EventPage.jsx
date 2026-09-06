@@ -214,25 +214,8 @@ export default function EventPage() {
     return predictions;
   }
 
-  /** Le contenu de l'éditeur, prêt pour l'API. */
-  function payload() {
-    return {
-      ranks: Object.entries(state.orders).flatMap(([phaseId, ids]) =>
-        ids.map((contenderId, i) => ({ phaseId, contenderId, rank: i + 1 }))
-      ),
-      battles: Object.values(state.picks).flatMap((byBattle) =>
-        Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
-      ),
-      // La poche des sélections sur vidéo. Envoyée telle quelle, y compris
-      // vide : c'est ce qui permet de retirer le dernier nom de son plateau.
-      pool: state.pool ?? {},
-
-      // La clé `stamp` est délibérément ABSENTE. Le schéma la rend facultative,
-      // et omise, le serveur conserve celle qui est en base. L'envoyer d'ici
-      // effacerait le tampon posé entre-temps depuis la fenêtre d'export : cette
-      // page ne le connaît plus, elle n'a donc rien à en dire.
-    };
-  }
+  /** Le contenu de l'éditeur ouvert, prêt pour l'API. */
+  const payload = () => contentBody(state);
 
   /**
    * Garantit qu'une version existe pour la catégorie courante, et renvoie son
@@ -350,15 +333,11 @@ export default function EventPage() {
    */
   async function saveEverything() {
     for (const item of unsaved) {
-      const content = draft[item.key];
-      const body = {
-        ranks: Object.entries(content.orders ?? {}).flatMap(([phaseId, ids]) =>
-          ids.map((contenderId, i) => ({ phaseId, contenderId, rank: i + 1 }))
-        ),
-        battles: Object.values(content.picks ?? {}).flatMap((byBattle) =>
-          Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
-        ),
-      };
+      // Le MÊME constructeur que le bouton d'enregistrement. Une copie
+      // manuscrite avait fini par oublier la poche des sélections sur vidéo :
+      // « enregistrer et quitter » écrivait alors les classements et perdait
+      // les artistes piochés.
+      const body = contentBody(draft[item.key]);
 
       // On n'ouvre une version que s'il n'en existe VRAIMENT aucune. Sans ce
       // repli sur la version courante, chaque avertissement créait un brouillon
@@ -921,6 +900,45 @@ function readVersion(saved) {
   const pool = saved.pool && typeof saved.pool === 'object' ? saved.pool : {};
 
   return { orders, picks, pool };
+}
+
+/**
+ * Le contenu d'un éditeur, prêt pour l'API.
+ *
+ * ─── Pourquoi cette fonction existe ─────────────────────────────────────────
+ *
+ * Il y avait DEUX constructions de ce corps : celle de `payload()`, pour le
+ * bouton d'enregistrement, et une copie manuscrite dans `saveEverything()`,
+ * pour « enregistrer et quitter ». Elles étaient identiques le jour où on les a
+ * écrites, puis la poche des sélections sur vidéo est arrivée — et n'a été
+ * ajoutée qu'à la première.
+ *
+ * Résultat : enregistrer soi-même gardait les artistes piochés, se les faire
+ * enregistrer par la garde de sortie les perdait. Le pire des cas, puisque
+ * c'est précisément le moment où l'on fait confiance au site pour ne rien
+ * laisser tomber.
+ *
+ * Deux endroits qui doivent dire la même chose finissent toujours par diverger.
+ * Il n'y en a plus qu'un.
+ */
+function contentBody(content) {
+  const { orders = {}, picks = {}, pool = {} } = content ?? {};
+  return {
+    ranks: Object.entries(orders).flatMap(([phaseId, ids]) =>
+      ids.map((contenderId, i) => ({ phaseId, contenderId, rank: i + 1 }))
+    ),
+    battles: Object.values(picks).flatMap((byBattle) =>
+      Object.values(byBattle).filter((b) => b.contenderAId && b.contenderBId)
+    ),
+    // La poche des sélections sur vidéo. Envoyée telle quelle, y compris vide :
+    // c'est ce qui permet de retirer le dernier nom de son plateau.
+    pool,
+
+    // La clé `stamp` est délibérément ABSENTE. Le schéma la rend facultative,
+    // et omise, le serveur conserve celle qui est en base. L'envoyer d'ici
+    // effacerait le tampon posé entre-temps depuis la fenêtre d'export : cette
+    // page ne le connaît plus, elle n'a donc rien à en dire.
+  };
 }
 
 function hydrate({ event, myPredictions }) {
