@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { buildReport } from '../lib/report.js';
-import { postToDiscord } from '../lib/discord.js';
+import { postEmbeds } from '../lib/discord.js';
 import { TZ, localDay } from '../lib/presence.js';
 
 /**
@@ -24,19 +24,26 @@ const SCHEDULE = process.env.REPORT_CRON ?? '5 8 * * *';
 
 export async function runDailyReport({ dryRun = false, days = DAYS, endsOn = null } = {}) {
     const built = await buildReport(days, endsOn);
-    const { title, description, fields, imageUrl, footer, uniques, report } = built;
+    const { embeds, imageUrl, uniques, report, shop } = built;
 
     if (dryRun) {
-        console.log(`— ${title} —\n`);
-        for (const f of fields) console.log(`${f.name} : ${f.value.replace(/\*\*/g, '').replace(/\n/g, ' ')}`);
-        console.log();
-        console.log(description);
-        console.log(`\n${footer} · ${uniques} personnes distinctes`);
-        if (imageUrl) console.log(`\nGraphique : ${imageUrl}`);
+        for (const e of embeds) {
+            console.log(`\n══ ${e.title} ══`);
+            for (const f of e.fields ?? []) {
+                console.log(`${f.name} : ${f.value.replace(/\*\*/g, '').replace(/\n/g, ' ')}`);
+            }
+            if (e.description) console.log(`\n${e.description.replace(/\*\*/g, '')}`);
+        }
+        console.log(`\n${uniques} personnes distinctes`);
+        if (shop) console.log(`Boutique : ${shop.total} objet(s), ${shop.spent} points.`);
+        if (imageUrl) console.log(`Graphique : ${imageUrl}`);
         return { ok: true, dryRun: true, report };
     }
 
-    const sent = await postToDiscord('REPORT', { title, description, fields, imageUrl, footer });
+    // `postEmbeds` et non `postToDiscord` : le rapport tient désormais en deux
+    // ou trois encarts, et le second en envoie autant qu'il faut en respectant
+    // les limites de Discord.
+    const sent = await postEmbeds('REPORT', embeds);
 
     if (!sent.ok) console.error('[rapport] envoi échoué :', sent.error);
     else console.log(`[rapport] ${report.end} posté.`);

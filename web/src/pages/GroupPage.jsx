@@ -8,6 +8,7 @@ import Modal from '../components/Modal.jsx';
 import PromptDialog from '../components/PromptDialog.jsx';
 import PredictionView from '../components/PredictionView.jsx';
 import Toast from '../components/Toast.jsx';
+import { FramedAvatar, Name } from '../components/Cosmetics.jsx';
 
 /**
  * Un groupe.
@@ -32,7 +33,7 @@ import Toast from '../components/Toast.jsx';
  */
 export default function GroupPage() {
     const { slug } = useParams();
-    const { t, number } = useI18n();
+    const { t, number, lang } = useI18n();
     const { user, loading } = useSession();
     const navigate = useNavigate();
 
@@ -222,10 +223,24 @@ export default function GroupPage() {
                                         >
                                             <span className="ladder__rank">{String(i + 1).padStart(2, '0')}</span>
 
+                                            {/* Le pin passe APRÈS l'étoile du
+                          propriétaire : l'étoile dit un rôle dans le groupe, le
+                          pin n'est qu'un achat — les mélanger ferait lire l'un
+                          pour l'autre. Le titre, lui, n'entre pas dans
+                          l'échelle : elle donne déjà deux lignes par membre, une
+                          troisième la transformerait en liste. */}
                                             <span className="ladder__who">
-                                                {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
+                                                {p.user?.avatarUrl && (
+                                                    <FramedAvatar
+                                                        url={p.user.avatarUrl}
+                                                        frameId={p.user.equippedFrame}
+                                                        size="xs"
+                                                    />
+                                                )}
                                                 <span className="ladder__name">
-                                                    {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                                                    <Name fxId={p.user?.equippedNameFx}>
+                                                        {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                                                    </Name>
                                                 </span>
                                                 {member?.role === 'OWNER' && <span className="ladder__crown">★</span>}
                                             </span>
@@ -314,8 +329,18 @@ export default function GroupPage() {
                             {shown.map((p) => (
                                 <button key={p.id} type="button" className="mosaic__card" onClick={() => setReading(p.id)}>
                                     <span className="mosaic__who">
-                                        {p.user.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
-                                        <strong className="mosaic__name">{p.user.globalName ?? p.user.username}</strong>
+                                        {p.user.avatarUrl && (
+                                            <FramedAvatar
+                                                url={p.user.avatarUrl}
+                                                frameId={p.user.equippedFrame}
+                                                size="xs"
+                                            />
+                                        )}
+                                        <strong className="mosaic__name">
+                                            <Name fxId={p.user.equippedNameFx}>
+                                                {p.user.globalName ?? p.user.username}
+                                            </Name>
+                                        </strong>
                                         {p.comments > 0 && (
                                             <span className="mosaic__bubbles">
                                                 {t('group.picks.comments', { n: p.comments })}

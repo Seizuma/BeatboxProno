@@ -1,0 +1,17 @@
+-- La pioche d'une sélection sur vidéo, attachée au pronostic.
+--
+-- Sur une catégorie wildcard, le joueur constitue lui-même son plateau : il
+-- cherche des noms dans le référentiel des artistes et les ajoute avant de les
+-- classer. Ce plateau n'existait qu'en mémoire du navigateur. Rafraîchir la
+-- page avant d'avoir tout placé effaçait la recherche de quinze noms — et rien
+-- ne prévenait, puisque les noms déjà classés, eux, revenaient.
+--
+-- Colonne JSON et non table : on lit toujours la liste entière d'un pronostic,
+-- jamais une entrée isolée, et rien n'a à être interrogé là-dedans. Une table
+-- aurait ajouté trois relations pour un tableau de chaînes. Même choix que
+-- `stamp` sur cette même table et `seedPairs` sur Phase.
+--
+-- Nullable sans valeur par défaut : les pronostics existants n'ont pas de
+-- pioche, et `NULL` le dit mieux qu'un objet vide. Le client retombe alors sur
+-- les rangs enregistrés, qui restent la source de vérité de ce qui est classé.
+ALTER TABLE "Prediction" ADD COLUMN "pool" JSONB;

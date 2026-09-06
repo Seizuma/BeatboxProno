@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
+import { withName } from '../lib/naming.js';
+import { isWildcardCategory } from '../lib/wildcard.js';
+import { itemById } from '../lib/cosmetics.js';
 
 export const predictionRouter = Router();
 predictionRouter.use(requireAuth);
@@ -16,6 +19,51 @@ const MAX_DRAFTS = 10;
 
 const contentSchema = z.object({
   label: z.string().min(1).max(60).optional(),
+
+  /**
+   * Le tampon posé sur le tableau, ou `null` pour le retirer.
+   *
+   * Les coordonnées sont des FRACTIONS bornées et non des pixels : la largeur du
+   * bracket dépend de l'écran, et la carte exportée n'a la largeur d'aucun d'eux.
+   * Les bornes sont ici et pas seulement dans l'interface, parce qu'une API
+   * publique ne se fie pas à son client — un x de 40 sortirait le tampon de
+   * l'image sans qu'aucune erreur ne soit levée.
+   *
+   * L'identifiant n'est pas vérifié contre le catalogue : un tampon retiré du
+   * catalogue rendrait le pronostic indéposable, ce qui punirait le joueur pour
+   * une décision qui n'est pas la sienne. Le rendu ignore simplement ce qu'il ne
+   * connaît pas.
+   */
+  stamp: z
+    .object({
+      id: z.string().max(60),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
+    .nullable()
+    .optional(),
+
+  /**
+   * La pioche d'une sélection sur vidéo : { [phaseId]: [contenderId, ...] }.
+   *
+   * Le plateau que le joueur s'est constitué, classés compris. Il ne se déduit
+   * PAS des rangs : un nom cherché mais pas encore placé n'a pas de rang, et
+   * c'est justement lui qu'on perdait au rechargement.
+   *
+   * Les identifiants ne sont pas vérifiés contre la base, pour la même raison
+   * que le tampon : un participant supprimé par l'organisateur rendrait le
+   * pronostic indéposable, ce qui punirait le joueur d'une décision qui n'est
+   * pas la sienne. Le client ignore ce qu'il ne sait pas résoudre.
+   *
+   * Les bornes, en revanche, sont ici : cinq cents entrées par phase suffisent
+   * largement à une wildcard de GBB, et sans plafond la colonne accepterait
+   * n'importe quel volume.
+   */
+  pool: z
+    .record(z.string(), z.array(z.string().max(60)).max(500))
+    .nullable()
+    .optional(),
+
   ranks: z
     .array(z.object({ phaseId: z.string(), contenderId: z.string(), rank: z.number().int().min(1) }))
     .default([]),
@@ -110,6 +158,105 @@ predictionRouter.get('/mine', async (req, res) => {
 // --- Création -----------------------------------------------------------------
 
 /** Ouvre une nouvelle version. Peut recopier une version existante. */
+/**
+ * Piocher un artiste dans une catégorie de sélection.
+ *
+ * ─── Pourquoi le joueur crée des participants ───────────────────────────────
+ *
+ * Dans un événement à tableau, l'organisateur sait qui concourt : il compose la
+ * liste, les joueurs la classent. Une sélection sur vidéo, c'est l'inverse —
+ * au moment où l'on pronostique, PERSONNE ne sait qui a envoyé une wildcard.
+ * Demander à l'organisateur de saisir cent cinquante noms avant l'ouverture
+ * reviendrait à lui faire deviner la réponse pour poser la question.
+ *
+ * Le joueur pioche donc dans le référentiel des artistes, et le participant est
+ * créé à la volée s'il n'existe pas encore.
+ *
+ * ─── Ce référentiel est commun, le plateau d'un joueur ne l'est pas ──────────
+ *
+ * `Contender` est une table PARTAGÉE, et doit le rester : deux joueurs qui
+ * piochent Alem obtiennent le même participant, sinon le résultat officiel
+ * saisi par l'organisateur n'en récompenserait qu'un des deux. C'est tout le
+ * sens de la transaction ci-dessous.
+ *
+ * Mais la liste que voit un joueur sur son plateau n'est PAS cette table :
+ * c'est la petite sélection qu'il a lui-même retenue, et elle se déduit de ses
+ * propres rangs côté client. Confondre les deux donnait à chacun la pioche de
+ * tous les autres. Cette route ne renvoie donc jamais la liste entière, juste
+ * le participant demandé : à l'appelant de savoir ce qui est à lui.
+ *
+ * ─── Pourquoi un participant et pas un artiste ──────────────────────────────
+ *
+ * Tout l'aval — les rangs pronostiqués, le score, la fiche d'un artiste, la
+ * saisie du résultat officiel — passe par `Contender`. Faire pointer les
+ * pronostics sur `Artist` demanderait de réécrire les six. On crée donc le
+ * participant manquant, et rien d'autre ne bouge.
+ *
+ * L'unicité est portée par la transaction : deux joueurs qui piochent le même
+ * artiste à la même seconde obtiennent le même participant, pas deux.
+ */
+predictionRouter.post('/categories/:categoryId/pool', async (req, res) => {
+  const { artistId } = z.object({ artistId: z.string().min(1) }).parse(req.body);
+
+  const category = await prisma.category.findUnique({
+    where: { id: req.params.categoryId },
+    include: {
+      event: { select: { status: true, predictionsCloseAt: true } },
+      phases: { select: { id: true, type: true } },
+    },
+  });
+  if (!category) return res.status(404).json({ error: 'Catégorie introuvable.' });
+
+  if (!isWildcardCategory(category)) {
+    return res.status(400).json({
+      error: "On ne pioche que dans une sélection. Ailleurs, c'est l'organisateur qui compose la liste.",
+    });
+  }
+
+  // Les mêmes conditions que pour enregistrer un pronostic : une compète fermée
+  // ne doit pas voir son plateau grossir.
+  if (!['OPEN'].includes(category.event.status)) {
+    return res.status(409).json({ error: 'Les pronostics sont fermés sur cet événement.' });
+  }
+  if (category.event.predictionsCloseAt && new Date() > category.event.predictionsCloseAt) {
+    return res.status(409).json({ error: 'La date butoir des pronostics est passée.' });
+  }
+
+  const artist = await prisma.artist.findUnique({
+    where: { id: artistId },
+    select: { id: true, name: true, kinds: true },
+  });
+  if (!artist) return res.status(404).json({ error: 'Artiste introuvable.' });
+
+  // Le format compte : on ne pioche pas un crew dans une sélection solo.
+  if (!(artist.kinds ?? []).includes(category.kind)) {
+    return res.status(400).json({
+      error: `${artist.name} n'est pas référencé dans le format ${category.kind}.`,
+    });
+  }
+
+  const contender = await prisma.$transaction(async (tx) => {
+    const existing = await tx.contender.findFirst({
+      where: { categoryId: category.id, artists: { some: { artistId: artist.id } } },
+      include: { artists: { include: { artist: true } } },
+    });
+    if (existing) return existing;
+
+    return tx.contender.create({
+      data: {
+        categoryId: category.id,
+        // Pas de nom propre : le participant suit celui de son artiste, et un
+        // changement de pseudo se propage partout au lieu d'être recopié ici.
+        name: null,
+        artists: { create: [{ artistId: artist.id }] },
+      },
+      include: { artists: { include: { artist: true } } },
+    });
+  });
+
+  res.status(201).json({ contender: withName(contender) });
+});
+
 predictionRouter.post('/categories/:categoryId', async (req, res) => {
   const { label, copyFrom } = z
     .object({ label: z.string().min(1).max(60).optional(), copyFrom: z.string().optional() })
@@ -154,6 +301,25 @@ predictionRouter.post('/categories/:categoryId', async (req, res) => {
       label: label ?? `Version ${drafts + 1}`,
       ...(source
         ? {
+          /**
+           * La poche des sélections sur vidéo suit la copie.
+           *
+           * Elle manquait, et sur une catégorie wildcard c'était toute la
+           * version qui manquait : le plateau d'un joueur EST sa poche, les
+           * rangs n'en décrivent que la partie déjà classée. Dupliquer une
+           * version avec quinze noms piochés dont quatre placés donnait un
+           * brouillon à quatre noms, les onze autres évaporés — et il fallait
+           * les rechercher un par un pour comprendre ce qui s'était passé.
+           *
+           * `undefined` quand la source n'en a pas : Prisma laisse alors la
+           * colonne à NULL, ce qui est la bonne valeur pour un pronostic qui
+           * n'a jamais eu de poche.
+           *
+           * Le tampon, lui, ne suit PAS, et c'est délibéré : il marque une carte
+           * précise, celle qu'on a partagée. Une copie est une carte neuve.
+           */
+          pool: source.pool ?? undefined,
+
           ranks: {
             create: source.ranks.map(({ phaseId, contenderId, rank }) => ({
               phaseId,
@@ -232,11 +398,30 @@ predictionRouter.put('/:predictionId', async (req, res) => {
   const rejected = body.ranks.length - ranks.length + (body.battles.length - battles.length);
 
   const saved = await prisma.$transaction(async (tx) => {
+    // `undefined` laisse la colonne tranquille, `null` l'efface : c'est la
+    // distinction que Prisma fait déjà, et elle tombe juste ici — un client qui
+    // n'envoie pas la clé ne veut rien changer, un client qui envoie null retire.
+    //
+    // La pioche suit la même règle. Elle en a d'autant plus besoin que seules
+    // les catégories wildcard l'envoient : partout ailleurs la clé est absente,
+    // et la traiter comme un effacement viderait le plateau du joueur au
+    // premier enregistrement fait depuis un autre écran.
+    const head = {
+      ...(body.stamp === undefined ? {} : { stamp: body.stamp }),
+      ...(body.pool === undefined ? {} : { pool: body.pool }),
+    };
+
     if (body.label) {
-      await tx.prediction.update({ where: { id: prediction.id }, data: { label: body.label } });
+      await tx.prediction.update({
+        where: { id: prediction.id },
+        data: { label: body.label, ...head },
+      });
     } else {
       // Touche updatedAt même quand seul le contenu change.
-      await tx.prediction.update({ where: { id: prediction.id }, data: { updatedAt: new Date() } });
+      await tx.prediction.update({
+        where: { id: prediction.id },
+        data: { updatedAt: new Date(), ...head },
+      });
     }
 
     // On ne réécrit que les phases encore ouvertes : les phases verrouillées
@@ -286,6 +471,78 @@ predictionRouter.patch('/:predictionId', async (req, res) => {
     data: { label },
   });
   res.json({ prediction: updated });
+});
+
+/**
+ * Poser ou retirer le tampon d'un pronostic.
+ *
+ * ─── Pourquoi une route à part ──────────────────────────────────────────────
+ *
+ * `PUT /:predictionId` réécrit le contenu ENTIER : classements, affiches,
+ * tampon. La fenêtre d'export ne connaît que le tampon ; l'y faire passer
+ * enverrait des tableaux vides et effacerait le pronostic. Une route qui ne
+ * touche qu'un champ ne peut pas en abîmer un autre.
+ *
+ * ─── Pourquoi aucune fermeture ne s'y applique ──────────────────────────────
+ *
+ * `eventGate` interdit d'écrire un pronostic après le coup d'envoi, et c'est
+ * juste : ce serait parier sur une battle déjà jouée. Un tampon ne dit rien du
+ * résultat, il décore une carte qu'on partage le plus souvent APRÈS la compète.
+ * Lui appliquer la même barrière reviendrait à interdire de signer sa propre
+ * affiche.
+ *
+ * L'appartenance est vérifiée deux fois : `loadMine` pour le pronostic, le
+ * porte-monnaie pour l'objet. Sans le second contrôle, un identifiant posté à la
+ * main donnerait le tampon le plus cher du catalogue à tout le monde — c'est
+ * déjà la règle des tampons de groupe, et elle vaut ici pour la même raison.
+ */
+predictionRouter.put('/:predictionId/stamp', async (req, res) => {
+  const parsed = z
+    .object({
+      stamp: z
+        .object({
+          id: z.string().min(1).max(60),
+          // Des FRACTIONS bornées, jamais des pixels : la carte n'a pas la même
+          // largeur à l'aperçu et à l'export, et l'aperçu lui-même dépend de
+          // l'écran. Bornées ici et pas seulement dans l'interface — une API ne
+          // se fie pas à son client.
+          x: z.number().min(0).max(1),
+          y: z.number().min(0).max(1),
+        })
+        .nullable(),
+    })
+    .safeParse(req.body);
+
+  if (!parsed.success) return res.status(400).json({ error: 'Tampon mal formé.' });
+
+  const prediction = await loadMine(req.params.predictionId, req.user.id);
+  if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
+
+  const { stamp } = parsed.data;
+
+  if (stamp) {
+    const item = itemById(stamp.id);
+    if (!item || item.slot !== 'stamp') {
+      return res.status(400).json({ error: "Ce tampon n'existe pas." });
+    }
+    if (item.price > 0) {
+      const owned = await prisma.walletEntry.findFirst({
+        where: { userId: req.user.id, kind: 'PURCHASE', itemId: item.id },
+        select: { id: true },
+      });
+      if (!owned) return res.status(403).json({ error: 'Vous ne possédez pas ce tampon.' });
+    }
+  }
+
+  // `null` efface la colonne, exactement comme dans le PUT de contenu : c'est la
+  // distinction que Prisma fait entre `undefined` — ne rien changer — et `null`.
+  const updated = await prisma.prediction.update({
+    where: { id: prediction.id },
+    data: { stamp },
+    select: { id: true, stamp: true },
+  });
+
+  res.json({ stamp: updated.stamp ?? null });
 });
 
 // --- Dépôt --------------------------------------------------------------------

@@ -4,6 +4,7 @@ import { useSession, isStaff } from '../lib/context.jsx';
 import { useI18n, LANGS } from '../lib/i18n.jsx';
 import DiscordButton from './DiscordButton.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import { FramedAvatar } from './Cosmetics.jsx';
 
 /* ---------------------------------------------------------------------------
    L'habillage P411. L'en-tête est la ligne de service d'un décodeur
@@ -58,7 +59,17 @@ export default function Layout() {
                     avec le reste de ce qui touche au compte. */}
                 <Link to="/me" title={t('nav.mine')} aria-label={t('nav.mine')}>
                   {user.avatarUrl ? (
-                    <img className="avatar avatar--link" src={user.avatarUrl} alt="" />
+                    /* Le cadre acheté se porte ici aussi : c'est le seul endroit
+                       du site que l'on voit sur toutes les pages, et un objet
+                       payé qui ne se montrerait que sur son propre profil ne
+                       vaudrait pas ses points. `avatar--link` reste pour la
+                       règle de survol qui la vise nommément. */
+                    <FramedAvatar
+                      url={user.avatarUrl}
+                      frameId={user.equippedFrame}
+                      size="xs"
+                      className="avatar--link"
+                    />
                   ) : (
                     <span className="tag">{t('nav.mine')}</span>
                   )}

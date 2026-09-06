@@ -11,13 +11,13 @@ import { seedFromContenders } from '../lib/bracket.js';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 import SeedingEditor from '../components/SeedingEditor.jsx';
+import CategoryFormat from '../components/CategoryFormat.jsx';
 import ConfirmDelete from '../components/ConfirmDelete.jsx';
 import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
 import AdminSearch from '../components/AdminSearch.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
-import CategoryFormat from '../components/CategoryFormat.jsx';
 
 const TABS = [
   ['structure', 'Événements'],
@@ -99,7 +99,14 @@ function useFlash() {
       // Une action peut renvoyer son propre message quand elle en sait plus
       // que l'appelant — par exemple le poids gagné après réduction d'image.
       const text = await fn();
-      setFlash({ ok: true, text: text ?? okText });
+
+      // Une CHAÎNE, et rien d'autre. Passer `api.post(...)` directement à `run`
+      // faisait remonter ici la réponse JSON de l'API ; React refuse un objet
+      // comme enfant, lève, et fait tomber TOUT l'écran d'administration —
+      // écran noir, sans message, sur un bouton qui avait pourtant réussi.
+      // Le garde vaut mieux que la discipline : il protège aussi les appels
+      // qu'on écrira demain.
+      setFlash({ ok: true, text: typeof text === 'string' ? text : okText });
     } catch (e) {
       setFlash({ ok: false, text: e.message });
     }
@@ -506,6 +513,7 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           </button>
           <button
             className={`btn btn--small${format ? ' btn--primary' : ''}`}
+            aria-expanded={format}
             onClick={() => setFormat(!format)}
           >
             Format
@@ -604,6 +612,7 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
     </div>
   );
 }
+
 /** Ajout et retrait des participants — jusqu'ici réservé au script de seed. */
 function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
@@ -732,19 +741,29 @@ function FormatBuilder({ event, onDone, onClose, run }) {
 
   const existingKinds = new Set(event.categories.map((c) => c.kind));
 
-  const toggle = (kind, label) =>
+  /**
+   * Cocher une entrée.
+   *
+   * La clé est l'IDENTIFIANT du catalogue et non la discipline : « Wildcard
+   * Solo », « Solo Mixte » et « Solo Femme » portent toutes le kind SOLO, et
+   * les indexer par kind les ferait s'écraser l'une l'autre.
+   */
+  const toggle = (entry) =>
     setPicked((p) => {
       const next = { ...p };
-      if (next[kind]) delete next[kind];
+      if (next[entry.id]) delete next[entry.id];
       else
-        next[kind] = {
-          kind,
-          name: label,
+        next[entry.id] = {
+          id: entry.id,
+          kind: entry.kind,
+          name: entry.label,
+          wildcardOnly: Boolean(entry.wildcardOnly),
+          // Une sélection : un nombre de places, et rien d'autre.
+          places: entry.wildcardOnly ? 8 : '',
           format: 'TOP_8',
-          wildcard: false,
-          wildcardCount: '',
-          // Deux paliers indépendants : toutes les catégories n'ont pas
-          // d'éliminations, et certaines n'ont que ça.
+          // Le palier d'éliminations reste ; celui de wildcards a disparu des
+          // catégories à tableau — une sélection est désormais un événement à
+          // part entière, pas une phase greffée sur autre chose.
           elimination: false,
           eliminationCount: '',
           smallFinal: false,
@@ -752,7 +771,7 @@ function FormatBuilder({ event, onDone, onClose, run }) {
       return next;
     });
 
-  const patch = (kind, changes) => setPicked((p) => ({ ...p, [kind]: { ...p[kind], ...changes } }));
+  const patch = (id, changes) => setPicked((p) => ({ ...p, [id]: { ...p[id], ...changes } }));
 
   const chosen = Object.values(picked);
 
@@ -763,12 +782,15 @@ function FormatBuilder({ event, onDone, onClose, run }) {
         categories: chosen.map((c) => ({
           kind: c.kind,
           name: c.name,
-          format: c.format,
-          wildcard: c.wildcard,
-          wildcardCount: c.wildcardCount === '' ? null : Number(c.wildcardCount),
-          elimination: c.elimination,
-          eliminationCount: c.eliminationCount === '' ? null : Number(c.eliminationCount),
-          smallFinal: c.smallFinal,
+          wildcardOnly: c.wildcardOnly,
+          ...(c.wildcardOnly
+            ? { places: Math.min(100, Math.max(1, Number(c.places) || 1)) }
+            : {
+              format: c.format,
+              elimination: c.elimination,
+              eliminationCount: c.eliminationCount === '' ? null : Number(c.eliminationCount),
+              smallFinal: c.smallFinal,
+            }),
         })),
       });
       setPicked({});
@@ -814,14 +836,29 @@ function FormatBuilder({ event, onDone, onClose, run }) {
             par catégorie.
           </p>
 
-          <div className="row" style={{ gap: '0.4rem' }}>
+          <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
             {catalog.kinds.map((k) => (
               <button
                 key={k.id}
                 className={`btn btn--small${picked[k.id] ? ' btn--primary' : ''}`}
-                onClick={() => toggle(k.id, k.label)}
+                onClick={() => toggle({ id: k.id, kind: k.id, label: k.label })}
               >
                 {k.label}{existingKinds.has(k.id) ? ' ✓' : ''}
+              </button>
+            ))}
+          </div>
+
+          {/* Les sélections sur une seconde ligne, séparées : ce ne sont pas
+              des variantes des disciplines au-dessus mais des compétitions
+              entières, sans tableau ni affiche. */}
+          <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+            {(catalog.wildcards ?? []).map((w) => (
+              <button
+                key={w.id}
+                className={`btn btn--small${picked[w.id] ? ' btn--primary' : ''}`}
+                onClick={() => toggle({ ...w, wildcardOnly: true })}
+              >
+                {w.label}
               </button>
             ))}
           </div>
@@ -830,80 +867,84 @@ function FormatBuilder({ event, onDone, onClose, run }) {
             <div className="panel panel--flush">
               <table>
                 <thead>
-                  <tr><th>Catégorie</th><th>Tableau</th><th>Wildcards</th><th>Éliminations</th><th>3e place</th></tr>
+                  <tr><th>Catégorie</th><th>Tableau</th><th>Éliminations</th><th>3e place</th></tr>
                 </thead>
                 <tbody>
                   {chosen.map((c) => (
-                    <tr key={c.kind}>
+                    <tr key={c.id}>
                       <td>
                         <input
-                          type="text" value={c.name} aria-label={`Nom de la catégorie ${c.kind}`}
-                          onChange={(e) => patch(c.kind, { name: e.target.value })}
-                          style={{ width: '10rem' }}
+                          type="text" value={c.name} aria-label={`Nom de la catégorie ${c.id}`}
+                          onChange={(e) => patch(c.id, { name: e.target.value })}
+                          style={{ width: '11rem' }}
                         />
                       </td>
-                      <td>
-                        <select
-                          value={c.format} aria-label={`Format de ${c.name}`}
-                          onChange={(e) => patch(c.kind, { format: e.target.value })}
-                        >
-                          {catalog.brackets.map((b) => (
-                            <option key={b.id} value={b.id}>{b.label}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <label style={{ margin: 0 }}>
-                          <input
-                            type="checkbox" checked={c.wildcard}
-                            onChange={(e) => patch(c.kind, { wildcard: e.target.checked })}
-                          />{' '}
-                          wildcards
-                        </label>
-                        {c.wildcard && (
-                          <select
-                            style={{ marginLeft: '0.5rem' }}
-                            value={c.wildcardCount}
-                            aria-label={`Nombre de qualifiés pour ${c.name}`}
-                            onChange={(e) => patch(c.kind, { wildcardCount: e.target.value })}
-                          >
-                            <option value="">Taille du tableau</option>
-                            {[2, 4, 8, 16, 32].map((n) => (
-                              <option key={n} value={n}>{n} qualifiés</option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td>
-                        <label style={{ margin: 0 }}>
-                          <input
-                            type="checkbox" checked={c.elimination}
-                            onChange={(e) => patch(c.kind, { elimination: e.target.checked })}
-                          />{' '}
-                          oui
-                        </label>
-                        {c.elimination && (
-                          <select
-                            style={{ marginLeft: '0.5rem' }}
-                            value={c.eliminationCount}
-                            aria-label={`Qualifiés après éliminations pour ${c.name}`}
-                            onChange={(e) => patch(c.kind, { eliminationCount: e.target.value })}
-                          >
-                            <option value="">Taille du tableau</option>
-                            {[2, 4, 8, 16, 32].map((n) => (
-                              <option key={n} value={n}>{n} qualifiés</option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td>
-                        <input
-                          type="checkbox" checked={c.smallFinal}
-                          disabled={c.format === 'TOP_2'}
-                          aria-label={`Petite finale pour ${c.name}`}
-                          onChange={(e) => patch(c.kind, { smallFinal: e.target.checked })}
-                        />
-                      </td>
+
+                      {/* Une sélection n'a ni tableau, ni éliminations, ni
+                          petite finale : elle a des places. La ligne fusionne
+                          donc ses trois dernières colonnes plutôt que d'afficher
+                          trois cases grisées. */}
+                      {c.wildcardOnly ? (
+                        <td colSpan={3}>
+                          <span className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
+                            <input
+                              type="number"
+                              min={catalog.places?.min ?? 1}
+                              max={catalog.places?.max ?? 100}
+                              value={c.places}
+                              style={{ width: '5.5rem' }}
+                              aria-label={`Nombre de places pour ${c.name}`}
+                              onChange={(e) => patch(c.id, { places: e.target.value })}
+                            />
+                            <span className="faint" style={{ fontSize: '0.85rem' }}>
+                              places qualificatives — sélection sur vidéo, sans tableau
+                            </span>
+                          </span>
+                        </td>
+                      ) : (
+                        <>
+                          <td>
+                            <select
+                              value={c.format} aria-label={`Format de ${c.name}`}
+                              onChange={(e) => patch(c.id, { format: e.target.value })}
+                            >
+                              {catalog.brackets.map((b) => (
+                                <option key={b.id} value={b.id}>{b.label}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <label style={{ margin: 0 }}>
+                              <input
+                                type="checkbox" checked={c.elimination}
+                                onChange={(e) => patch(c.id, { elimination: e.target.checked })}
+                              />{' '}
+                              oui
+                            </label>
+                            {c.elimination && (
+                              <select
+                                style={{ marginLeft: '0.5rem' }}
+                                value={c.eliminationCount}
+                                aria-label={`Qualifiés après éliminations pour ${c.name}`}
+                                onChange={(e) => patch(c.id, { eliminationCount: e.target.value })}
+                              >
+                                <option value="">Taille du tableau</option>
+                                {[2, 4, 8, 16, 32].map((n) => (
+                                  <option key={n} value={n}>{n} qualifiés</option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td>
+                            <input
+                              type="checkbox" checked={c.smallFinal}
+                              disabled={c.format === 'TOP_2'}
+                              aria-label={`Petite finale pour ${c.name}`}
+                              onChange={(e) => patch(c.id, { smallFinal: e.target.checked })}
+                            />
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1392,7 +1433,16 @@ function ResultsAdmin() {
         {category && (
           <button
             className="btn btn--small"
-            onClick={() => run(() => api.post(`/admin/categories/${category.id}/rescore`), 'Scores recalculés.')}
+            onClick={() =>
+              run(async () => {
+                const { rescored } = await api.post(`/admin/categories/${category.id}/rescore`);
+                // Le rechargement n'est pas cosmétique : les points affichés sur
+                // la page viennent de la réponse précédente, et sans lui on
+                // annonce un recalcul en montrant les anciens chiffres.
+                await reload();
+                return `${category.name} : ${rescored} pronostic(s) recalculé(s).`;
+              })
+            }
           >
             Recalculer {category.name}
           </button>

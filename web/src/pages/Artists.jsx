@@ -55,6 +55,9 @@ export function ArtistPage() {
   const [error, setError] = useState(null);
   const { t, number } = useI18n();
 
+  // Pas de session requise ici : une fiche d'artiste ne parle de personne
+  // d'inscrit, et c'est le genre de page qu'on partage. Seul le COMPTEUR
+  // distingue — il ne retient que les visiteurs connectés.
   useEffect(() => {
     api.get(`/artists/${slug}`).then(setData).catch((e) => setError(e.message));
   }, [slug]);
@@ -80,6 +83,9 @@ export function ArtistPage() {
           agrégé, ça ne décrit aucune des situations réelles. */}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <Metric value={number(totals?.pointsFrom ?? 0)} label={t('artists.pointsFrom')} accent />
+        {/* Une vue par visiteur et par jour : le chiffre dit combien de membres
+            sont venus, pas combien de fois la page a été chargée. */}
+        {data.views != null && <Metric value={number(data.views)} label={t('artists.views')} />}
       </div>
 
       <section className="stack">

@@ -4,6 +4,7 @@ import { useI18n } from '../lib/i18n.jsx';
 import Modal from './Modal.jsx';
 import ArtistFigure from './ArtistFigure.jsx';
 import PredictionComments from './PredictionComments.jsx';
+import GroupStamps from './GroupStamps.jsx';
 import ExportPrediction from './ExportPrediction.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -20,6 +21,10 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [placing, setPlacing] = useState(false);
+    // La pose de tampon, distincte de la pose de commentaire : les deux modes
+    // s'excluent, parce qu'un clic ne peut pas signifier deux choses. Activer
+    // l'un éteint l'autre plutôt que de laisser deux couches se disputer le clic.
+    const [stamping, setStamping] = useState(false);
     const [exporting, setExporting] = useState(false);
 
     // La boîte annotée : c'est elle qui porte `position: relative`, donc
@@ -69,9 +74,18 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                     {data && groupSlug && (
                         <button
                             className={`btn btn--small${placing ? ' btn--primary' : ''}`}
-                            onClick={() => setPlacing((v) => !v)}
+                            onClick={() => { setPlacing((v) => !v); setStamping(false); }}
                         >
                             {placing ? t('pin.mode.on') : t('pin.mode')}
+                        </button>
+                    )}
+
+                    {data && groupSlug && (
+                        <button
+                            className={`btn btn--small${stamping ? ' btn--primary' : ''}`}
+                            onClick={() => { setStamping((v) => !v); setPlacing(false); }}
+                        >
+                            {stamping ? t('stamp.cancel') : t('stamp.place')}
                         </button>
                     )}
 
@@ -88,6 +102,27 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
 
             {data && (
                 <div ref={canvas} className={`canvas${placing ? ' canvas--placing' : ''}`}>
+                    {/* Les tampons partagent le repère du canvas avec les
+                        bulles : leurs positions sont des fractions de la même
+                        boîte, donc les deux restent d'accord à toute largeur.
+
+                        Ils se rendent AVANT la fiche, et c'est le point de ce
+                        changement : leur barre de commandes — dont le retrait —
+                        était en fin de canvas, c'est-à-dire sous deux écrans de
+                        tableau. Un bouton qu'il faut chercher dix secondes
+                        n'existe pas. Les marques et la couche de pose sont en
+                        position absolue : l'ordre du document ne change rien à
+                        leur placement, seulement à celui de la barre. */}
+                    {groupSlug && (
+                        <GroupStamps
+                            predictionId={predictionId}
+                            groupSlug={groupSlug}
+                            canvasRef={canvas}
+                            placing={stamping}
+                            onPlacingEnd={() => setStamping(false)}
+                        />
+                    )}
+
                     <Body prediction={data} />
 
                     {groupSlug && (
@@ -128,7 +163,7 @@ const ROUND_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FIN
  * l'alimentent, et les deux finales dans la même colonne. Une liste à plat
  * ne dit rien du chemin parcouru — or c'est précisément ce qu'on vient lire.
  */
-function ReadOnlyBracket({ battles, byId, photo }) {
+export function ReadOnlyBracket({ battles, byId, photo }) {
     const { t } = useI18n();
 
     const byRound = {};
@@ -220,7 +255,11 @@ function ReadOnlyBracket({ battles, byId, photo }) {
     );
 }
 
-function Body({ prediction }) {
+/**
+ * Exporté pour l'aperçu de boutique : le tampon se juge sur un vrai tableau, et
+ * c'est ce composant qui sait le dessiner en lecture seule.
+ */
+export function Body({ prediction }) {
     const { t } = useI18n();
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
     const photo = (c) => c?.imageUrl ?? c?.artists?.[0]?.artist?.imageUrl ?? null;

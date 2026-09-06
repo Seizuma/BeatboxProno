@@ -8,8 +8,16 @@ import {
   clearSession,
 } from '../lib/auth.js';
 import { touch } from '../lib/presence.js';
+import { prisma } from '../lib/prisma.js';
 
 export const authRouter = Router();
+
+/**
+ * Express 4 avale les rejets d'un handler asynchrone : la requête reste
+ * suspendue jusqu'au délai d'expiration, sans une ligne de log. Toute route
+ * `async` de ce fichier passe par ici.
+ */
+const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /**
  * La destination à rejoindre une fois la connexion faite.
@@ -99,8 +107,52 @@ authRouter.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.get('/me', (req, res) => {
+/**
+ * La session courante.
+ *
+ * Les CINQ cosmétiques portés sont relus en base plutôt que pris sur
+ * `req.user` : ce que le middleware attache dépend de son propre `select`, et
+ * s'y fier ici ferait dépendre l'affichage du cadre d'un fichier qui n'a rien
+ * demandé — le jour où quelqu'un resserre ce select, le cadre disparaîtrait de
+ * l'en-tête sans erreur ni trace, ce qui est la pire façon de casser.
+ *
+ * Cinq et non trois : le tampon et le skin de carte manquaient. Un emplacement
+ * absent d'ici n'est pas « vide », il est INCONNU — et l'interface, elle, lit
+ * l'absence comme un retrait. Résultat : le bouton « poser mon tampon »
+ * basculait un mode qui n'affichait rien dans les groupes, et ne s'affichait
+ * pas du tout sur son propre tableau. La règle tient pour la suite : tout
+ * emplacement de `SLOTS` doit sortir par cette route.
+ *
+ * La requête est un findUnique sur la clé primaire, et `/me` n'est appelé
+ * qu'une fois par chargement d'application : le coût est nul à côté du risque.
+ */
+authRouter.get('/me', guard(async (req, res) => {
   if (!req.user) return res.json({ user: null });
   const { id, username, globalName, avatarUrl, role } = req.user;
-  res.json({ user: { id, username, globalName, avatarUrl, role } });
-});
+
+  const worn = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      equippedFrame: true,
+      equippedNameFx: true,
+      equippedBand: true,
+      equippedCardSkin: true,
+      equippedStamp: true,
+    },
+  });
+
+  res.json({
+    user: {
+      id,
+      username,
+      globalName,
+      avatarUrl,
+      role,
+      equippedFrame: worn?.equippedFrame ?? null,
+      equippedNameFx: worn?.equippedNameFx ?? null,
+      equippedBand: worn?.equippedBand ?? null,
+      equippedCardSkin: worn?.equippedCardSkin ?? null,
+      equippedStamp: worn?.equippedStamp ?? null,
+    },
+  });
+}));

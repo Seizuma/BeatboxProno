@@ -1,9 +1,12 @@
+import { isWildcardCategory } from './wildcard.js';
 import {
     GAP_MAX_BONUS,
     BATTLE_HAPPENED,
     BATTLE_WINNER,
     BATTLE_SCORE,
     QUALIFIED_POINT,
+    FINAL_FOUR_POINTS,
+    WILDCARD_HIT,
 } from './scoring.js';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -24,6 +27,12 @@ export function maxScoreForCategory(category) {
     const lines = [];
     let total = 0;
 
+    // Dans une compétition de wildcards, la qualification vaut trois points au
+    // lieu d'un. Le maximum doit le savoir, sinon la précision d'un pronostic
+    // parfait dépasse cent pour cent — c'est exactement le défaut qu'on a mis
+    // deux jours à trouver sur le Crew.
+    const hitValue = isWildcardCategory(category) ? WILDCARD_HIT : QUALIFIED_POINT;
+
     for (const phase of category.phases ?? []) {
         if (RANKING_TYPES.includes(phase.type)) {
             const runners = category.contenders?.length ?? 0;
@@ -41,7 +50,7 @@ export function maxScoreForCategory(category) {
             const countsQualification = phase.type === 'WILDCARD' || phase.type === 'ELIMINATION';
             const cut = phase.qualifierCount ?? 0;
             const qualifies = countsQualification && cut > 0 && cut < runners ? cut : 0;
-            const qualification = qualifies * QUALIFIED_POINT;
+            const qualification = qualifies * hitValue;
 
             const points = gap + qualification;
 
@@ -50,7 +59,7 @@ export function maxScoreForCategory(category) {
                 phase: phase.name,
                 type: phase.type,
                 detail: qualifies
-                    ? `${runners} × ${GAP_MAX_BONUS} (placement) + ${qualifies} × ${QUALIFIED_POINT} (qualification)`
+                    ? `${runners} × ${GAP_MAX_BONUS} (placement) + ${qualifies} × ${hitValue} (qualification)`
                     : `${runners} × ${GAP_MAX_BONUS} (placement)` +
                     (countsQualification && cut >= runners && runners > 0
                         ? ' — personne n\'est éliminé, aucun point de qualification'
@@ -74,6 +83,40 @@ export function maxScoreForCategory(category) {
             points,
         });
         total += points;
+
+        /**
+         * Le top 4 final, une fois par tableau.
+         *
+         * Il dépend de la STRUCTURE et non des résultats, comme le reste de ce
+         * fichier : une finale existe ou n'existe pas, une petite finale aussi.
+         * Un format sans petite finale ne vaut donc que 9 points ici au lieu de
+         * 14 — et c'est un argument de plus pour en ajouter une, ce que l'écran
+         * de format sait faire depuis peu.
+         */
+        if (phase.type === 'BRACKET') {
+            const rounds = new Set((phase.battles ?? []).map((b) => b.round));
+            const places = [];
+            if (rounds.has('FINAL')) places.push(FINAL_FOUR_POINTS[0], FINAL_FOUR_POINTS[1]);
+            if (rounds.has('FINAL') && rounds.has('SMALL_FINAL')) {
+                places.push(FINAL_FOUR_POINTS[2], FINAL_FOUR_POINTS[3]);
+            }
+
+            if (places.length) {
+                const four = places.reduce((n, p) => n + p, 0);
+                lines.push({
+                    phaseId: `${phase.id}-four`,
+                    phase: `${phase.name} — top 4`,
+                    type: 'FINAL_FOUR',
+                    detail:
+                        places.join(' + ') +
+                        (places.length === 2
+                            ? ' (pas de petite finale : ni 3e ni 4e place)'
+                            : ' (vainqueur, finaliste, 3e, 4e)'),
+                    points: four,
+                });
+                total += four;
+            }
+        }
     }
 
     return { category: category.name, categoryId: category.id, total, lines };

@@ -25,6 +25,12 @@ const RANGES = [
 export default function AdminPeople({ currentUser, useFlash }) {
     const [flash, run] = useFlash();
 
+    // Le porte-monnaie ouvert, s'il y en a un. Un seul à la fois : c'est un
+    // geste qu'on fait pour une personne précise, pas une colonne qu'on
+    // parcourt. En faire une colonne aurait demandé un agrégat par ligne sur
+    // cent comptes, pour une information qu'on regarde une fois par mois.
+    const [wallet, setWallet] = useState(null);
+
     const [data, setData] = useState(null);
     const [q, setQ] = useState('');
     const [open, setOpen] = useState(false);
@@ -149,10 +155,11 @@ export default function AdminPeople({ currentUser, useFlash }) {
                                             <th>Compte</th>
                                             <th>Identifiant Discord</th>
                                             <th>Rôle</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {users.map((u) => (
+                                        {users.flatMap((u) => [
                                             <tr key={u.id}>
                                                 <td>
                                                     <span className="row" style={{ gap: '0.5rem' }}>
@@ -199,8 +206,28 @@ export default function AdminPeople({ currentUser, useFlash }) {
                                                         {isOwner(currentUser) && <option value="OWNER">Propriétaire</option>}
                                                     </select>
                                                 </td>
-                                            </tr>
-                                        ))}
+                                                <td className="num">
+                                                    <button
+                                                        className="btn btn--small btn--ghost"
+                                                        aria-expanded={wallet === u.id}
+                                                        onClick={() => setWallet(wallet === u.id ? null : u.id)}
+                                                    >
+                                                        Points
+                                                    </button>
+                                                </td>
+                                            </tr>,
+
+                                            /* Une ligne dépliée sous le compte plutôt qu'une fenêtre : on
+                                               garde sous les yeux DE QUI il s'agit, ce qu'une modale fait
+                                               précisément disparaître. */
+                                            wallet === u.id ? (
+                                                <tr key={`${u.id}-wallet`}>
+                                                    <td colSpan={4} style={{ background: 'var(--surface-2)' }}>
+                                                        <WalletPanel userId={u.id} run={run} />
+                                                    </td>
+                                                </tr>
+                                            ) : null,
+                                        ])}
                                     </tbody>
                                 </table>
                             </div>
@@ -214,6 +241,151 @@ export default function AdminPeople({ currentUser, useFlash }) {
                 rôles. Le propriétaire est le seul qu'aucun administrateur ne peut destituer ; il n'y en a
                 qu'un, et il ne peut transmettre son rang qu'en le donnant à quelqu'un d'autre.
             </p>
+        </div>
+    );
+}
+
+
+/**
+ * Le porte-monnaie d'un joueur : son solde, ses vingt dernières écritures, et
+ * de quoi en ajouter une.
+ *
+ * Le motif est OBLIGATOIRE. Un crédit d'événement se justifie tout seul, il
+ * porte le nom de la compète ; un crédit manuel ne porte rien. Sans motif, la
+ * seule réponse possible à « d'où viennent ces cinq cents points ? » est « je
+ * ne sais pas », et c'est une conversation qu'on n'a qu'une fois avant de le
+ * regretter.
+ */
+function WalletPanel({ userId, run }) {
+    const [data, setData] = useState(null);
+    const [amount, setAmount] = useState('');
+    const [note, setNote] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const reload = () => api.get(`/admin/users/${userId}/wallet`).then(setData);
+
+    useEffect(() => {
+        setData(null);
+        reload().catch(() => { });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId]);
+
+    const value = Number(amount);
+    const valid = Number.isInteger(value) && value !== 0 && note.trim().length > 0;
+
+    async function submit(event) {
+        event.preventDefault();
+        if (!valid || busy) return;
+        setBusy(true);
+        await run(async () => {
+            const out = await api.post(`/admin/users/${userId}/wallet`, {
+                amount: value,
+                note: note.trim(),
+            });
+            setAmount('');
+            setNote('');
+            await reload();
+            return `Porte-monnaie à ${out.balance} point(s).`;
+        });
+        setBusy(false);
+    }
+
+    if (!data) return <p className="faint" style={{ margin: '0.6rem 0' }}>Chargement…</p>;
+
+    return (
+        <div className="stack" style={{ gap: '0.7rem', padding: '0.6rem 0' }}>
+            <div className="row" style={{ gap: '0.8rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span
+                    className="display"
+                    style={{ fontSize: 'calc(1.8rem * var(--display-scale))', color: 'var(--g)' }}
+                >
+                    {data.balance}
+                </span>
+                <span className="eyebrow" style={{ margin: 0 }}>points dépensables</span>
+            </div>
+
+            <form className="row" style={{ gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }} onSubmit={submit}>
+                <div className="field" style={{ margin: 0, width: '7rem' }}>
+                    <label htmlFor={`amt-${userId}`}>Montant</label>
+                    <input
+                        id={`amt-${userId}`}
+                        type="number"
+                        step="1"
+                        value={amount}
+                        placeholder="250"
+                        onChange={(e) => setAmount(e.target.value)}
+                    />
+                </div>
+
+                <div className="field" style={{ margin: 0, flex: '1 1 18rem' }}>
+                    <label htmlFor={`note-${userId}`}>Motif</label>
+                    <input
+                        id={`note-${userId}`}
+                        type="text"
+                        maxLength={140}
+                        value={note}
+                        placeholder="concours de pronostics du live GBB26"
+                        onChange={(e) => setNote(e.target.value)}
+                    />
+                </div>
+
+                <button className="btn btn--small btn--primary" type="submit" disabled={!valid || busy}>
+                    {value < 0 ? 'Retirer' : 'Créditer'}
+                </button>
+            </form>
+
+            <p className="faint" style={{ fontSize: '0.8rem', margin: 0 }}>
+                Un montant négatif reprend des points. Le score au classement n'est jamais touché : il
+                reste la somme des pronostics, et rien ne le dépense.
+            </p>
+
+            {data.entries.length === 0 ? (
+                <p className="empty">Aucun mouvement.</p>
+            ) : (
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Origine</th>
+                            <th className="num">Montant</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.entries.map((e) => (
+                            <tr key={e.id}>
+                                <td className="data faint">{formatDay(e.createdAt)}</td>
+                                <td>
+                                    {e.kind === 'EVENT_POINTS' && (e.event ? `${e.event.name} ${e.event.year}` : 'Compétition supprimée')}
+                                    {e.kind === 'PURCHASE' && `Achat · ${e.itemId}`}
+                                    {e.kind === 'GRANT' && (e.note ?? 'Crédit manuel')}
+                                </td>
+                                <td className="num" style={{ color: e.amount < 0 ? 'var(--m)' : 'var(--g)' }}>
+                                    {e.amount > 0 ? `+${e.amount}` : e.amount}
+                                </td>
+                                <td className="num">
+                                    {/* Seules les écritures manuelles s'annulent : le serveur refuse
+                                        les autres, le bouton ne fait que dire la même chose plus tôt. */}
+                                    {e.kind === 'GRANT' && (
+                                        <button
+                                            className="btn btn--small btn--ghost"
+                                            onClick={() =>
+                                                run(async () => {
+                                                    await api.del(`/admin/wallet/${e.id}`);
+                                                    await reload();
+                                                    return 'Écriture annulée.';
+                                                })
+                                            }
+                                        >
+                                            Annuler
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
         </div>
     );
 }

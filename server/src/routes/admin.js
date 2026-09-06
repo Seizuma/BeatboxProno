@@ -6,6 +6,8 @@ import { contenderName, withName } from '../lib/naming.js';
 import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
 import { notifyEventOpen } from '../lib/notifications.js';
+import { settleEvent } from '../lib/badges.js';
+import { WILDCARD_KINDS, MIN_PLACES, MAX_PLACES } from '../lib/wildcard.js';
 import {
   validateSeedPairs,
   patternFor,
@@ -348,7 +350,21 @@ adminRouter.patch('/events/:id', async (req, res) => {
     announced = await notifyEventOpen(event.id);
   }
 
-  res.json({ event, announced });
+  /**
+   * La clôture distribue badges et porte-monnaie — sur la TRANSITION vers
+   * FINISHED, comme l'annonce d'ouverture, et pour la même raison : un état se
+   * ré-enregistre, une transition n'arrive qu'à la bascule.
+   *
+   * L'opération est rejouable : re-basculer LIVE → FINISHED après un recalcul
+   * de points CORRIGE badges et crédits, sans jamais les dupliquer. C'est le
+   * geste à faire quand un résultat change après coup.
+   */
+  let settled = null;
+  if (data.status === 'FINISHED' && before?.status !== 'FINISHED') {
+    settled = await settleEvent(event.id);
+  }
+
+  res.json({ event, announced, settled });
 });
 
 adminRouter.delete('/events/:id', onlyAdmin, async (req, res) => {
@@ -607,6 +623,11 @@ adminRouter.get('/formats', (_req, res) => {
       rounds: f.rounds.map(([round, count]) => ({ round, count })),
     })),
     kinds: Object.entries(CATEGORY_KINDS).map(([id, label]) => ({ id, label })),
+    // Les sélections sur vidéo. Elles portent une DISCIPLINE réelle — c'est
+    // elle qui décide quels artistes on peut engager — et un nom qui dit la
+    // nuance que la discipline ignore : mixte, féminine.
+    wildcards: WILDCARD_KINDS,
+    places: { min: MIN_PLACES, max: MAX_PLACES },
   });
 });
 
@@ -638,6 +659,17 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
           eliminationCount: z.number().int().min(2).max(200).nullable().optional(),
           smallFinal: z.boolean().default(false),
           legacyBattles: z.number().int().min(1).max(16).default(4),
+
+          /**
+           * Une SÉLECTION sur vidéo : pas de tableau, pas d'affiches. Une liste
+           * d'inscrits, un nombre de places, et un classement à pronostiquer.
+           *
+           * `places` est libre entre 1 et 100 : une sélection peut retenir un
+           * seul nom comme en retenir quarante, et rien ne justifie de
+           * n'autoriser que les puissances de deux — ce n'est pas un tableau.
+           */
+          wildcardOnly: z.boolean().default(false),
+          places: z.number().int().min(MIN_PLACES).max(MAX_PLACES).optional(),
         })
       )
       .min(1),
@@ -686,6 +718,28 @@ adminRouter.post('/events/:eventId/format', async (req, res) => {
       });
 
       let position = 0;
+
+      /**
+       * Une sélection s'arrête là : une phase de classement, et c'est tout.
+       *
+       * Pas de squelette d'affiches, donc rien à propager, rien à recomposer
+       * quand le classement change. C'est aussi ce qui la rend reconnaissable
+       * ensuite — une catégorie à phase unique de type WILDCARD, et le reste du
+       * site en déduit la règle sans qu'on ait eu à poser un drapeau.
+       */
+      if (spec.wildcardOnly) {
+        await tx.phase.create({
+          data: {
+            categoryId: category.id,
+            name,
+            type: 'WILDCARD',
+            position: 0,
+            qualifierCount: spec.places ?? bracket.size,
+          },
+        });
+        out.push({ id: category.id, name, battles: 0, places: spec.places ?? bracket.size });
+        continue;
+      }
 
       // Les paliers de qualification, dans l'ordre : wildcards puis
       // éliminations. Chacun est facultatif et peut exister sans l'autre.
@@ -1029,6 +1083,152 @@ async function composeSmallFinals(phaseId) {
   return done;
 }
 
+/**
+ * Le porte-monnaie d'un joueur, vu et alimenté par l'organisateur.
+ *
+ * ─── Pourquoi une écriture et non un compteur ───────────────────────────────
+ *
+ * Créditer manuellement, c'est ajouter une LIGNE au livre de comptes, pas
+ * augmenter un solde. Le solde reste ce qu'il a toujours été : la somme des
+ * lignes. Conséquence directe, et c'est tout l'intérêt — une bourse donnée par
+ * erreur se retire en supprimant sa ligne, sans qu'on ait à retrancher quoi que
+ * ce soit ni à se demander si un achat est passé entre-temps.
+ *
+ * ─── Pourquoi une provenance ────────────────────────────────────────────────
+ *
+ * Un crédit d'événement se justifie tout seul : il porte l'identifiant de la
+ * compète. Un crédit manuel ne porte rien. Le jour où quelqu'un demande d'où
+ * viennent ses cinq cents points, sans `note` ni `grantedById` la seule réponse
+ * possible est « je ne sais pas ». Les deux colonnes coûtent une migration et
+ * évitent cette conversation.
+ */
+
+const WALLET_NOTE_MAX = 140;
+
+/** Le solde et les dernières écritures d'un joueur. */
+adminRouter.get('/users/:id/wallet', async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, username: true, globalName: true },
+  });
+  if (!user) return res.status(404).json({ error: 'Compte introuvable.' });
+
+  const [agg, entries] = await Promise.all([
+    prisma.walletEntry.aggregate({ where: { userId: user.id }, _sum: { amount: true } }),
+    prisma.walletEntry.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      // Vingt lignes : de quoi comprendre un solde sans transformer le panneau
+      // en relevé bancaire. Le livre complet reste dans l'export de compte.
+      take: 20,
+      include: { event: { select: { slug: true, name: true, year: true } } },
+    }),
+  ]);
+
+  res.json({
+    user,
+    balance: agg._sum.amount ?? 0,
+    entries,
+  });
+});
+
+/**
+ * Créditer ou débiter à la main.
+ *
+ * Le montant peut être négatif : reprendre une bourse donnée par erreur est le
+ * cas d'usage jumeau, et une route séparée pour ça n'aurait rien apporté.
+ *
+ * Un débit ne peut pas faire passer le solde sous zéro. La boutique suppose
+ * partout un solde positif ; un porte-monnaie négatif ne bloquerait pas
+ * seulement les achats, il ferait aussi disparaître silencieusement les crédits
+ * de la compète suivante, absorbés par le trou.
+ */
+adminRouter.post('/users/:id/wallet', async (req, res) => {
+  const { amount, note } = z
+    .object({
+      amount: z.number().int().refine((n) => n !== 0, 'Un mouvement de zéro point ne dit rien.'),
+      note: z.string().trim().min(1).max(WALLET_NOTE_MAX),
+    })
+    .parse(req.body);
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { id: true },
+  });
+  if (!user) return res.status(404).json({ error: 'Compte introuvable.' });
+
+  // Transaction interactive : le solde est lu ET la ligne écrite sans que rien
+  // ne s'intercale. Deux onglets d'administration ouverts sur le même joueur,
+  // et deux débits de cent points passeraient tous les deux sur un solde de
+  // cent cinquante.
+  try {
+    await prisma.$transaction(async (tx) => {
+      const agg = await tx.walletEntry.aggregate({
+        where: { userId: user.id },
+        _sum: { amount: true },
+      });
+      const balance = agg._sum.amount ?? 0;
+      if (balance + amount < 0) {
+        const err = new Error('negative');
+        err.balance = balance;
+        throw err;
+      }
+
+      await tx.walletEntry.create({
+        data: {
+          userId: user.id,
+          kind: 'GRANT',
+          amount,
+          note,
+          grantedById: req.user.id,
+        },
+      });
+    });
+  } catch (err) {
+    if (err.message === 'negative') {
+      return res.status(409).json({
+        error: `Ce retrait mettrait le porte-monnaie à découvert : il contient ${err.balance} point(s).`,
+      });
+    }
+    throw err;
+  }
+
+  const agg = await prisma.walletEntry.aggregate({
+    where: { userId: user.id },
+    _sum: { amount: true },
+  });
+  res.json({ ok: true, balance: agg._sum.amount ?? 0 });
+});
+
+/**
+ * Annuler une écriture manuelle.
+ *
+ * Seules les lignes GRANT sont supprimables. Un crédit d'événement se corrige en
+ * re-clôturant la compète — c'est ce qui garde le calcul et le livre d'accord.
+ * Et un achat ne se défait pas ici : supprimer sa ligne rendrait les points tout
+ * en laissant l'objet équipé.
+ */
+adminRouter.delete('/wallet/:entryId', async (req, res) => {
+  const entry = await prisma.walletEntry.findUnique({
+    where: { id: req.params.entryId },
+    select: { id: true, kind: true, userId: true },
+  });
+  if (!entry) return res.status(404).json({ error: 'Écriture introuvable.' });
+  if (entry.kind !== 'GRANT') {
+    return res.status(400).json({
+      error: "Seules les écritures manuelles s'annulent ici. Un crédit d'événement se corrige en re-clôturant la compète.",
+    });
+  }
+
+  await prisma.walletEntry.delete({ where: { id: entry.id } });
+
+  const agg = await prisma.walletEntry.aggregate({
+    where: { userId: entry.userId },
+    _sum: { amount: true },
+  });
+  res.json({ ok: true, balance: agg._sum.amount ?? 0 });
+});
+
 adminRouter.patch('/categories/:id', async (req, res) => {
   const schema = z.object({
     name: z.string().min(1).optional(),
@@ -1096,7 +1296,11 @@ adminRouter.get('/events/:eventId/max-score', async (req, res) => {
           contenders: { select: { id: true } },
           phases: {
             orderBy: { position: 'asc' },
-            include: { battles: { select: { id: true } } },
+            // `round` en plus de l'identifiant : le barème du top 4 dépend de la
+            // PRÉSENCE d'une finale et d'une petite finale, pas du nombre
+            // d'affiches. Sans cette colonne, maxScoreForCategory ne voyait que
+            // des tours `undefined` et n'annonçait jamais ces points.
+            include: { battles: { select: { id: true, round: true } } },
           },
         },
       },
@@ -1195,7 +1399,9 @@ adminRouter.put('/phases/:id/seeding', async (req, res) => {
 /** Change le nombre de qualifiés d'une phase après coup. */
 adminRouter.patch('/phases/:id/qualifiers', async (req, res) => {
   const { qualifierCount } = z
-    .object({ qualifierCount: z.number().int().min(1).max(128).nullable() })
+    // Une place au minimum, cent au plus — les mêmes bornes qu'à la
+    // composition. Une sélection n'a pas de raison d'être une puissance de deux.
+    .object({ qualifierCount: z.number().int().min(MIN_PLACES).max(MAX_PLACES).nullable() })
     .parse(req.body);
 
   const phase = await prisma.phase.update({

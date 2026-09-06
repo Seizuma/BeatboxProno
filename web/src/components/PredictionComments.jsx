@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
+import { FramedAvatar, Name } from './Cosmetics.jsx';
 
 /** Le serveur tranche ; ce chiffre ne sert qu'à arrêter la frappe au bon endroit. */
 const MAX = 2000;
@@ -30,7 +31,7 @@ export default function PredictionComments({
     placing,
     onPlacingEnd,
 }) {
-    const { t, date } = useI18n();
+    const { t, date, lang } = useI18n();
 
     const [comments, setComments] = useState(null);
     const [error, setError] = useState(null);
@@ -220,8 +221,20 @@ export default function PredictionComments({
     const note = (c) => (
         <div className="note" key={c.id}>
             <div className="note__head">
-                {c.author.avatarUrl && <img className="avatar" src={c.author.avatarUrl} alt="" />}
-                <strong>{c.author.globalName ?? c.author.username}</strong>
+                {/* Le cadre acheté vaut aussi dans une conversation de groupe :
+                    c'est là que les membres se lisent le plus souvent. */}
+                {c.author.avatarUrl && (
+                    <FramedAvatar
+                        url={c.author.avatarUrl}
+                        frameId={c.author.equippedFrame}
+                        size="xs"
+                    />
+                )}
+                <strong>
+                    <Name fxId={c.author.equippedNameFx}>
+                        {c.author.globalName ?? c.author.username}
+                    </Name>
+                </strong>
                 <span className="note__when">
                     {date(c.createdAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     {c.editedAt && ` · ${t('thread.edited')}`}

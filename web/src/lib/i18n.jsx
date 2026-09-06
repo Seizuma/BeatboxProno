@@ -39,6 +39,7 @@ const DICT = {
     'nav.logout': 'Sign out',
     'nav.language': 'Language',
     'nav.menu': 'Menu',
+    'nav.shop': 'Shop',
 
     'footer.tagline': 'Predictions close when each phase kicks off.',
 
@@ -105,6 +106,7 @@ const DICT = {
     'ranking.cutline': 'Qualification line',
     'ranking.drop': 'Drop here',
     'ranking.remove': 'Remove {name}',
+    'ranking.discard': 'Drop {name} from your list',
     'ranking.grab': 'Move {name}. Drag, or use the arrow keys.',
     'ranking.add': 'Place {name}',
     'ranking.fill': 'Fill by seed',
@@ -118,6 +120,27 @@ const DICT = {
     'bracket.round.SMALL_FINAL': 'Small final',
     'bracket.round.FINAL': 'Final',
     'bracket.round.LEGACY': 'Legacy',
+
+    'result.title': 'Official result',
+    'result.open': 'See the result',
+    'result.empty': 'Result not published yet.',
+    'result.col.rank': 'Place',
+    'result.col.artist': 'Artist',
+    'result.col.mine': 'Your call',
+    'result.col.gap': 'Gap',
+    'result.col.battle': 'Matchup',
+    'result.col.official': 'What happened',
+    'result.col.yours': 'What you called',
+    'result.qualified': 'Through',
+    'result.notRanked': 'unranked',
+    'result.noPick': 'No call',
+    'result.hits': '{n}/{total} qualifiers called',
+    'result.winners': '{n}/{total} winners called',
+    'result.ghosts': 'You also called, and they are not in the result:',
+    'result.hit.matchup': 'Matchup',
+    'result.hit.winner': 'Winner',
+    'result.hit.score': 'Score',
+
     'bracket.tbd': 'to be decided',
     'bracket.winner': 'Winner',
     'bracket.score': 'Score',
@@ -264,6 +287,8 @@ const DICT = {
     'export.share.unsupported': 'Your browser cannot share files. Download the image instead.',
     'export.hint':
       'The card carries the whole prediction: every ranking phase and every bracket round, with the picked winners and scores.',
+    'export.stamp.hint': 'Click on the card to drop your stamp.',
+    'export.stamp.none': 'Wear a stamp from the shop to mark this card.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Join {name}',
@@ -390,6 +415,16 @@ const DICT = {
     'stats.col.actual': 'Actual',
     'stats.col.gap': 'Gap',
     'stats.col.voters': 'Voices',
+    'stats.results.open': 'Result statistics',
+    'stats.tab.boards': 'Standouts',
+    'stats.tooSmall': 'Fewer than {n} measured contenders here — the full list already says it all.',
+    'stats.tab.all': 'Every contender',
+    'stats.results.title': 'Result statistics',
+    'stats.results.subtitle': 'How the crowd read this event',
+    'stats.results.sampled': '{n} contenders measured',
+    'stats.all': 'Every contender',
+    'stats.all.lede':
+      'Real place, average predicted place, and the gap between the two — for every contender of a published phase.',
     'event.deadline': 'Predictions close {date}',
     'event.deadline.none': 'No closing date yet — phases lock as they start',
     'event.deadline.passed': 'Predictions are closed',
@@ -427,6 +462,41 @@ const DICT = {
     'help.gap.exact': 'Exact',
     'help.gap.beyond': 'Beyond',
     'help.matchup.short': 'Put Alem against NaPoM in the semi-final and they meet in the quarter-final instead? You still score. A battle is judged on the pair, not on where it sits in the bracket.',
+    'help.card.four': 'Final top 4',
+    'help.card.four.hint': 'Once per bracket, on the finish rather than the road.',
+    'help.four.title': 'The final four',
+    'help.four.first': 'winner',
+    'help.four.second': 'runner-up',
+    'help.four.third': '3rd',
+    'help.four.fourth': '4th',
+    'help.four.short':
+      'Read from your final and small final. A bracket derails fast: one wrong quarter-final and everything below it is lost. These points look only at who ends up where — call the winner right and it pays, whatever happened on the way. The place counts too: putting the winner as runner-up is a different call.',
+    'wc.title': 'How a wildcard selection is scored',
+    'wc.subtitle': '{n} qualifying places',
+    'wc.lede':
+      'No bracket here, no battles. One list of entrants, {n} places, and one question: who gets through? You rank everyone; the points follow.',
+    'wc.card.hit': 'Called a qualifier',
+    'wc.card.hit.hint': 'Per artist you put in the top {n} who actually got through.',
+    'wc.card.place': 'Exact place',
+    'wc.card.place.hint': 'Per artist ranked at the right position.',
+    'wc.gap.title': 'Placement',
+    'wc.gap.exact': 'exact',
+    'wc.gap.beyond': '5 or more',
+    'wc.gap.short':
+      'Every artist is scored on how far your rank sits from the official one. Nothing is lost for being close.',
+    'wc.hit.title': 'The qualifiers',
+    'wc.hit.short':
+      'Three points for each artist you placed in your top {n} who really got through — whatever position you gave them. It is worth three times the usual qualification point, because here it is not a detail beside a ranking: it is the whole question.',
+    'wc.note':
+      'Both add up: calling a qualifier and placing them exactly pays 8 on that artist alone.',
+    'wc.board.title': 'Your top {n}',
+    'wc.board.lede':
+      'Nobody knows yet who sent a wildcard — that is the whole question. Pick the artists you think will get through, then order them.',
+    'wc.board.search': 'Add an artist',
+    'wc.board.placeholder': 'Type a name…',
+    'wc.board.none': 'No artist of this format under that name.',
+    'wc.board.count': '{picked} ranked · {pool} still to place',
+    'wc.board.empty': 'Nothing picked yet. Search for a name above.',
     'help.title': 'How points work',
     'help.matchup.title': 'A battle pays wherever it happens',
     'help.close': 'Got it',
@@ -551,6 +621,108 @@ const DICT = {
     'privacy.contact.title': 'A question',
     'privacy.contact.lede':
       'Use the postbox on the home page, or reach the site owner on the Discord. There is one person behind this site, and they read everything.',
+
+    'shop.eyebrow': 'SHOP',
+    'shop.title': 'The shop',
+    'shop.balance': 'wallet',
+    'shop.balance.lede':
+      'Points earned on finished competitions land here. Spending them never touches your leaderboard score — that one is carved for good.',
+    'shop.signin': 'Sign in with Discord to earn and spend points.',
+    'shop.buy': 'Buy',
+    'shop.equip': 'Wear',
+    'shop.unequip': 'Remove',
+    'shop.free': 'free',
+    'shop.points': 'pts',
+    'shop.animated': 'animated',
+
+    'shop.preview': 'Preview',
+    'shop.preview.note': 'Shown with the rest of your kit. Nothing is bought or worn yet.',
+    'shop.promo.banner': '{n} items on sale until {date}. The kit rotates every week.',
+    'shop.preview.noPrediction': 'File a prediction first: the preview shows your latest one.',
+    'shop.preview.noBracket': 'Your latest prediction has no bracket to stamp.',
+    'shop.stamp.hint': 'Click anywhere to stamp.',
+    'shop.stamp.again': 'Click again to move it.',
+    'shop.live.leaderboard': 'Leaderboard row',
+    'shop.live.profile': 'Profile header',
+    'shop.live.bracket': 'Bracket battle',
+    'shop.live.card': 'Shared card',
+
+    'shop.section.frame': 'Avatar frames',
+    'shop.section.frame.lede':
+      'Five pixels wide at most, hugging the photo. Shown everywhere your avatar appears.',
+    'shop.section.nameFx': 'Name effects',
+    'shop.section.nameFx.lede':
+      'Character attributes only — nothing to draw, and readable in a dense table.',
+    'shop.section.band': 'Profile bands',
+    'shop.section.band.lede':
+      'Two vertical strips framing your profile page. Hidden on narrow screens.',
+    'shop.section.cardSkin': 'Export card skins',
+    'shop.section.cardSkin.lede':
+      'The only cosmetic people without an account will ever see. The price says so.',
+    'shop.section.stamp': 'Stamps',
+    'shop.section.stamp.lede':
+      'A mark laid across your prediction, kept on the shared image.',
+
+    'shop.badges': 'Badges',
+    'shop.badges.lede':
+      'Badges cannot be bought — they drop for everyone when a competition is finished.',
+
+    'badge.PARTICIPANT': 'Wildcard — submitted a prediction',
+    'badge.BRONZE': 'Top 60% of the event',
+    'badge.SILVER': 'Top 30% of the event',
+    'badge.GOLD': 'Top 5% of the event',
+    'badge.PODIUM_3': 'Third — third best predictor',
+    'badge.PODIUM_2': 'Second — runner-up predictor',
+    'badge.PODIUM_1': 'Winner — best predictor',
+
+    'profile.badges': 'Badges',
+    'profile.badges.empty':
+      'No badges yet — they drop when a competition you predicted is finished.',
+    'profile.wallet': 'Wallet',
+    'profile.views': 'Profile views',
+    'profile.gate': 'Sign in with Discord to see this profile. Counted once per member per day.',
+    'artists.views': 'Page views',
+    'profile.shop.cta': 'Open the shop',
+
+    'stamp.place': 'Place my stamp',
+    'stamp.move': 'Move my stamp',
+    'stamp.cancel': 'Cancel',
+    'stamp.remove': 'Remove stamp',
+    'stamp.hint': 'Click anywhere on the bracket to drop it. Escape to cancel.',
+    'group.stamp.by': 'Stamped by {name}',
+    'group.stamp.none': 'Wear a stamp to leave your mark here.',
+    'group.stamp.invite': 'You can stamp this prediction.',
+    'group.stamp.hint': 'Click anywhere on the card to stamp it.',
+    'group.stamp.remove': 'Remove my stamp',
+    'group.stamp.count': '{n} stamp(s)',
+
+    'common.close': 'Close',
+
+    'badge.rule': 'How it drops',
+    'badge.awarded': 'Awarded on {date}.',
+
+    'badge.PARTICIPANT.name': 'The wildcard',
+    'badge.BRONZE.name': 'One facet',
+    'badge.SILVER.name': 'Two facets',
+    'badge.GOLD.name': 'Full cube',
+    'badge.PODIUM_3.name': 'Third place',
+    'badge.PODIUM_2.name': 'Second place',
+    'badge.PODIUM_1.name': 'Winner',
+
+    'badge.PARTICIPANT.detail':
+      'One prediction filed on the competition.',
+    'badge.BRONZE.detail':
+      'Top 60% of predictors.',
+    'badge.SILVER.detail':
+      'Top 30% of predictors.',
+    'badge.GOLD.detail':
+      'Top 5% of predictors.',
+    'badge.PODIUM_3.detail':
+      'Third best predictor.',
+    'badge.PODIUM_2.detail':
+      'Second best predictor of the competition.',
+    'badge.PODIUM_1.detail':
+      'Best predictor of the competition.',
   },
 
   fr: {
@@ -567,6 +739,7 @@ const DICT = {
     'nav.logout': 'Déconnexion',
     'nav.language': 'Langue',
     'nav.menu': 'Menu',
+    'nav.shop': 'Boutique',
 
     'footer.tagline': 'Les pronostics ferment au coup d’envoi de chaque phase.',
 
@@ -633,6 +806,7 @@ const DICT = {
     'ranking.cutline': 'Ligne de qualification',
     'ranking.drop': 'Déposez ici',
     'ranking.remove': 'Retirer {name}',
+    'ranking.discard': 'Sortir {name} de votre liste',
     'ranking.grab': 'Déplacer {name}. Glissez, ou utilisez les flèches.',
     'ranking.add': 'Placer {name}',
     'ranking.fill': 'Remplir par seed',
@@ -646,6 +820,27 @@ const DICT = {
     'bracket.round.SMALL_FINAL': 'Petite finale',
     'bracket.round.FINAL': 'Finale',
     'bracket.round.LEGACY': 'Legacy',
+
+    'result.title': 'Résultat officiel',
+    'result.open': 'Voir le résultat',
+    'result.empty': 'Résultat pas encore publié.',
+    'result.col.rank': 'Place',
+    'result.col.artist': 'Artiste',
+    'result.col.mine': 'Votre rang',
+    'result.col.gap': 'Écart',
+    'result.col.battle': 'Affiche',
+    'result.col.official': 'Ce qui s’est passé',
+    'result.col.yours': 'Ce que vous aviez dit',
+    'result.qualified': 'Qualifié',
+    'result.notRanked': 'non classé',
+    'result.noPick': 'Pas de pronostic',
+    'result.hits': '{n}/{total} qualifiés trouvés',
+    'result.winners': '{n}/{total} vainqueurs trouvés',
+    'result.ghosts': 'Vous aviez aussi classé, et ils ne sont pas au résultat :',
+    'result.hit.matchup': 'Affiche',
+    'result.hit.winner': 'Vainqueur',
+    'result.hit.score': 'Score',
+
     'bracket.tbd': 'à déterminer',
     'bracket.winner': 'Vainqueur',
     'bracket.score': 'Score',
@@ -793,6 +988,8 @@ const DICT = {
     'export.share.unsupported': 'Votre navigateur ne sait pas partager de fichier. Téléchargez l’image à la place.',
     'export.hint':
       'La carte porte le pronostic entier : toutes les phases de classement et tous les tours du tableau, avec les vainqueurs choisis et les scores.',
+    'export.stamp.hint': 'Cliquez sur la carte pour poser votre tampon.',
+    'export.stamp.none': 'Portez un tampon depuis la boutique pour marquer cette carte.',
 
     'join.eyebrow': 'Invitation',
     'join.title': 'Rejoindre {name}',
@@ -919,6 +1116,16 @@ const DICT = {
     'stats.col.actual': 'Réel',
     'stats.col.gap': 'Écart',
     'stats.col.voters': 'Avis',
+    'stats.results.open': 'Statistiques des résultats',
+    'stats.tab.boards': 'Ce qui a surpris',
+    'stats.tooSmall': 'Moins de {n} participants mesurés ici — la liste complète dit déjà tout.',
+    'stats.tab.all': 'Tous les participants',
+    'stats.results.title': 'Statistiques des résultats',
+    'stats.results.subtitle': 'Comment la foule a lu cet événement',
+    'stats.results.sampled': '{n} participants mesurés',
+    'stats.all': 'Tous les participants',
+    'stats.all.lede':
+      'Place réelle, place moyenne pronostiquée, et l’écart entre les deux — pour chaque participant d’une phase publiée.',
     'event.deadline': 'Pronostics fermés {date}',
     'event.deadline.none': 'Pas encore de date de fermeture — chaque phase se verrouille à son coup d’envoi',
     'event.deadline.passed': 'Les pronostics sont fermés',
@@ -956,6 +1163,41 @@ const DICT = {
     'help.gap.exact': 'Exact',
     'help.gap.beyond': 'Au-delà',
     'help.matchup.short': 'Vous opposez Alem à NaPoM en demi-finale et ils se croisent en quart ? Vous marquez quand même. Un battle se juge sur la paire, pas sur sa place dans le tableau.',
+    'help.card.four': 'Top 4 final',
+    'help.card.four.hint': 'Une fois par tableau, sur l’arrivée plutôt que sur la route.',
+    'help.four.title': 'Le podium final',
+    'help.four.first': 'vainqueur',
+    'help.four.second': 'finaliste',
+    'help.four.third': '3e',
+    'help.four.fourth': '4e',
+    'help.four.short':
+      'Lu dans votre finale et votre petite finale. Un tableau déraille vite : un quart de finale manqué et tout ce qui suit tombe avec lui. Ces points-là ne regardent que l’arrivée — voir juste qui gagne rapporte, quoi qu’il se soit passé en route. La place compte aussi : mettre le vainqueur en finaliste, c’est un autre pronostic.',
+    'wc.title': 'Comment se comptent les points d’une sélection',
+    'wc.subtitle': '{n} places qualificatives',
+    'wc.lede':
+      'Pas de tableau ici, pas d’affiches. Une liste d’inscrits, {n} places, et une seule question : qui passe ? Vous classez tout le monde, les points suivent.',
+    'wc.card.hit': 'Qualifié deviné',
+    'wc.card.hit.hint': 'Par artiste placé dans votre top {n} et réellement retenu.',
+    'wc.card.place': 'Place exacte',
+    'wc.card.place.hint': 'Par artiste classé au bon rang.',
+    'wc.gap.title': 'Le placement',
+    'wc.gap.exact': 'exact',
+    'wc.gap.beyond': '5 ou plus',
+    'wc.gap.short':
+      'Chaque artiste rapporte selon l’écart entre votre rang et le rang officiel. Être proche ne fait rien perdre.',
+    'wc.hit.title': 'Les qualifiés',
+    'wc.hit.short':
+      'Trois points par artiste placé dans votre top {n} et réellement retenu — quel que soit le rang que vous lui avez donné. C’est trois fois le point de qualification habituel, parce qu’ici ce n’est pas un détail au bord d’un classement : c’est toute la question.',
+    'wc.note':
+      'Les deux se cumulent : deviner un qualifié ET le placer au bon rang rapporte 8 points sur ce seul artiste.',
+    'wc.board.title': 'Votre top {n}',
+    'wc.board.lede':
+      'Personne ne sait encore qui a envoyé une wildcard — c’est toute la question. Piochez les artistes que vous voyez passer, puis classez-les.',
+    'wc.board.search': 'Ajouter un artiste',
+    'wc.board.placeholder': 'Tapez un nom…',
+    'wc.board.none': 'Aucun artiste de ce format sous ce nom.',
+    'wc.board.count': '{picked} classé(s) · {pool} à placer',
+    'wc.board.empty': 'Rien de choisi pour l’instant. Cherchez un nom ci-dessus.',
     'help.title': 'Comment marchent les points',
     'help.matchup.title': 'Un battle rapporte où qu’il se joue',
     'help.close': 'Compris',
@@ -1080,6 +1322,108 @@ const DICT = {
     'privacy.contact.title': 'Une question',
     'privacy.contact.lede':
       'Passez par la boîte à idées de la page d’accueil, ou joignez le responsable du site sur le Discord. Il y a une seule personne derrière ce site, et elle lit tout.',
+
+    'shop.eyebrow': 'BOUTIQUE',
+    'shop.title': 'La boutique',
+    'shop.balance': 'porte-monnaie',
+    'shop.balance.lede':
+      'Les points gagnés sur les compétitions terminées atterrissent ici. Les dépenser ne touche jamais votre score au classement — celui-là est gravé pour de bon.',
+    'shop.signin': 'Connectez-vous avec Discord pour gagner et dépenser des points.',
+    'shop.buy': 'Acheter',
+    'shop.equip': 'Porter',
+    'shop.unequip': 'Retirer',
+    'shop.free': 'gratuit',
+    'shop.points': 'pts',
+    'shop.animated': 'animé',
+
+    'shop.preview': 'Aperçu',
+    'shop.preview.note': 'Montré avec le reste de votre tenue. Rien n’est acheté ni porté pour autant.',
+    'shop.promo.banner': '{n} objets en promotion jusqu’au {date}. La sélection tourne chaque semaine.',
+    'shop.preview.noPrediction': 'Déposez d’abord un pronostic : l’aperçu utilise votre dernier.',
+    'shop.preview.noBracket': 'Votre dernier pronostic n’a pas de tableau à tamponner.',
+    'shop.stamp.hint': 'Cliquez n’importe où pour tamponner.',
+    'shop.stamp.again': 'Cliquez à nouveau pour le déplacer.',
+    'shop.live.leaderboard': 'Ligne de classement',
+    'shop.live.profile': 'En-tête de profil',
+    'shop.live.bracket': 'Affiche de tableau',
+    'shop.live.card': 'Carte partagée',
+
+    'shop.section.frame': 'Cadres d’avatar',
+    'shop.section.frame.lede':
+      'Cinq pixels de large au maximum, collés à la photo. Visibles partout où votre avatar apparaît.',
+    'shop.section.nameFx': 'Effets de pseudo',
+    'shop.section.nameFx.lede':
+      'Rien que des attributs de caractère — aucun dessin, et ça reste lisible dans un tableau dense.',
+    'shop.section.band': 'Bandes de profil',
+    'shop.section.band.lede':
+      'Deux colonnes verticales qui encadrent votre profil. Masquées sur écran étroit.',
+    'shop.section.cardSkin': 'Skins de carte d’export',
+    'shop.section.cardSkin.lede':
+      'Le seul cosmétique que verront des gens sans compte. Le prix en tient compte.',
+    'shop.section.stamp': 'Tampons',
+    'shop.section.stamp.lede':
+      'Une marque apposée sur votre pronostic, conservée sur l’image partagée.',
+
+    'shop.badges': 'Badges',
+    'shop.badges.lede':
+      'Les badges ne s’achètent pas — ils tombent pour tout le monde à la clôture d’une compétition.',
+
+    'badge.PARTICIPANT': 'Wildcard — un pronostic déposé',
+    'badge.BRONZE': 'Top 60 % de la compète',
+    'badge.SILVER': 'Top 30 % de la compète',
+    'badge.GOLD': 'Top 5 % de la compète',
+    'badge.PODIUM_3': 'Troisième — 3e pronostiqueur',
+    'badge.PODIUM_2': 'Deuxième — 2e pronostiqueur',
+    'badge.PODIUM_1': 'Vainqueur — meilleur pronostiqueur',
+
+    'profile.badges': 'Badges',
+    'profile.badges.empty':
+      'Aucun badge pour l’instant — ils tombent à la clôture d’une compétition que vous avez pronostiquée.',
+    'profile.wallet': 'Porte-monnaie',
+    'profile.views': 'Vues du profil',
+    'profile.gate': 'Connectez-vous avec Discord pour voir ce profil. Une vue par membre et par jour.',
+    'artists.views': 'Vues de la fiche',
+    'profile.shop.cta': 'Ouvrir la boutique',
+
+    'stamp.place': 'Poser mon tampon',
+    'stamp.move': 'Déplacer mon tampon',
+    'stamp.cancel': 'Annuler',
+    'stamp.remove': 'Retirer le tampon',
+    'stamp.hint': 'Cliquez où vous voulez sur le tableau pour le poser. Échap pour annuler.',
+    'group.stamp.by': 'Tamponné par {name}',
+    'group.stamp.none': 'Portez un tampon pour laisser votre marque ici.',
+    'group.stamp.invite': 'Vous pouvez tamponner ce pronostic.',
+    'group.stamp.hint': 'Cliquez où vous voulez sur la fiche pour tamponner.',
+    'group.stamp.remove': 'Retirer mon tampon',
+    'group.stamp.count': '{n} tampon(s)',
+
+    'common.close': 'Fermer',
+
+    'badge.rule': 'Comment il tombe',
+    'badge.awarded': 'Obtenu le {date}.',
+
+    'badge.PARTICIPANT.name': 'La wildcard',
+    'badge.BRONZE.name': 'Une facette',
+    'badge.SILVER.name': 'Deux facettes',
+    'badge.GOLD.name': 'Cube plein',
+    'badge.PODIUM_3.name': 'Troisième place',
+    'badge.PODIUM_2.name': 'Deuxième place',
+    'badge.PODIUM_1.name': 'Vainqueur',
+
+    'badge.PARTICIPANT.detail':
+      'Un pronostic déposé sur la compétition.',
+    'badge.BRONZE.detail':
+      'Top 60 % des pronostiqueurs.',
+    'badge.SILVER.detail':
+      'Top 30 % des pronostiqueurs.',
+    'badge.GOLD.detail':
+      'Top 5 % des pronostiqueurs.',
+    'badge.PODIUM_3.detail':
+      'Troisième meilleur pronostiqueur.',
+    'badge.PODIUM_2.detail':
+      'Deuxième meilleur pronostiqueur de la compète.',
+    'badge.PODIUM_1.detail':
+      'Meilleur pronostiqueur de la compète.',
   },
 };
 

@@ -5,7 +5,12 @@ import {
     BATTLE_WINNER,
     GAP_MAX_BONUS,
     QUALIFIED_POINT,
+    FINAL_FOUR_POINTS,
+    WILDCARD_HIT,
+    finalFour,
 } from './scoring.js';
+import { isWildcardCategory } from './wildcard.js';
+import { contenderName } from './naming.js';
 
 /**
  * Le moteur du classement.
@@ -72,6 +77,9 @@ export async function resolveScope({ event, kind } = {}) {
  * Ici, dépublier une phase la retire des deux côtés du rapport à la fois.
  */
 function maxOnResolved(category) {
+    // Le même barème que le calcul du score et que le maximum annoncé. Les
+    // trois doivent s'accorder au point près, sinon la précision dérape.
+    const hitValue = isWildcardCategory(category) ? WILDCARD_HIT : QUALIFIED_POINT;
     let total = 0;
 
     for (const phase of category.phases ?? []) {
@@ -90,7 +98,7 @@ function maxOnResolved(category) {
             const cut = phase.qualifierCount ?? 0;
             const qualifies = countsQualification && cut > 0 && cut < ranked ? cut : 0;
 
-            total += ranked * GAP_MAX_BONUS + qualifies * QUALIFIED_POINT;
+            total += ranked * GAP_MAX_BONUS + qualifies * hitValue;
             continue;
         }
 
@@ -101,6 +109,15 @@ function maxOnResolved(category) {
         ).length;
 
         total += battles * (BATTLE_HAPPENED + BATTLE_WINNER + BATTLE_SCORE);
+
+        // Le top 4 : les seules places RÉELLEMENT attribuées comptent. Une finale
+        // pas encore jouée ne met pas ses 9 points au dénominateur, sans quoi la
+        // précision de tout le monde chuterait entre les demies et la finale sans
+        // que personne n'ait rien fait de mal.
+        if (phase.type === 'BRACKET') {
+            const places = finalFour(phase.battles ?? [], { playedOnly: true });
+            total += places.reduce((n, id, i) => n + (id ? FINAL_FOUR_POINTS[i] : 0), 0);
+        }
     }
 
     return total;
@@ -118,6 +135,9 @@ function maxOnResolved(category) {
  * @param {boolean}       pad           fait figurer à zéro les `userIds` qui
  *                                      n'ont encore rien déposé
  * @param {boolean}       readings      calcule les palmarès de lecture
+ * @param {boolean}       readingsAll   ajoute la liste COMPLÈTE des participants
+ *                                      mesurés, et pas seulement les cinq têtes
+ *                                      de chaque palmarès
  * @param {number}        take          nombre de lignes maximum
  */
 export async function buildScoreboard({
@@ -127,12 +147,13 @@ export async function buildScoreboard({
     userIds = null,
     pad = false,
     readings = true,
+    readingsAll = false,
     take = 200,
 } = {}) {
     const empty = {
         totals: { players: 0, submitted: 0, points: 0, possible: 0, precision: null },
         players: [],
-        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 },
+        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, all: [] },
     };
 
     // Un groupe sans membre, ou sans périmètre. Une liste d'événements vide ne
@@ -193,7 +214,21 @@ export async function buildScoreboard({
                         resolved: true,
                         qualifierCount: true,
                         entries: { select: { rank: true } },
-                        battles: { select: { played: true, contenderAId: true, contenderBId: true } },
+                        // `round` et `winnerId` en plus : le barème du top 4 lit
+                        // les deux dernières affiches pour savoir qui finit où.
+                        // Sans ces colonnes, `finalFour` ne voyait que des tours
+                        // `undefined`, n'attribuait aucune place, et le
+                        // dénominateur perdait 14 points par tableau — d'où des
+                        // précisions au-dessus de cent pour cent.
+                        battles: {
+                            select: {
+                                played: true,
+                                contenderAId: true,
+                                contenderBId: true,
+                                round: true,
+                                winnerId: true,
+                            },
+                        },
                     },
                 },
             },
@@ -204,7 +239,17 @@ export async function buildScoreboard({
         readings
             ? prisma.phaseEntry.findMany({
                 where: { phase: { resolved: true, ...phaseScope } },
-                select: { phaseId: true, contenderId: true, rank: true },
+                select: {
+                    phaseId: true,
+                    contenderId: true,
+                    rank: true,
+                    // Le nom et le rang de la phase, parce qu'une catégorie peut
+                    // en publier plusieurs — un placement PUIS des éliminations.
+                    // Sans eux, le même participant apparaissait deux fois avec
+                    // deux places différentes, et rien ne disait laquelle
+                    // était laquelle.
+                    phase: { select: { name: true, position: true } },
+                },
             })
             : [],
 
@@ -239,9 +284,20 @@ export async function buildScoreboard({
     const scored = new Set(grouped.map((g) => g.userId));
     const idle = pad && userIds ? userIds.filter((id) => !scored.has(id)) : [];
 
+    // Les colonnes `equipped*` voyagent avec le pseudo. C'est la seule
+    // requête à traverser : le classement général et celui de chaque groupe
+    // passent tous deux par ici, les élargir séparément aurait fait deux
+    // tableaux où l'un porte les cadres et l'autre non.
     const users = await prisma.user.findMany({
         where: { id: { in: [...scored, ...idle] } },
-        select: { id: true, username: true, globalName: true, avatarUrl: true },
+        select: {
+            id: true,
+            username: true,
+            globalName: true,
+            avatarUrl: true,
+            equippedFrame: true,
+            equippedNameFx: true,
+        },
     });
     const byId = new Map(users.map((u) => [u.id, u]));
 
@@ -287,7 +343,7 @@ export async function buildScoreboard({
     };
 
     if (!readings) {
-        return { totals, players, readings: { wellRead: [], overRated: [], underRated: [], sampled: 0 } };
+        return { totals, players, readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, all: [] } };
     }
 
     // --- Précision et upsets --------------------------------------------------
@@ -313,6 +369,9 @@ export async function buildScoreboard({
         const expected = bucket.sum / bucket.n;
         rows.push({
             contenderId: entry.contenderId,
+            phaseId: entry.phaseId,
+            phase: entry.phase?.name ?? '',
+            phasePosition: entry.phase?.position ?? 0,
             actual: entry.rank,
             expected: Math.round(expected * 10) / 10,
             // Positif : il a fini MIEUX que prévu. Négatif : moins bien.
@@ -321,6 +380,20 @@ export async function buildScoreboard({
         });
     }
 
+    /**
+     * Ajoute nom, photo, catégorie et compète aux lignes mesurées.
+     *
+     * Le nom passe par `contenderName` et non par la colonne `Contender.name`,
+     * qui est VIDE dès que le participant suit son artiste — c'est-à-dire dans
+     * la quasi-totalité des cas, puisqu'on ne la renseigne que pour un crew ou
+     * un duo au pseudonyme propre. Les palmarès affichaient donc une photo, une
+     * catégorie, et pas de nom. Le défaut ne se voyait pas tant qu'on ne
+     * montrait que cinq lignes par tableau ; la liste complète l'a mis en pleine
+     * lumière.
+     *
+     * D'où aussi le `name` demandé sur l'artiste : la requête ne remontait que
+     * `imageUrl`, et la résolution n'aurait rien eu à résoudre.
+     */
     const decorate = async (list) => {
         const ids = list.map((r) => r.contenderId);
         if (ids.length === 0) return [];
@@ -328,7 +401,7 @@ export async function buildScoreboard({
             where: { id: { in: ids } },
             include: {
                 category: { select: { name: true, event: { select: { name: true, year: true } } } },
-                artists: { include: { artist: { select: { imageUrl: true } } } },
+                artists: { include: { artist: { select: { name: true, imageUrl: true } } } },
             },
         });
         const contenderById = new Map(contenders.map((c) => [c.id, c]));
@@ -338,7 +411,7 @@ export async function buildScoreboard({
                 if (!c) return null;
                 return {
                     ...r,
-                    name: c.name,
+                    name: contenderName(c),
                     category: c.category.name,
                     event: `${c.category.event.name} ${c.category.event.year}`,
                     imageUrl: c.imageUrl ?? c.artists[0]?.artist?.imageUrl ?? null,
@@ -350,19 +423,50 @@ export async function buildScoreboard({
     const byAccuracy = [...rows].sort((x, y) => Math.abs(x.delta) - Math.abs(y.delta));
     const bySurprise = [...rows].sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
 
-    const [wellRead, overRated, underRated] = await Promise.all([
+    const [wellRead, overRated, underRated, all] = await Promise.all([
         // Les mieux lus : l'écart le plus faible entre attendu et réel.
         decorate(byAccuracy.slice(0, 5)),
         // Surcotés : on les attendait haut, ils ont fini bas (delta négatif).
         decorate(bySurprise.filter((r) => r.delta < 0).slice(0, 5)),
         // Sous-cotés : on les attendait bas, ils ont fini haut (delta positif).
         decorate(bySurprise.filter((r) => r.delta > 0).slice(0, 5)),
+
+        /**
+         * Tout le monde, sur demande.
+         *
+         * Les trois palmarès répondent à « qui a surpris » ; celle-ci répond à
+         * « et les autres ? ». Un top 5 sur cent participants cache
+         * quatre-vingt-quinze lignes, et c'est précisément celles-là qu'on
+         * cherche quand on veut savoir comment la foule a lu SON favori.
+         *
+         * Sur demande et non par défaut : cette route sert aussi le classement
+         * du site, tous événements confondus, où la liste complète ferait
+         * plusieurs centaines de lignes que personne n'a demandées. Le tri est
+         * celui du résultat — par compète, puis par place réelle — parce qu'on
+         * y cherche un nom, alors que dans les palmarès on lit un verdict.
+         */
+        readingsAll
+            ? decorate(rows).then((list) =>
+                // Compète, puis catégorie, puis phase dans son ordre de
+                // déroulement, puis place. La phase est intercalée avant la
+                // place : sans elle, deux classements d'une même catégorie
+                // s'entrelaçaient place à place, et la liste alternait entre
+                // deux échelles qui n'ont rien à voir.
+                list.sort(
+                    (x, y) =>
+                        x.event.localeCompare(y.event) ||
+                        x.category.localeCompare(y.category) ||
+                        x.phasePosition - y.phasePosition ||
+                        x.actual - y.actual
+                )
+            )
+            : Promise.resolve([]),
     ]);
 
     return {
         totals,
         players,
-        readings: { wellRead, overRated, underRated, sampled: rows.length },
+        readings: { wellRead, overRated, underRated, sampled: rows.length, all },
     };
 }
 

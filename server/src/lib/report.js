@@ -1,5 +1,6 @@
 import { prisma } from './prisma.js';
 import { TZ, lastDays, localDay } from './presence.js';
+import { purchasesOn } from './shop-trend.js';
 
 /**
  * Le rapport de fréquentation quotidien.
@@ -333,14 +334,87 @@ export function chartUrl(report) {
     return url.toString();
 }
 
+/**
+ * Les achats de la journée, mis en forme.
+ *
+ * Rend `null` quand il n'y a rien eu — le rapport omet alors la rubrique
+ * entièrement. Afficher « 0 achat » chaque jour occuperait une place permanente
+ * pour n'apprendre jamais rien, et noierait les journées où il s'est passé
+ * quelque chose.
+ */
+export function purchasesBlock(purchases) {
+    if (!purchases?.length) return null;
+
+    const total = purchases.reduce((n, p) => n + p.count, 0);
+    const spent = purchases.reduce((n, p) => n + p.spent, 0);
+    const width = Math.max(...purchases.map((p) => (p.item?.name.fr ?? p.itemId).length));
+
+    const lines = purchases.map((p) => {
+        const name = p.item?.name.fr ?? p.itemId;
+        return `${String(p.count).padStart(2)} × ${name.padEnd(width)}  ${String(p.spent).padStart(5)} pts`;
+    });
+
+    return {
+        total,
+        spent,
+        text: ['```', ...lines, '```'].join('\n'),
+    };
+}
+
 /** Assemble le message complet destiné au salon privé. */
 export async function buildReport(days = 30, endsOn = null) {
     const report = await collect(days, endsOn);
     const uniques = await uniqueVisitors(report.days[0], report.end);
+    const purchases = await purchasesOn(report.end, TZ);
+    const shop = purchasesBlock(purchases);
+
+    /**
+     * Un encart par sujet, plutôt qu'un pavé.
+     *
+     * Discord sépare les encarts d'un filet et les colore individuellement :
+     * trois blocs se parcourent, un seul se subit. La journée d'abord — c'est
+     * elle qu'on vient lire — puis la période, puis la boutique quand elle a
+     * quelque chose à dire.
+     */
+    const embeds = [
+        {
+            title: `Fréquentation — ${longDay(report.end)}`,
+            description: prose(report),
+            fields: fields(report, uniques),
+            color: 0x00e8e8,
+        },
+        {
+            title: `Les ${days} derniers jours`,
+            description: [chart(report), table(report)].join('\n'),
+            ...(chartUrl(report) ? { image: { url: chartUrl(report) } } : {}),
+            color: 0xff3ce8,
+        },
+    ];
+
+    if (shop) {
+        embeds.push({
+            title: 'Boutique',
+            description: shop.text,
+            fields: [
+                { name: 'Objets achetés', value: `**${shop.total}**`, inline: true },
+                { name: 'Points dépensés', value: `**${shop.spent}**`, inline: true },
+                { name: 'Objets distincts', value: `**${purchases.length}**`, inline: true },
+            ],
+            color: 0x00d648,
+        });
+    }
+
+    // Le pied ne va que sur le dernier encart : répété trois fois, il ferait
+    // trois fois la même ligne grise.
+    embeds[embeds.length - 1].footer = { text: `${days} jours jusqu'au ${dm(report.end)} · ${TZ}` };
 
     return {
         report,
         uniques,
+        purchases,
+        shop,
+        embeds,
+        // Conservés pour les appelants qui n'attendent qu'un encart.
         title: `Fréquentation — ${longDay(report.end)}`,
         description: [prose(report), chart(report), table(report)].join('\n'),
         fields: fields(report, uniques),

@@ -35,6 +35,11 @@ statsRouter.get(['/scoreboard', '/stats'], guard(async (req, res) => {
   const board = await buildScoreboard({
     eventId: scope.eventId,
     categoryKind: scope.categoryKind,
+    // `?full=1` ajoute la liste complète des participants mesurés. Optionnel et
+    // non systématique : sans périmètre, elle ferait plusieurs centaines de
+    // lignes envoyées à chaque ouverture du classement, pour un tableau que
+    // seule la fenêtre de statistiques d'un événement affiche.
+    readingsAll: req.query.full === '1',
   });
 
   res.json({

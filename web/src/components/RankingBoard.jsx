@@ -118,7 +118,14 @@ function sameTarget(a, b) {
   return a.list === b.list && a.index === b.index;
 }
 
-export default function RankingBoard({ phase, contenders, order, onChange, locked }) {
+/**
+ * @param {Function} [onDiscard]  facultatif : retire complètement un participant
+ *   du plateau. Fourni uniquement par les sélections sur vidéo, où c'est le
+ *   joueur qui a constitué la liste et où il doit donc pouvoir la défaire.
+ *   Partout ailleurs la liste vient de l'organisateur : on la classe, on ne la
+ *   modifie pas, et un bouton de suppression y serait une promesse fausse.
+ */
+export default function RankingBoard({ phase, contenders, order, onChange, locked, onDiscard }) {
   const { t } = useI18n();
   const cut = phase.qualifierCount ?? null;
 
@@ -480,6 +487,23 @@ export default function RankingBoard({ phase, contenders, order, onChange, locke
                 {order.length + 1}
                 <span className="visually-hidden"> — {t('ranking.add', { name: c.name })}</span>
               </button>
+
+              {/* Le retrait définitif, et seulement là où il a un sens.
+                  Le « × » de la colonne classée renvoie ici ; celui-ci sort du
+                  plateau. Deux gestes voisins et irréversiblement différents,
+                  d'où le libellé accessible explicite. */}
+              {onDiscard && (
+                <button
+                  type="button"
+                  className="card__drop"
+                  aria-label={t('ranking.discard', { name: c.name })}
+                  title={t('ranking.discard', { name: c.name })}
+                  disabled={locked}
+                  onClick={() => onDiscard(c.id)}
+                >
+                  ×
+                </button>
+              )}
             </div>
           ))}
         </div>

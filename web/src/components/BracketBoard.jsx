@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../lib/i18n.jsx';
 import { contenderPhoto } from '../lib/media.js';
 import { splitsForWinner, judgesFor } from '../lib/scores.js';
 import { resolveBracket, bracketKey as key, bracketSignature as stable } from '../lib/bracket.js';
 import ArtistFigure from './ArtistFigure.jsx';
+import { itemById } from '../lib/cosmetics.js';
 
 const DISPLAY_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FINAL', 'FINAL', 'LEGACY'];
 
@@ -30,6 +31,12 @@ const DISPLAY_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_F
  *   Faux tant que la qualification n'est pas jouée : la base contient alors des
  *   appariements composés automatiquement par l'éditeur d'organisateur, qui ne
  *   sont le tirage de personne.
+ * @param {object}   stamp   le tampon posé sur ce pronostic, {id, x, y} en
+ *   FRACTIONS du tableau — jamais en pixels : la largeur du bracket dépend de
+ *   l'écran, et un tampon posé sur un portable atterrirait ailleurs sur un
+ *   grand écran.
+ * @param {string}   stampId le tampon porté par le lecteur, s'il en a un. C'est
+ *   ce qu'il peut poser ; ce n'est pas forcément ce qui est déjà posé.
  */
 export default function BracketBoard({
   phase,
@@ -42,11 +49,23 @@ export default function BracketBoard({
   event,
   authoritative = false,
   officialDraw = true,
+  stamp = null,
+  onStamp,
+  stampId = null,
 }) {
   // Le tirage vit sur la phase : c'est un réglage de format, pas une donnée
   // que l'appelant aurait à porter.
   const seedPairs = phase.seedPairs ?? null;
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+
+  // La pose : un mode transitoire, pas un état enregistré. On y entre par un
+  // bouton, on en sort au premier clic sur le tableau ou par Échap.
+  const [placing, setPlacing] = useState(false);
+  const boardRef = useRef(null);
+
+  const posed = itemById(stamp?.id);
+  const holding = itemById(stampId);
+  const canStamp = Boolean(onStamp) && !locked && Boolean(holding);
   // Les splits proposables découlent du panel de juges : inutile d'offrir un
   // 5-0 sur une compète jugée à trois.
   const judges = judgesFor(phase, event);
@@ -175,6 +194,34 @@ export default function BracketBoard({
     });
   }
 
+  /**
+   * Poser le tampon là où on a cliqué.
+   *
+   * Les coordonnées sont ramenées en fractions du rectangle du tableau. Stocker
+   * des pixels aurait paru plus simple et aurait été faux : le bracket n'a pas
+   * la même largeur sur un téléphone et sur un écran large, et la carte
+   * exportée n'a la largeur d'aucun des deux.
+   */
+  function place(event) {
+    if (!placing || !boardRef.current) return;
+    const box = boardRef.current.getBoundingClientRect();
+    const x = (event.clientX - box.left) / box.width;
+    const y = (event.clientY - box.top) / box.height;
+    setPlacing(false);
+    onStamp({
+      id: stampId,
+      x: Math.min(0.95, Math.max(0.05, x)),
+      y: Math.min(0.95, Math.max(0.05, y)),
+    });
+  }
+
+  useEffect(() => {
+    if (!placing) return undefined;
+    const escape = (e) => { if (e.key === 'Escape') setPlacing(false); };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [placing]);
+
   /** Une colonne se dessine par paires quand la suivante en compte moitié moins. */
   const pairing = useMemo(() => {
     const map = {};
@@ -269,20 +316,57 @@ export default function BracketBoard({
     <>
       {/* Reprendre l'arbre à zéro sans avoir à cliquer « Effacer » sur chaque
           affiche — et sans toucher au classement qui compose le premier tour. */}
-      {!locked && called > 0 && (
-        <div className="row" style={{ gap: '0.6rem', justifyContent: 'flex-end' }}>
-          <span className="faint" style={{ fontSize: '0.82rem' }}>
-            {t('bracket.called', { n: called })}
-          </span>
-          <button type="button" className="btn btn--small btn--ghost" onClick={clearAll}>
-            {t('bracket.clearAll')}
-          </button>
+      {(canStamp || (!locked && called > 0)) && (
+        <div className="row" style={{ gap: '0.6rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          {!locked && called > 0 && (
+            <span className="faint" style={{ fontSize: '0.82rem' }}>
+              {t('bracket.called', { n: called })}
+            </span>
+          )}
+
+          {canStamp && (
+            <button
+              type="button"
+              className={`btn btn--small${placing ? ' btn--primary' : ''}`}
+              aria-pressed={placing}
+              onClick={() => setPlacing(!placing)}
+            >
+              {placing ? t('stamp.cancel') : t(stamp ? 'stamp.move' : 'stamp.place')}
+            </button>
+          )}
+
+          {canStamp && stamp && !placing && (
+            <button
+              type="button"
+              className="btn btn--small btn--ghost"
+              onClick={() => onStamp(null)}
+            >
+              {t('stamp.remove')}
+            </button>
+          )}
+
+          {!locked && called > 0 && (
+            <button type="button" className="btn btn--small btn--ghost" onClick={clearAll}>
+              {t('bracket.clearAll')}
+            </button>
+          )}
         </div>
+      )}
+
+      {placing && (
+        <p className="notice notice--ok" style={{ margin: '0.5rem 0 0' }}>
+          {t('stamp.hint')}
+        </p>
       )}
 
       {/* Le nombre de colonnes est passé à la CSS : c'est lui qui permet de
           répartir la largeur disponible au lieu de déborder vers la droite. */}
-      <div className="bracket" style={{ '--cols': columns.length }}>
+      <div
+        className={`bracket cos-stamp-host${placing ? ' cos-stamp-host--placing' : ''}`}
+        style={{ '--cols': columns.length }}
+        ref={boardRef}
+        onClick={place}
+      >
         {columns.map((col) => {
           const battles = battlesOf[col.main] ?? [];
           const extras = col.extra ? battlesOf[col.extra] ?? [] : [];
@@ -324,6 +408,16 @@ export default function BracketBoard({
             </section>
           );
         })}
+
+        {posed && (
+          <span
+            className={`cos-stamp cos-stamp--posed cos-stamp--${posed.color}`}
+            style={{ left: `${stamp.x * 100}%`, top: `${stamp.y * 100}%` }}
+            aria-hidden="true"
+          >
+            {posed.text[lang] ?? posed.text.en}
+          </span>
+        )}
       </div>
     </>
   );

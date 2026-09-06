@@ -34,15 +34,31 @@ model User {
   // retenir par personne, et les notes sont ordonnées.
   lastReadRelease String?
 
+  // Cinq emplacements, cinq colonnes. Le nom de l'objet porté et rien d'autre :
+  // le catalogue vit dans le code, la base ne retient que la tenue. Aucune
+  // contrainte de clé étrangère — un objet retiré du catalogue doit pouvoir
+  // disparaître sans qu'une migration soit nécessaire, et la migration de
+  // remboursement délie les colonnes devenues orphelines.
+  equippedFrame    String?
+  equippedNameFx   String?
+  equippedBand     String?
+  equippedCardSkin String?
+  equippedStamp    String?
+
   predictions Prediction[]
   postbox     PostboxMessage[]
   visits      Visit[]
   memberships GroupMember[]
   comments    GroupComment[]
+  wallet      WalletEntry[]
+  badges      BadgeAward[]
   // Les avis reçus, et ceux qu'on a déclenchés chez les autres. Deux relations
   // vers le même modèle : Prisma exige alors qu'on les nomme.
   notifications Notification[] @relation("Notified")
   triggered     Notification[] @relation("Actor")
+  stamps      GroupStamp[]
+  viewsMade     ProfileView[] @relation("ProfileViewer")
+  viewsReceived ProfileView[] @relation("ProfileViewed")
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -69,6 +85,8 @@ model Artist {
   createdAt DateTime @default(now())
 
   entries   ContenderArtist[]
+
+  views ProfileView[]
 }
 
 // --- Événements ---------------------------------------------------------------
@@ -106,6 +124,26 @@ model Event {
   predictions Prediction[]
   groups      GroupEvent[]
   notifications Notification[]
+  wallet      WalletEntry[]
+  badges      BadgeAward[]
+}
+
+model GroupStamp {
+  id           String     @id @default(cuid())
+  groupId      String
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  predictionId String
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  itemId       String
+  x            Float
+  y            Float
+  createdAt    DateTime   @default(now())
+  
+
+  @@unique([groupId, predictionId, authorId])
+  @@index([groupId, predictionId])
 }
 
 enum CategoryKind {
@@ -306,10 +344,27 @@ model Prediction {
   scoredAt    DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  stamps        GroupStamp[]
   ranks   PredictedRank[]
   battles PredictedBattle[]
   podium  PredictedPodium[]
+
+  /// La position du tampon posé sur le tableau, en fractions : {id, x, y}.
+  /// JSON et non trois colonnes — c'est un tout, et la base n'a rien à
+  /// interroger là-dedans. Même choix que `seedPairs` sur Phase.
+  stamp     Json?
+
+  /// La pioche d'une sélection sur vidéo : { [phaseId]: [contenderId, ...] }.
+  ///
+  /// Le plateau que CE joueur s'est constitué, classés compris. Il ne se déduit
+  /// pas des rangs : un nom qu'on a cherché sans encore le placer n'a pas de
+  /// rang, et c'était tout le bug — la pioche disparaissait au rechargement.
+  ///
+  /// JSON plutôt qu'une table : rien n'a jamais à être interrogé là-dedans, on
+  /// lit toujours la liste entière d'un pronostic. Une table
+  /// `PredictedPoolEntry` aurait ajouté trois relations pour un tableau de
+  /// chaînes. Même raisonnement que `stamp` et `seedPairs`.
+  pool      Json?
 
   // Les fils de discussion ouverts sur ce pronostic, un par groupe privé.
   comments      GroupComment[]
@@ -385,6 +440,7 @@ model Group {
   slug        String   @unique
   name        String
   description String?
+  stamps        GroupStamp[]
 
   // Le code d'invitation, porté par le groupe plutôt que par une table de
   // jetons : une invitation n'a ni destinataire ni échéance, elle ouvre la
@@ -614,4 +670,160 @@ model Visit {
 
   @@id([userId, day])
   @@index([day])
+}
+
+// --- Cosmétique : badges et porte-monnaie --------------------------------------
+
+// Les sept badges d'événement. Une énumération et non une table : un badge n'a
+// pas d'état propre — son visuel, son libellé et sa condition vivent dans
+// cosmetics.js, la base ne retient que QUI l'a gagné et SUR QUELLE compète.
+enum BadgeCode {
+  PARTICIPANT // au moins un pronostic déposé sur la compète
+  BRONZE      // top 60 % du classement de la compète
+  SILVER      // top 30 %
+  GOLD        // top 5 %
+  PODIUM_3    // troisième pronostiqueur de la compète
+  PODIUM_2    // deuxième
+  PODIUM_1    // vainqueur
+}
+
+// Un badge gagné par une personne sur une compétition.
+//
+// L'attribution se rejoue intégralement à chaque passage de l'événement en
+// FINISHED : tout supprimer puis tout recréer rend l'opération idempotente —
+// re-clôturer après un recalcul de points CORRIGE le palmarès, il ne le
+// duplique jamais. L'unicité (personne, compète, badge) est la ceinture de
+// sécurité si deux clôtures se croisent.
+model BadgeAward {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  code      BadgeCode
+  awardedAt DateTime  @default(now())
+
+  @@unique([userId, eventId, code])
+  // Le mur de badges d'un profil interroge par personne ; la re-clôture d'une
+  // compète supprime par événement.
+  @@index([userId])
+  @@index([eventId])
+}
+
+enum WalletKind {
+  EVENT_POINTS // crédit à la clôture d'une compète
+  PURCHASE     // débit à l'achat d'un cosmétique
+  GRANT        // crédit ou retrait décidé par un organisateur
+}
+
+// Le porte-monnaie est un livre de comptes, jamais un compteur.
+//
+// Un solde stocké sur User dirait « 340 » sans dire d'où, et repartirait faux
+// au premier incident — exactement le travers que les notifications et le
+// quota de la boîte à idées évitent déjà. Ici le solde EST la somme des
+// lignes : impossible à désynchroniser, et l'historique des gains et des
+// achats vient gratuitement.
+//
+// Le score du classement, lui, ne bouge jamais : il reste la somme des
+// `Prediction.points`. Dépenser n'y touche pas — les deux compteurs demandés
+// sont ce score gravé d'un côté, et cette somme de lignes de l'autre.
+model WalletEntry {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      WalletKind
+  // Positif pour un crédit, négatif pour un achat. Un seul signe par ligne :
+  // le solde est un SUM sans condition.
+  amount    Int
+
+  // Pour un EVENT_POINTS : la compète créditrice. `SetNull` et non cascade —
+  // supprimer une vieille compète ne doit pas reprendre un argent peut-être
+  // déjà dépensé, ce qui rendrait des soldes négatifs.
+  eventId   String?
+  event     Event?     @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // Pour un PURCHASE : l'identifiant de l'objet dans cosmetics.js. C'est cette
+  // ligne qui PROUVE la possession — pas de table d'inventaire à part.
+  itemId    String?
+
+  /// Le motif d'un crédit manuel. Obligatoire côté route, nullable en base :
+  /// les écritures d'avant cette migration n'en ont pas, et rien ne sert de
+  /// leur en inventer un.
+  note        String?
+
+  /// Qui a passé l'écriture. Sans relation Prisma : la ligne doit survivre à
+  /// la suppression du compte de l'organisateur qui l'a créée, et on
+  /// n'interroge jamais dans l'autre sens.
+  grantedById String?
+
+  createdAt DateTime   @default(now())
+
+  // Deux unicités qui cohabitent grâce aux NULL de PostgreSQL (des NULL ne
+  // sont jamais égaux entre eux) :
+  //  - un seul crédit par (personne, compète) : la re-clôture UPSERT le
+  //    montant au lieu d'empiler des lignes — les achats, sans eventId,
+  //    ne sont pas concernés ;
+  //  - un objet ne s'achète qu'une fois — les crédits, sans itemId,
+  //    ne sont pas concernés.
+  @@unique([userId, eventId])
+  @@unique([userId, itemId])
+  @@index([userId])
+}
+
+/// Une consultation de profil ou de fiche d'artiste.
+///
+/// Une ligne par visiteur, par cible et par JOURNÉE — jamais par clic. Compter
+/// les clics donnerait un nombre que n'importe qui fabrique en maintenant F5.
+model ProfileView {
+  id        String   @id @default(cuid())
+  viewerId  String
+  viewer    User     @relation("ProfileViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  /// La cible : un joueur OU un artiste, jamais les deux.
+  userId    String?
+  user      User?    @relation("ProfileViewed", fields: [userId], references: [id], onDelete: Cascade)
+  artistId  String?
+  artist    Artist?  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  /// La journée locale, au format AAAA-MM-JJ. Même unité que `Visit`.
+  day       String
+  createdAt DateTime @default(now())
+
+  /// Les deux unicités cohabitent grâce aux NULL de PostgreSQL : deux NULL ne
+  /// sont jamais égaux, donc une vue d'artiste échappe à la première et une vue
+  /// de joueur à la seconde. Le mécanisme de WalletEntry, déjà éprouvé.
+  @@unique([viewerId, userId, day])
+  @@unique([viewerId, artistId, day])
+  @@index([userId])
+  @@index([artistId])
+}
+
+/// Le classement de popularité de la boutique, recalculé tous les deux jours.
+///
+/// Remplacé en bloc à chaque calcul : il n'y a rien à conserver d'un classement
+/// périmé. Aucune clé étrangère vers un catalogue — celui-ci vit dans le code, et
+/// un objet retiré laisse une ligne que le prochain calcul balaiera.
+model ShopTrend {
+  itemId     String   @id
+  purchases  Int      @default(0)
+  position   Int
+
+  /// L'horloge des deux jours. C'est la DATE du dernier calcul qui décide du
+  /// prochain, jamais une planification cron — celle-ci dérive au premier
+  /// redémarrage tombant un jour impair.
+  computedAt DateTime @default(now())
+
+  @@index([position])
+}
+
+/// Les promotions de la semaine, tirées parmi les objets les moins achetés.
+model ShopPromo {
+  itemId   String   @id
+  percent  Int
+  startsAt DateTime @default(now())
+  endsAt   DateTime
+
+  /// La lecture filtre toujours sur « encore valable » : c'est cet index qui
+  /// porte chaque ouverture de la boutique.
+  @@index([endsAt])
 }

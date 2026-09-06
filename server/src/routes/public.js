@@ -1,8 +1,46 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { withName } from '../lib/naming.js';
+import { walletBalance } from '../lib/badges.js';
+import { requireAuth } from '../lib/auth.js';
+import { countViews, recordView } from '../lib/views.js';
 
 export const publicRouter = Router();
+
+/**
+ * L'ordre d'une compétition, du premier tour au dernier.
+ *
+ * La petite finale se joue AVANT la finale et s'affiche donc avant elle. C'est
+ * l'ordre du plateau et celui du calendrier ; tout autre choix demanderait une
+ * explication.
+ *
+ * Un tour absent de cette liste se range en tête plutôt que de disparaître —
+ * `indexOf` rend -1, ce qui est un défaut acceptable : mieux vaut un tour mal
+ * placé qu'un tour perdu.
+ */
+const ROUND_ORDER = [
+  'ROUND_OF_32',
+  'ROUND_OF_16',
+  'QUARTER',
+  'SEMI',
+  'SMALL_FINAL',
+  'FINAL',
+  'LEGACY',
+];
+
+/**
+ * Express 4 n'attrape PAS le rejet d'un handler asynchrone.
+ *
+ * Ce n'est pas une erreur silencieuse, c'est pire : la requête reste
+ * suspendue jusqu'au délai d'expiration, sans réponse et sans une ligne de
+ * log. Côté navigateur, la page tourne indéfiniment — le symptôme le plus
+ * difficile à relier à sa cause, parce qu'il ne ressemble pas à une erreur.
+ *
+ * Les autres routeurs du projet ont ce garde depuis longtemps ; celui-ci ne
+ * l'avait pas, et ses six handlers asynchrones étaient à une exception près
+ * de faire tourner une page dans le vide.
+ */
+const guard = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 const isStaff = (user) => Boolean(user) && ['ADMIN', 'OWNER'].includes(user.role);
 
@@ -104,7 +142,7 @@ const categoryInclude = {
   },
 };
 
-publicRouter.get('/events', async (req, res) => {
+publicRouter.get('/events', guard(async (req, res) => {
   const events = await prisma.event.findMany({
     where: visible(req.user),
     orderBy: [{ startsAt: 'desc' }, { year: 'desc' }],
@@ -116,9 +154,9 @@ publicRouter.get('/events', async (req, res) => {
     },
   });
   res.json({ events });
-});
+}));
 
-publicRouter.get('/events/:slug', async (req, res) => {
+publicRouter.get('/events/:slug', guard(async (req, res) => {
   const event = await prisma.event.findFirst({
     where: { slug: req.params.slug, ...visible(req.user) },
     include: {
@@ -162,7 +200,7 @@ publicRouter.get('/events/:slug', async (req, res) => {
     event: isStaff(req.user) ? event : redactEvent(event),
     myPredictions,
   });
-});
+}));
 
 /**
  * Le détail d'un pronostic, lisible par tout le monde.
@@ -171,11 +209,20 @@ publicRouter.get('/events/:slug', async (req, res) => {
  * privé, sans quoi on lirait les hésitations des autres — et son événement doit
  * être visible. Le propriétaire, lui, accède aussi à ses propres brouillons.
  */
-publicRouter.get('/predictions/:predictionId', async (req, res) => {
+publicRouter.get('/predictions/:predictionId', guard(async (req, res) => {
   const prediction = await prisma.prediction.findUnique({
     where: { id: req.params.predictionId },
     include: {
-      user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
+      user: {
+        select: {
+          id: true, username: true, globalName: true, avatarUrl: true,
+          equippedFrame: true, equippedNameFx: true,
+          // Le skin habille la carte exportée depuis CE pronostic : il suit donc
+          // son auteur, pas son lecteur. Une carte doit ressembler à ce que la
+          // personne qui l'a faite a choisi, même consultée par quelqu'un d'autre.
+          equippedCardSkin: true,
+        },
+      },
       event: { select: { slug: true, name: true, year: true, status: true, judgeCount: true } },
       category: {
         select: {
@@ -213,10 +260,10 @@ publicRouter.get('/predictions/:predictionId', async (req, res) => {
 
   prediction.category.contenders = prediction.category.contenders.map(withName);
   res.json({ prediction });
-});
+}));
 
 /** Classement général ou par événement. */
-publicRouter.get('/leaderboard', async (req, res) => {
+publicRouter.get('/leaderboard', guard(async (req, res) => {
   const { event: eventSlug } = req.query;
 
   const where = { submitted: true };
@@ -237,7 +284,12 @@ publicRouter.get('/leaderboard', async (req, res) => {
 
   const users = await prisma.user.findMany({
     where: { id: { in: rows.map((r) => r.userId) } },
-    select: { id: true, username: true, globalName: true, avatarUrl: true },
+    select: {
+      id: true, username: true, globalName: true, avatarUrl: true,
+      // Le cadre et l'effet de pseudo voyagent avec le nom : un cosmétique
+      // visible du seul propriétaire ne se vend pas.
+      equippedFrame: true, equippedNameFx: true,
+    },
   });
   const byId = new Map(users.map((u) => [u.id, u]));
 
@@ -250,13 +302,36 @@ publicRouter.get('/leaderboard', async (req, res) => {
       predictions: r._count._all,
     })),
   });
-});
+}));
 
 /** Fiche publique d'un pronostiqueur. */
-publicRouter.get('/users/:id', async (req, res) => {
+/**
+ * Le profil d'un joueur.
+ *
+ * `requireAuth` : la fiche est réservée aux membres. Deux raisons, et la
+ * seconde compte plus que la première. Un compteur de vues n'a de sens que si
+ * chaque vue a un visage — sinon il compte surtout des robots d'indexation. Et
+ * un profil rassemble points, historique et badges de quelqu'un : le rendre
+ * lisible sans compte, c'est le publier.
+ */
+publicRouter.get('/users/:id', requireAuth, guard(async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
-    select: { id: true, username: true, globalName: true, avatarUrl: true, createdAt: true, role: true },
+    select: {
+      id: true,
+      username: true,
+      globalName: true,
+      avatarUrl: true,
+      createdAt: true,
+      role: true,
+      // La tenue est publique par nature : un cosmétique qui ne se montre qu'à
+      // soi-même ne vaudrait pas un point. Ni le skin de carte ni le tampon,
+      // en revanche — ils ne s'affichent pas sur un profil, et ce qu'on ne
+      // montre pas, on ne le transporte pas.
+      equippedFrame: true,
+      equippedNameFx: true,
+      equippedBand: true,
+    },
   });
   if (!user) return res.status(404).json({ error: 'Profil introuvable.' });
 
@@ -299,19 +374,52 @@ publicRouter.get('/users/:id', async (req, res) => {
     { points: 0, submitted: 0, finished: 0, pending: 0, drafts: 0 }
   );
 
-  res.json({ user, predictions, totals });
-});
+  // Le mur de badges, public lui aussi — c'est un palmarès, pas un secret.
+  // Trié par date en base, regroupé par compète côté client : l'ordre à
+  // l'intérieur d'une compète dépend du prestige, que seul le catalogue connaît.
+  const badges = await prisma.badgeAward.findMany({
+    where: { userId: user.id },
+    include: { event: { select: { slug: true, name: true, year: true } } },
+    orderBy: { awardedAt: 'desc' },
+  });
+
+  // Le solde, en revanche, n'appartient qu'à soi : montrer le porte-monnaie des
+  // autres inviterait à comparer des dépenses plutôt que des pronostics.
+  const wallet = req.user?.id === user.id ? await walletBalance(user.id) : null;
+
+  // La consultation est notée puis comptée — dans cet ordre, pour que la
+  // personne qui vient d'arriver se voie dans le total plutôt que de découvrir
+  // un chiffre en retard d'une visite. On ne l'attend pas : `recordView` ne lève
+  // jamais, mais rien n'oblige à retarder la réponse pour un ornement.
+  recordView({ viewerId: req.user.id, userId: user.id });
+  const views = await countViews({ userId: user.id });
+
+  res.json({ user, predictions, totals, badges, wallet, views });
+}));
 
 /**
  * Stats d'un artiste : sur combien de pronostics les gens l'ont vu gagner,
  * et à quelle fréquence ils ont eu raison.
  */
-publicRouter.get('/artists', async (_req, res) => {
+publicRouter.get('/artists', guard(async (_req, res) => {
   const artists = await prisma.artist.findMany({ orderBy: { name: 'asc' } });
   res.json({ artists });
-});
+}));
 
-publicRouter.get('/artists/:slug', async (req, res) => {
+/**
+ * La fiche d'un artiste. OUVERTE, contrairement aux profils de joueurs.
+ *
+ * La distinction n'est pas une inconséquence. Un profil rassemble les points,
+ * l'historique et les badges de quelqu'un : le rendre lisible sans compte, ce
+ * serait le publier. Une fiche d'artiste ne parle de personne d'inscrit — c'est
+ * une page sur un beatboxer, le genre de lien qu'on partage sur un Discord et
+ * qu'un moteur indexe. La fermer coûterait au site sa meilleure porte d'entrée.
+ *
+ * Le compteur, lui, ne bouge pas : seuls les visiteurs connectés y figurent, et
+ * `recordView` s'en charge en sortant tout de suite quand il n'y a pas de
+ * session. On compte donc des membres, pas des passages.
+ */
+publicRouter.get('/artists/:slug', guard(async (req, res) => {
   const artist = await prisma.artist.findUnique({
     where: { slug: req.params.slug },
     include: {
@@ -570,13 +678,25 @@ publicRouter.get('/artists/:slug', async (req, res) => {
         qualifiedShare: b.cutSeen ? Math.round((b.cutThrough / b.cutSeen) * 100) : cut ? 0 : null,
         distribution,
         pickedToWin: b.pickedToWin,
-        byRound: [...b.byRound.entries()].map(([round, n]) => ({ round, n })),
+        // Dans l'ordre de la compétition, et non dans celui où les pronostics
+        // ont été rencontrés. Une Map conserve l'ordre d'INSERTION : la fiche
+        // affichait donc les tours dans un ordre qui ne dépendait que du hasard
+        // des lectures — finale avant quarts, selon les jours.
+        byRound: [...b.byRound.entries()]
+          .map(([round, n]) => ({ round, n }))
+          .sort((x, y) => ROUND_ORDER.indexOf(x.round) - ROUND_ORDER.indexOf(y.round)),
         judged: b.judged,
         correct: b.correct,
         accuracy: b.judged ? Math.round((b.correct / b.judged) * 100) : null,
       },
     };
   });
+
+  // `req.user?.id` et non `req.user.id` : la route est ouverte, il n'y a pas
+  // toujours quelqu'un derrière. `recordView` sort sans rien faire sur un
+  // visiteur anonyme.
+  recordView({ viewerId: req.user?.id, artistId: artist.id });
+  const views = await countViews({ artistId: artist.id });
 
   res.json({
     artist: {
@@ -589,6 +709,7 @@ publicRouter.get('/artists/:slug', async (req, res) => {
     },
     // Le seul chiffre qui se cumule honnêtement d'une compétition à l'autre.
     totals: { pointsFrom },
+    views,
     appearances,
   });
-});
+}));

@@ -1,0 +1,12 @@
+{
+    "name": "bbp-tools",
+    "private": true,
+    "type": "module",
+    "description": "Outils de génération d'assets. Isolés du frontend et du serveur exprès : voir README.md.",
+    "scripts": {
+        "badges": "node gen-badges.mjs"
+    },
+    "devDependencies": {
+        "canvas": "^3.1.0"
+    }
+}

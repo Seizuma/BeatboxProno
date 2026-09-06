@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
-import ArtistFigure from '../components/ArtistFigure.jsx';
+import { FramedAvatar, Name } from '../components/Cosmetics.jsx';
 
 /**
  * Le classement. Anciennement deux pages — « Classement » et « Statistiques » —
  * qui affichaient le même tableau de joueurs à deux détails près. Elles n'en
- * font plus qu'une : les points en tête, la réussite dans la même ligne, et
- * les lectures de la foule en dessous.
+ * font plus qu'une : les points en tête et la réussite dans la même ligne.
+ *
+ * Les lectures de la foule, qui figuraient en dessous, sont parties sur la page
+ * de chaque événement terminé : elles parlent d'artistes quand cette page parle
+ * de joueurs, et hors du cadre d'une compète elles ne comparaient plus rien de
+ * comparable.
  */
 export default function Leaderboard() {
   const [filters, setFilters] = useState({ events: [], kinds: [] });
@@ -146,11 +150,28 @@ export default function Leaderboard() {
                   {shown.map(({ p, rank }) => (
                     <tr key={p.user?.id ?? rank}>
                       <td className="rank-cell">{rank}</td>
+                      {/* Cadre et effet de pseudo. C'est ici qu'ils prennent
+                          leur valeur : un cosmétique visible du seul
+                          propriétaire ne se vend pas. Les deux ne rendent rien
+                          quand rien n'est porté — la ligne d'un joueur sans
+                          achat est exactement celle d'avant.
+
+                          L'avatar passe en `sm` : à 1,6 rem il disparaissait
+                          dans une rangée où il est pourtant le seul élément
+                          visuel, et le cadre acheté avec lui. */}
                       <td>
                         <span className="stat-row">
-                          {p.user?.avatarUrl && <img className="avatar" src={p.user.avatarUrl} alt="" />}
+                          {p.user?.avatarUrl && (
+                            <FramedAvatar
+                              url={p.user.avatarUrl}
+                              frameId={p.user.equippedFrame}
+                              size="sm"
+                            />
+                          )}
                           <Link to={`/players/${p.user?.id}`}>
-                            {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                            <Name fxId={p.user?.equippedNameFx}>
+                              {p.user?.globalName ?? p.user?.username ?? t('leaderboard.deleted')}
+                            </Name>
                           </Link>
                         </span>
                       </td>
@@ -184,86 +205,23 @@ export default function Leaderboard() {
             </div>
           )}
 
-          {data.readings?.sampled > 0 && (
-            <>
-              <ReadingBoard
-                title={t('stats.wellRead')}
-                lede={t('stats.wellRead.lede')}
-                rows={data.readings.wellRead}
-              />
-              <ReadingBoard
-                title={t('stats.underRated')}
-                lede={t('stats.underRated.lede')}
-                rows={data.readings.underRated}
-                tone="ok"
-              />
-              <ReadingBoard
-                title={t('stats.overRated')}
-                lede={t('stats.overRated.lede')}
-                rows={data.readings.overRated}
-                tone="warn"
-              />
-            </>
-          )}
+          {/* Les lectures de la foule ont déménagé sur la page de chaque
+              événement terminé.
+
+              Elles répondaient ici à une question que cette page ne pose pas :
+              le classement dit qui marque le plus, elles disent quels ARTISTES
+              la foule a mal placés. Deux objets différents — des joueurs d'un
+              côté, des artistes de l'autre. Et sans filtre d'événement actif,
+              elles mélangeaient toutes les compètes de l'histoire du site :
+              « sous-coté » n'y voulait plus dire grand-chose, et la colonne qui
+              rappelait l'événement à chaque ligne était l'aveu que le cadrage
+              manquait.
+
+              Le serveur les calcule toujours et les renvoie toujours : la même
+              route sert la page événement, avec `?event=`. */}
         </>
       )}
     </div>
-  );
-}
-
-/**
- * Un palmarès de lecture : ce que la foule attendait face à ce qui s'est
- * produit. L'écart est signé — positif, l'artiste a fini mieux que prévu.
- */
-function ReadingBoard({ title, lede, rows, tone }) {
-  const { t } = useI18n();
-  if (!rows?.length) return null;
-
-  const color = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--r)' : 'var(--accent)';
-
-  return (
-    <section className="stack">
-      <div>
-        <h2>{title}</h2>
-        <p className="muted" style={{ fontSize: '0.88rem' }}>{lede}</p>
-      </div>
-      <div className="panel panel--flush">
-        <table>
-          <thead>
-            <tr>
-              <th>{t('stats.col.artist')}</th>
-              <th className="num">{t('stats.col.expected')}</th>
-              <th className="num">{t('stats.col.actual')}</th>
-              <th className="num">{t('stats.col.gap')}</th>
-              <th className="num">{t('stats.col.voters')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.contenderId}>
-                <td>
-                  <span className="stat-row">
-                    <ArtistFigure src={r.imageUrl} name={r.name} size="xs" />
-                    <span>
-                      {r.name}
-                      <span className="faint data" style={{ fontSize: '0.78rem', display: 'block' }}>
-                        {r.event} · {r.category}
-                      </span>
-                    </span>
-                  </span>
-                </td>
-                <td className="num muted">{r.expected}</td>
-                <td className="num">{r.actual}</td>
-                <td className="num" style={{ color, fontWeight: 600 }}>
-                  {r.delta > 0 ? `+${r.delta}` : r.delta}
-                </td>
-                <td className="num muted">{r.voters}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
 

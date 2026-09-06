@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
+import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
+import { useSession } from '../lib/context.jsx';
 import {
     EXPORT_PIXEL_SCALE,
     FORMATS,
@@ -8,6 +10,7 @@ import {
     drawCard,
     ensureFonts,
     fileNameFor,
+    paletteForSkin,
     previewScale,
     readPalette,
 } from '../lib/predictionCard.js';
@@ -39,9 +42,23 @@ const ORDER = ['square', 'story', 'wide'];
  * Aucune API ne permet de publier sur une story depuis un site web : il faut
  * passer la main au système. Le bouton n'apparaît donc que là où
  * `navigator.share` accepte les fichiers, c'est-à-dire sur mobile.
+ *
+ * ─── La pose du tampon vit ICI, et nulle part ailleurs ──────────────────────
+ *
+ * Elle se faisait sur le tableau de la page d'événement. Deux choses s'y
+ * mêlaient : on décorait une carte en remplissant un pronostic, et il fallait
+ * enregistrer pour que la marque tienne — un geste ornemental soumis au cycle
+ * de sauvegarde d'un geste de jeu. Or le tampon ne se voit QUE sur la carte
+ * partagée. Il se pose donc sur la carte partagée, on le voit tomber à
+ * l'endroit exact où il finira, et il part aussitôt en base par sa propre
+ * route.
+ *
+ * Seul l'auteur peut tamponner, et seulement s'il en porte un. Consulter la
+ * carte de quelqu'un d'autre n'ouvre aucune commande.
  */
 export default function ExportPrediction({ prediction, onClose }) {
-    const { t } = useI18n();
+    const { t, lang } = useI18n();
+    const { user } = useSession();
 
     const canvas = useRef(null);
     const frame = useRef(null);
@@ -52,8 +69,31 @@ export default function ExportPrediction({ prediction, onClose }) {
     const [error, setError] = useState(null);
     const [shared, setShared] = useState(null);
 
+    /**
+     * Le tampon posé, tenu localement.
+     *
+     * Amorcé sur ce que porte le pronostic, puis maître à bord : la fenêtre ne
+     * se recharge pas après une pose, et relire `prediction.stamp` afficherait
+     * l'état d'avant le clic. La base est mise à jour en parallèle.
+     */
+    const [stamp, setStamp] = useState(prediction.stamp ?? null);
+    const [placing, setPlacing] = useState(false);
+
+    const mine = Boolean(user?.id) && user.id === prediction.user?.id;
+    const worn = user?.equippedStamp ?? null;
+    const canStamp = mine && Boolean(worn);
+
     const spec = FORMATS[format];
-    const model = buildCardModel(prediction, { t });
+    // `stamp` est passé explicitement : sans lui, le modèle relirait
+    // `prediction.stamp`, c'est-à-dire l'état d'avant la pose.
+    const model = buildCardModel(prediction, { t, lang, stamp });
+
+    /**
+     * La palette effective : celle du site, puis celle du skin porté par
+     * l'AUTEUR du pronostic. Pas celle du lecteur : une carte doit ressembler à
+     * ce que son auteur a choisi, y compris consultée par quelqu'un d'autre.
+     */
+    const palette = () => paletteForSkin(readPalette(), model.skinId);
     const name = fileNameFor(model, spec);
 
     /**
@@ -79,6 +119,15 @@ export default function ExportPrediction({ prediction, onClose }) {
         };
     }, [measure]);
 
+    // Échap sort du mode pose, comme partout ailleurs sur le site : un mode dont
+    // on ne sait pas sortir est un piège.
+    useEffect(() => {
+        if (!placing) return undefined;
+        const escape = (e) => { if (e.key === 'Escape') setPlacing(false); };
+        window.addEventListener('keydown', escape);
+        return () => window.removeEventListener('keydown', escape);
+    }, [placing]);
+
     const maxH = typeof window === 'undefined' ? 600 : window.innerHeight * 0.52;
     const cssW = Math.max(1, Math.min(boxW || 1, (maxH * spec.w) / spec.h));
     const cssH = (cssW * spec.h) / spec.w;
@@ -97,7 +146,7 @@ export default function ExportPrediction({ prediction, onClose }) {
                 await ensureFonts();
                 if (cancelled || !canvas.current) return;
 
-                drawCard(canvas.current, model, spec, readPalette(), {
+                drawCard(canvas.current, model, spec, palette(), {
                     pixelScale: previewScale(spec, cssW),
                 });
 
@@ -117,16 +166,64 @@ export default function ExportPrediction({ prediction, onClose }) {
             cancelled = true;
         };
         // `model` est reconstruit à chaque rendu ; le suivre relancerait le tracé en
-        // boucle. Les entrées qui comptent sont le pronostic, le format et la
-        // largeur d'affichage.
+        // boucle. Les entrées qui comptent sont le pronostic, le format, la largeur
+        // d'affichage — et le tampon, qui est dessiné DANS la carte.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [prediction, format, cssW, boxW, t]);
+    }, [prediction, format, cssW, boxW, t, lang, model.skinId, stamp]);
+
+    /**
+     * Poser le tampon là où on a cliqué.
+     *
+     * Les coordonnées sont ramenées en fractions du CANVAS et non de son
+     * conteneur : celui-ci porte une bordure et un rembourrage, et une story
+     * plus étroite que la fenêtre laisse du vide de chaque côté. Mesurer la
+     * boîte extérieure décalait le tampon de quelques pour cent — invisible à
+     * l'aperçu, visible sur l'image exportée.
+     *
+     * L'affichage passe d'abord, l'enregistrement ensuite : le geste doit
+     * répondre tout de suite. Un échec réseau remet l'état d'avant plutôt que
+     * de laisser croire à une marque qui n'existe pas en base.
+     */
+    const place = async (event) => {
+        if (!placing || !canStamp || !canvas.current) return;
+        const box = canvas.current.getBoundingClientRect();
+        const next = {
+            id: worn,
+            x: Math.min(0.95, Math.max(0.05, (event.clientX - box.left) / box.width)),
+            y: Math.min(0.95, Math.max(0.05, (event.clientY - box.top) / box.height)),
+        };
+
+        const avant = stamp;
+        setStamp(next);
+        setPlacing(false);
+        setError(null);
+        try {
+            await api.put(`/predictions/${prediction.id}/stamp`, { stamp: next });
+        } catch (e) {
+            setStamp(avant);
+            setError(e.message);
+        }
+    };
+
+    /** Retirer le tampon. Même aller-retour, dans l'autre sens. */
+    const clearStamp = async () => {
+        const avant = stamp;
+        setStamp(null);
+        setPlacing(false);
+        setError(null);
+        try {
+            await api.put(`/predictions/${prediction.id}/stamp`, { stamp: null });
+        } catch (e) {
+            setStamp(avant);
+            setError(e.message);
+        }
+    };
 
     /** Le fichier, rendu hors écran à pleine définition au moment du clic. */
     const renderFile = async () => {
         await ensureFonts();
         const off = document.createElement('canvas');
-        drawCard(off, model, spec, readPalette(), { pixelScale: EXPORT_PIXEL_SCALE });
+        drawCard(off, model, spec, palette(), { pixelScale: EXPORT_PIXEL_SCALE });
         return new Promise((resolve, reject) => {
             off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Canvas vide.'))), 'image/png');
         });
@@ -184,6 +281,25 @@ export default function ExportPrediction({ prediction, onClose }) {
                             {t('export.share')}
                         </button>
                     )}
+
+                    {/* Les commandes de tampon vivent dans le pied, avec les
+                        autres actions de la fenêtre. Le retrait est un bouton à
+                        part entière et non une ligne de texte : c'est ce qu'on
+                        cherche en premier quand on a mal visé. */}
+                    {canStamp && (
+                        <button
+                            className={`btn btn--small${placing ? ' btn--primary' : ''}`}
+                            onClick={() => setPlacing((v) => !v)}
+                        >
+                            {placing ? t('stamp.cancel') : stamp ? t('stamp.move') : t('stamp.place')}
+                        </button>
+                    )}
+                    {canStamp && stamp && !placing && (
+                        <button className="btn btn--small btn--ghost" onClick={clearStamp}>
+                            {t('stamp.remove')}
+                        </button>
+                    )}
+
                     <span className="faint data" style={{ fontSize: '0.8rem' }}>
                         {outW} × {outH} px
                     </span>
@@ -210,9 +326,19 @@ export default function ExportPrediction({ prediction, onClose }) {
             {shared === false && (
                 <p className="notice" style={{ marginTop: '0.8rem' }}>{t('export.share.unsupported')}</p>
             )}
+            {placing && (
+                <p className="notice notice--ok" style={{ marginTop: '0.8rem' }}>{t('export.stamp.hint')}</p>
+            )}
+            {mine && !worn && (
+                <p className="faint" style={{ fontSize: '0.85rem', marginTop: '0.8rem' }}>
+                    {t('export.stamp.none')}
+                </p>
+            )}
 
             <div
                 ref={frame}
+                className={placing ? 'cos-stamp-host--placing' : undefined}
+                onClick={placing ? place : undefined}
                 style={{
                     marginTop: '1rem',
                     border: '1px solid var(--line)',
