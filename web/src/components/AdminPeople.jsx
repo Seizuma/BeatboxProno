@@ -5,24 +5,21 @@ import MenuButton from './MenuButton.jsx';
 import Modal from './Modal.jsx';
 
 /**
- * L'onglet « Comptes ».
+ * La liste des comptes, dans l'espace « Joueurs ».
  *
- * Sorti d'Admin.jsx, où il partageait un fichier de mille sept cents lignes
- * avec la structure des événements, les artistes et les résultats. Il a
- * maintenant sa courbe, son décompte et sa liste repliable ; l'y laisser aurait
- * rendu le fichier illisible pour un panneau qui n'a rien à voir avec les
- * autres.
+ * ─── Ce que cet écran n'est plus ────────────────────────────────────────────
  *
- * Le principe de l'écran : les chiffres d'abord, la liste ensuite et repliée.
- * Déployée en permanence, elle noyait sous cent lignes la seule information
- * qu'on vient chercher la plupart du temps — combien de monde, et depuis quand.
+ * Il portait aussi les chiffres du site et la courbe de fréquentation. Ils sont
+ * partis dans l'onglet « Statistiques », auquel ils appartenaient : cette
+ * courbe ne parle pas des comptes, elle parle du SITE. On l'ouvrait pour savoir
+ * si une annonce avait porté, et on tombait sur cent personnes à administrer.
+ *
+ * Ce qui reste ici est ce qui s'applique à UNE personne : son rôle, son
+ * porte-monnaie, son bannissement, la suppression de son compte. La suppression
+ * de ses pronostics est à côté, dans le même espace, sous l'onglet
+ * « Pronostics » — c'est le regroupement qui manquait, elle vivait auparavant
+ * dans un onglet « Recherche » sans rapport apparent.
  */
-
-const RANGES = [
-    [30, '30 jours'],
-    [90, '3 mois'],
-    [180, '6 mois'],
-];
 
 export default function AdminPeople({ currentUser, useFlash }) {
     const [flash, run] = useFlash();
@@ -41,9 +38,11 @@ export default function AdminPeople({ currentUser, useFlash }) {
 
     const [data, setData] = useState(null);
     const [q, setQ] = useState('');
-    const [open, setOpen] = useState(false);
-    const [days, setDays] = useState(30);
-    const [activity, setActivity] = useState(null);
+    // La liste est déployée d'emblée : c'est désormais le seul contenu de
+    // l'écran. Elle était repliée quand les chiffres passaient devant elle, ce
+    // qui n'est plus le cas — la replier encore obligerait à un clic pour voir
+    // la seule chose que cet onglet contient.
+    const [open, setOpen] = useState(true);
 
     const reload = () =>
         api.get(`/admin/users?q=${encodeURIComponent(q)}`).then(setData);
@@ -54,10 +53,6 @@ export default function AdminPeople({ currentUser, useFlash }) {
         const id = setTimeout(() => { reload().catch(() => { }); }, 300);
         return () => clearTimeout(id);
     }, [q]);
-
-    useEffect(() => {
-        api.get(`/admin/users/activity?days=${days}`).then(setActivity).catch(() => { });
-    }, [days]);
 
     // Chercher, c'est vouloir voir : le repli ne doit pas obliger à un second
     // geste pour lire ce qu'on vient de demander.
@@ -71,49 +66,7 @@ export default function AdminPeople({ currentUser, useFlash }) {
         <div className="stack">
             {flash}
 
-            {/* --- Les chiffres --------------------------------------------------- */}
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-                <Figure value={data ? data.total : '—'} label="Comptes au total" accent />
-                <Figure value={activity ? sum(activity.days, 'signups') : '—'} label={`Arrivées sur ${days} j`} />
-                <Figure value={activity ? activity.days.at(-1)?.active ?? 0 : '—'} label="Actifs aujourd'hui" />
-                <Figure
-                    value={activity ? Math.max(...activity.days.map((d) => d.active), 0) : '—'}
-                    label={`Pic d'activité sur ${days} j`}
-                />
-            </div>
-
-            {/* --- La courbe ------------------------------------------------------ */}
-            <section className="panel stack" style={{ gap: '0.7rem' }}>
-                <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Arrivées et fréquentation</h2>
-                    <span className="row" style={{ gap: '0.3rem' }}>
-                        {RANGES.map(([n, label]) => (
-                            <button
-                                key={n}
-                                className={`btn btn--small${days === n ? ' btn--primary' : ' btn--ghost'}`}
-                                onClick={() => setDays(n)}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </span>
-                </div>
-
-                {!activity ? (
-                    <p className="faint">Chargement…</p>
-                ) : (
-                    <ActivityChart days={activity.days} />
-                )}
-
-                <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-                    Les barres comptent les comptes créés dans la journée ; la ligne, les personnes qui se
-                    sont manifestées ce jour-là. Séparées, ces deux séries ne disent pas grand-chose ; côte à
-                    côte elles répondent à la question qui suit une annonce — les nouveaux venus sont-ils
-                    restés ?
-                </p>
-            </section>
-
-            {/* --- La liste, repliée par défaut ----------------------------------- */}
+            {/* --- La liste des comptes ------------------------------------------- */}
             <section className="panel stack" style={{ gap: '0.7rem' }}>
                 <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <button
@@ -605,8 +558,6 @@ function WalletPanel({ userId, run }) {
     );
 }
 
-const sum = (rows, key) => rows.reduce((n, r) => n + r[key], 0);
-
 /** AAAA-MM-JJ vers une date lisible. Le panneau d'administration est en français. */
 function formatDay(value) {
     return new Date(value).toLocaleDateString('fr-FR', {
@@ -614,126 +565,4 @@ function formatDay(value) {
         month: 'short',
         year: 'numeric',
     });
-}
-
-/**
- * Deux séries sur une grille de journées : les arrivées en barres, la
- * fréquentation en ligne.
- *
- * Tracé en SVG à la main plutôt qu'avec une bibliothèque de graphiques : celles
- * qui existent apportent leurs propres polices, leurs coins arrondis et leurs
- * dégradés, qu'il faudrait ensuite désapprendre une par une pour retrouver
- * l'écran télétexte. Cent lignes de SVG coûtent moins qu'un mégaoctet de
- * paquet à corriger.
- *
- * Les deux séries ont leur propre échelle. Une échelle commune serait plus
- * honnête en théorie, mais la fréquentation dépasse les arrivées d'un facteur
- * dix ou vingt : les barres seraient invisibles, et l'écran ne montrerait
- * qu'une seule des deux informations.
- */
-function ActivityChart({ days }) {
-    const W = 720;
-    const H = 200;
-    const PAD = { top: 12, right: 8, bottom: 22, left: 8 };
-
-    const maxSignups = Math.max(...days.map((d) => d.signups), 1);
-    const maxActive = Math.max(...days.map((d) => d.active), 1);
-
-    const innerW = W - PAD.left - PAD.right;
-    const innerH = H - PAD.top - PAD.bottom;
-    const step = innerW / days.length;
-    const barW = Math.max(1, step * 0.62);
-
-    const y = (value, max) => PAD.top + innerH - (value / max) * innerH;
-    const x = (i) => PAD.left + i * step + step / 2;
-
-    const line = days
-        .map((d, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(d.active, maxActive).toFixed(1)}`)
-        .join(' ');
-
-    // Une étiquette tous les sept jours : au quotidien elles se chevauchent, et
-    // sur six mois elles formeraient un pâté noir.
-    const everyNth = Math.ceil(days.length / 8);
-
-    return (
-        <figure style={{ margin: 0 }}>
-            <svg
-                viewBox={`0 0 ${W} ${H}`}
-                // `width: 100%` avec un viewBox fixe : le graphique se met à l'échelle
-                // sans qu'on ait à le redessiner au redimensionnement.
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-                role="img"
-                aria-label="Arrivées et fréquentation par journée"
-            >
-                {/* La ligne de base, comme le filet d'un tableau télétexte. */}
-                <line
-                    x1={PAD.left} y1={PAD.top + innerH} x2={W - PAD.right} y2={PAD.top + innerH}
-                    stroke="var(--line)" strokeWidth="1"
-                />
-
-                {days.map((d, i) => (
-                    <rect
-                        key={d.day}
-                        x={x(i) - barW / 2}
-                        y={y(d.signups, maxSignups)}
-                        width={barW}
-                        height={PAD.top + innerH - y(d.signups, maxSignups)}
-                        fill="var(--y)"
-                    >
-                        <title>{`${d.day} · ${d.signups} arrivée${d.signups > 1 ? 's' : ''}`}</title>
-                    </rect>
-                ))}
-
-                <path d={line} fill="none" stroke="var(--c)" strokeWidth="2" />
-
-                {days.map((d, i) => (
-                    <circle key={d.day} cx={x(i)} cy={y(d.active, maxActive)} r="2" fill="var(--c)">
-                        <title>{`${d.day} · ${d.active} actif${d.active > 1 ? 's' : ''}`}</title>
-                    </circle>
-                ))}
-
-                {days.map((d, i) =>
-                    i % everyNth === 0 ? (
-                        <text
-                            key={d.day}
-                            x={x(i)}
-                            y={H - 6}
-                            textAnchor="middle"
-                            fill="var(--ink-faint)"
-                            style={{ fontFamily: 'var(--font-data)', fontSize: '11px' }}
-                        >
-                            {d.day.slice(5)}
-                        </text>
-                    ) : null
-                )}
-            </svg>
-
-            <figcaption className="row" style={{ gap: '1rem', marginTop: '0.4rem' }}>
-                <span className="faint data" style={{ fontSize: '0.78rem' }}>
-                    <span style={{ color: 'var(--y)' }}>█</span> arrivées (max {maxSignups}/j)
-                </span>
-                <span className="faint data" style={{ fontSize: '0.78rem' }}>
-                    <span style={{ color: 'var(--c)' }}>──</span> actifs (max {maxActive}/j)
-                </span>
-            </figcaption>
-        </figure>
-    );
-}
-
-function Figure({ value, label, accent }) {
-    return (
-        <div className="panel">
-            <p
-                className="display"
-                style={{
-                    fontSize: 'calc(2.2rem * var(--display-scale))',
-                    color: accent ? 'var(--accent)' : 'inherit',
-                    margin: 0,
-                }}
-            >
-                {value}
-            </p>
-            <p className="eyebrow" style={{ margin: '0.4rem 0 0' }}>{label}</p>
-        </div>
-    );
 }

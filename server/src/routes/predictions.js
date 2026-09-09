@@ -417,6 +417,26 @@ predictionRouter.put('/:predictionId', async (req, res) => {
   const closed = await predictionGate(category.event, req.user.id);
   if (closed) return res.status(409).json({ error: closed });
 
+  /**
+   * Le plafond de pioche d'une sélection.
+   *
+   * Refusé, et non tronqué en silence. Tronquer voudrait dire choisir à la
+   * place du joueur quels noms sautent — les derniers ajoutés ? les moins bien
+   * classés ? — et le lui rendre sans le dire. Un refus explicite lui laisse la
+   * décision, et l'interface l'empêche déjà d'en arriver là : ceci est le
+   * filet, pas la règle du jeu.
+   */
+  if (body.pool) {
+    const over = category.phases.find(
+      (p) => p.maxPicks && (body.pool[p.id]?.length ?? 0) > p.maxPicks
+    );
+    if (over) {
+      return res.status(409).json({
+        error: `${over.name} est limitée à ${over.maxPicks} choix. Retirez-en avant d'enregistrer.`,
+      });
+    }
+  }
+
   const validContenders = new Set(category.contenders.map((c) => c.id));
   const openPhases = new Map(category.phases.filter((p) => !phaseIsLocked(p)).map((p) => [p.id, p]));
 

@@ -507,6 +507,10 @@ const DICT = {
     'wc.board.title': 'Your top {n}',
     'wc.board.lede':
       'Nobody knows yet who sent a wildcard — that is the whole question. Pick the artists you think will get through, then order them.',
+    // Le compteur du plafond de pioche, et la phrase qui remplace le champ de
+    // recherche une fois la limite atteinte.
+    'wc.board.cap': '{n} / {max} picks',
+    'wc.board.full': 'You have reached the limit of {max} picks. Remove a name to swap in another one.',
     'wc.board.search': 'Add an artist',
     'wc.board.placeholder': 'Type a name…',
     'wc.board.none': 'No artist of this format under that name.',
@@ -1230,6 +1234,8 @@ const DICT = {
     'wc.board.title': 'Votre top {n}',
     'wc.board.lede':
       'Personne ne sait encore qui a envoyé une wildcard — c’est toute la question. Piochez les artistes que vous voyez passer, puis classez-les.',
+    'wc.board.cap': '{n} / {max} choix',
+    'wc.board.full': 'Vous avez atteint la limite de {max} choix. Retirez un nom pour en placer un autre.',
     'wc.board.search': 'Ajouter un artiste',
     'wc.board.placeholder': 'Tapez un nom…',
     'wc.board.none': 'Aucun artiste de ce format sous ce nom.',

@@ -147,6 +147,11 @@ export default function WildcardBoard({
     }, [artists, query, engaged, category.kind]);
 
     async function pick(artist) {
+        // Le plafond est déjà tenu par l'affichage, mais deux clics rapides
+        // partent avant que le rendu suivant n'ait masqué le champ. Le serveur
+        // refuse à l'enregistrement ; autant ne pas laisser le plateau passer
+        // par un état qu'il devra défaire.
+        if (full) return;
         setBusy(artist.id);
         setError(null);
         try {
@@ -196,17 +201,49 @@ export default function WildcardBoard({
     const places = phase.qualifierCount ?? 0;
     const waiting = mine.length - order.length;
 
+    /**
+     * Le plafond de pioche.
+     *
+     * Sans lui, la stratégie gagnante est de tout prendre : chaque nom ajouté
+     * ne peut que rapporter, jamais coûter, donc verser les cinquante inscrits
+     * ramasse mécaniquement toutes les bonnes réponses. Le plafond rend le
+     * choix coûteux, et c'est le choix qui fait le jeu.
+     *
+     * Vide sur les sélections déjà ouvertes : on ne referme pas une compète en
+     * cours sur des joueurs qui ont composé leur liste sous une autre règle.
+     */
+    const cap = phase.maxPicks ?? null;
+    const full = cap !== null && mine.length >= cap;
+
     return (
         <div className="stack" style={{ gap: '0.8rem' }}>
             <div className="panel stack" style={{ gap: '0.5rem' }}>
-                <p className="eyebrow" style={{ margin: 0 }}>
-                    {t('wc.board.title', { n: places })}
-                </p>
+                <div className="spread">
+                    <p className="eyebrow" style={{ margin: 0 }}>
+                        {t('wc.board.title', { n: places })}
+                    </p>
+                    {/* Le compteur est affiché en permanence et non au moment où
+                        l'on bute : quelqu'un qui découvre la limite à son
+                        vingtième nom a déjà composé sa liste pour rien. */}
+                    {cap !== null && (
+                        <span className="tag" style={full ? { borderColor: 'var(--m)', color: 'var(--m)' } : undefined}>
+                            {t('wc.board.cap', { n: mine.length, max: cap })}
+                        </span>
+                    )}
+                </div>
                 <p className="faint" style={{ margin: 0, fontSize: '0.9rem' }}>
                     {t('wc.board.lede')}
                 </p>
 
-                {!locked && (
+                {/* Plafond atteint : le champ disparaît plutôt que de rester
+                    grisé. Une recherche qui répond mais dont aucun résultat
+                    n'est cliquable est plus déroutante qu'un champ absent, et
+                    la phrase dit quoi faire — retirer un nom. */}
+                {!locked && full && (
+                    <p className="notice" style={{ margin: 0 }}>{t('wc.board.full', { max: cap })}</p>
+                )}
+
+                {!locked && !full && (
                     <div className="field" style={{ margin: 0, position: 'relative' }}>
                         <label htmlFor={`wc-${category.id}`}>{t('wc.board.search')}</label>
                         <input
