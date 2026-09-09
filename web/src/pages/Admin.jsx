@@ -386,11 +386,25 @@ function StructureAdmin() {
                 className="btn btn--danger"
                 onClick={() =>
                   run(async () => {
-                    await api.patch(`/admin/events/${closing.event.id}`, {
+                    const { settled } = await api.patch(`/admin/events/${closing.event.id}`, {
                       status: closing.status,
                     });
                     setClosing(null);
                     await reload();
+
+                    /* La distribution d'un palmarès ne doit pas se produire en
+                       silence, et son ABSENCE encore moins : un organisateur qui
+                       clôture sans rien voir se passer croit à une panne. Les
+                       deux refus possibles ont chacun leur phrase. */
+                    if (settled?.skipped === 'aucun-resultat') {
+                      return 'Pronostics fermés. Aucun palmarès : rien n’est encore publié. Publiez les résultats puis repassez par « terminé ».';
+                    }
+                    if (settled?.skipped === 'palmares-desactive') {
+                      return 'Pronostics fermés. Cette compète ne décerne pas de palmarès.';
+                    }
+                    if (settled?.badges) {
+                      return `Pronostics fermés. ${settled.badges} badge(s) distribués à ${settled.players} joueur(s).`;
+                    }
                     return 'Pronostics fermés.';
                   })
                 }
@@ -543,6 +557,31 @@ function EventSettings({ event, onDone, run }) {
         >
           Effacer
         </button>
+      </div>
+
+      {/* Le palmarès.
+
+          Les badges ne sont PAS propres à une compète : il en existe sept pour
+          tout le site, et jusqu'ici la moindre compète passée en « terminé » les
+          distribuait tous. Une sélection de wildcards à vingt joueurs décernait
+          les mêmes médailles qu'un Grand Beatbox Battle, et rien ne permettait
+          de dire non. */}
+      <div className="stack" style={{ gap: '0.3rem' }}>
+        <label className="row" style={{ gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={event.awardsBadges !== false}
+            onChange={(e) => save({ awardsBadges: e.target.checked })}
+          />
+          <span>Cette compète décerne un palmarès</span>
+        </label>
+        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+          Décoché, le passage en « terminé » ne distribue ni badges ni points de porte-monnaie.
+          Les badges sont ceux du site — participation, paliers, podium — et sont les mêmes sur
+          toutes les compètes : une sélection mineure n'a pas de raison de décerner les mêmes
+          médailles qu'un Grand Beatbox Battle. Ce réglage ne reprend rien de ce qui a déjà été
+          distribué : pour cela, voir le panneau « Badges et points distribués ».
+        </p>
       </div>
 
       <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>

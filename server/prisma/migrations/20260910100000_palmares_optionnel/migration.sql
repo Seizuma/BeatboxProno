@@ -1,0 +1,22 @@
+-- Une compète décerne-t-elle un palmarès ?
+--
+-- ─── Le problème ────────────────────────────────────────────────────────────
+--
+-- Les badges ne sont pas propres à un événement. Il en existe SEPT pour tout
+-- le site — participation, trois paliers de classement, trois places de
+-- podium — et jusqu'ici la moindre compète passée en « terminé » les
+-- distribuait tous, avec le crédit du porte-monnaie qui va avec.
+--
+-- Une sélection de wildcards à vingt joueurs décernait donc exactement les
+-- mêmes médailles qu'un Grand Beatbox Battle. Ce n'était pas une fuite entre
+-- événements — chaque badge portait bien l'identifiant de sa compète — mais
+-- l'absence de tout moyen de dire « celle-ci ne compte pas ».
+--
+-- ─── Pourquoi `true` par défaut ─────────────────────────────────────────────
+--
+-- C'est le comportement actuel, et toutes les compètes en base l'ont eu. Un
+-- défaut à `false` reviendrait à décider rétroactivement qu'aucune compète
+-- passée ne méritait son palmarès, et à obliger l'organisateur à cocher une
+-- case pour retrouver ce qu'il avait déjà. On décoche pour les compètes
+-- mineures ; on ne recoche pas pour les autres.
+ALTER TABLE "Event" ADD COLUMN "awardsBadges" BOOLEAN NOT NULL DEFAULT true;
