@@ -1953,40 +1953,379 @@ adminRouter.get('/users', async (req, res) => {
 /**
  * Les compteurs du site, pour l'onglet Statistiques.
  *
- * ─── Pourquoi une route et non cinq ─────────────────────────────────────────
+ * ─── Une route et non quinze ────────────────────────────────────────────────
  *
- * Ce sont cinq `count` sans jointure, que Postgres rend en quelques
- * millisecondes. Les demander séparément aurait coûté cinq allers-retours pour
- * un écran qu'on ouvre d'un bloc, et surtout aurait laissé l'affichage se
- * remplir case par case — un tableau de bord qui se compose sous les yeux
- * donne l'impression de ramer alors qu'il ne fait rien.
+ * Ce sont des agrégats sans jointure, que Postgres rend en quelques
+ * millisecondes. Les demander séparément aurait coûté autant d'allers-retours
+ * pour un écran qu'on ouvre d'un bloc, et surtout aurait laissé l'affichage se
+ * remplir case par case — un tableau de bord qui se compose sous les yeux donne
+ * l'impression de ramer alors qu'il ne fait rien.
  *
- * `Promise.all` et non une suite d'`await` : ces requêtes ne dépendent pas les
- * unes des autres.
+ * ─── Les deux chiffres qui comptent vraiment ────────────────────────────────
  *
- * ─── Ce qui est compté, et pourquoi ces choix ───────────────────────────────
+ * `players` et `touched`. Le premier est le nombre de PERSONNES ayant déposé au
+ * moins un pronostic, le second celles qui en ont seulement commencé un. Sans
+ * eux, « 1 200 pronostics » ne dit rien : ça peut être deux cents joueurs ou
+ * quarante acharnés, et ces deux sites-là ne se pilotent pas pareil.
  *
- * Les pronostics sont comptés deux fois : le total inclut les brouillons, et
- * `submitted` ne retient que ce qui est déposé. Le premier dit l'activité —
- * combien de monde a ouvert un tableau et joué avec — le second dit la
- * participation réelle. Confondus, on surestime la seconde d'un facteur trois.
- *
- * Les événements en brouillon sont exclus du décompte visible : ce sont des
- * compètes que personne ne voit encore, et les compter donnerait un chiffre
- * qu'aucun joueur ne pourrait retrouver.
+ * L'écart entre `touched` et `players` est un diagnostic d'interface : des gens
+ * qui composent un tableau entier sans jamais le déposer n'ont pas compris
+ * qu'il fallait le faire, ou n'osent pas.
  */
 adminRouter.get('/stats', async (_req, res) => {
-  const [users, events, drafts, predictions, submitted, groups, artists] = await Promise.all([
+  const [
+    users, banned, exclusions,
+    events, draftEvents,
+    groups, artists, noPhoto, noKind, orphans,
+    predictions, submitted,
+    postboxPending, postboxFailed, comments,
+  ] = await Promise.all([
     prisma.user.count(),
+    prisma.user.count({ where: { bannedAt: { not: null } } }),
+    prisma.eventExclusion.count(),
     prisma.event.count({ where: { status: { not: 'DRAFT' } } }),
     prisma.event.count({ where: { status: 'DRAFT' } }),
-    prisma.prediction.count(),
-    prisma.prediction.count({ where: { submitted: true } }),
     prisma.group.count(),
     prisma.artist.count(),
+    prisma.artist.count({ where: { imageUrl: null } }),
+    prisma.artist.count({ where: { kinds: { isEmpty: true } } }),
+    // Un participant sans artiste rattaché : un fantôme dans les arbres, et la
+    // dette qui coûte le plus cher parce qu'elle ne se voit qu'à l'affichage.
+    prisma.contender.count({ where: { artists: { none: {} } } }),
+    prisma.prediction.count(),
+    prisma.prediction.count({ where: { submitted: true } }),
+    // Non délivré ET sans échec : en attente. Les deux états sont distincts,
+    // et c'est le second qui doit alerter.
+    prisma.postboxMessage.count({ where: { delivered: false, failure: null } }),
+    prisma.postboxMessage.count({ where: { failure: { not: null } } }),
+    prisma.groupComment.count(),
   ]);
 
-  res.json({ stats: { users, events, drafts, predictions, submitted, groups, artists } });
+  const [touchedRows, playerRows, memberRows, joinedRows, wallet, purchases] = await Promise.all([
+    prisma.prediction.groupBy({ by: ['userId'], _count: { _all: true } }),
+    prisma.prediction.groupBy({ by: ['userId'], where: { submitted: true }, _count: { _all: true } }),
+    prisma.groupMember.groupBy({ by: ['groupId'], _count: { _all: true } }),
+    prisma.groupMember.groupBy({ by: ['userId'], _count: { _all: true } }),
+    prisma.walletEntry.groupBy({ by: ['kind'], _sum: { amount: true }, _count: { _all: true } }),
+    prisma.walletEntry.groupBy({
+      by: ['itemId'],
+      where: { kind: 'PURCHASE' },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const sumOf = (kind) => wallet.find((w) => w.kind === kind)?._sum.amount ?? 0;
+
+  res.json({
+    stats: {
+      users, banned, exclusions,
+      events, draftEvents,
+      artists, noPhoto, noKind, orphans,
+      predictions, submitted,
+      postboxPending, postboxFailed,
+
+      // Personnes, et non lignes de pronostic.
+      players: playerRows.length,
+      touched: touchedRows.length,
+
+      groups,
+      // Un groupe à un seul membre n'est pas un groupe : c'est quelqu'un qui a
+      // cliqué sur « créer » et n'a invité personne. Les compter ensemble
+      // surestime la vie sociale du site.
+      groupsShared: memberRows.filter((m) => m._count._all > 1).length,
+      grouped: joinedRows.length,
+      comments,
+
+      wallet: {
+        // Les achats sont enregistrés en montants NÉGATIFS : le livre de
+        // comptes est une suite de mouvements, pas deux colonnes. On rend la
+        // dépense en valeur absolue pour l'affichage.
+        earned: sumOf('EVENT_POINTS'),
+        granted: sumOf('GRANT'),
+        spent: Math.abs(sumOf('PURCHASE')),
+        circulating: sumOf('EVENT_POINTS') + sumOf('GRANT') + sumOf('PURCHASE'),
+        purchases: wallet.find((w) => w.kind === 'PURCHASE')?._count._all ?? 0,
+      },
+
+      topItems: purchases
+        .filter((p) => p.itemId)
+        .map((p) => ({ itemId: p.itemId, n: p._count._all, revenue: Math.abs(p._sum.amount ?? 0) }))
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 10),
+    },
+  });
+});
+
+/**
+ * La participation, événement par événement.
+ *
+ * ─── Pourquoi c'est la vue qui décide d'une saison ──────────────────────────
+ *
+ * « Le GBB 2026 a-t-il fait mieux que 2025 ? » n'a aujourd'hui aucune réponse
+ * ailleurs que dans l'intuition. Deux nombres y répondent : les pronostics
+ * déposés et, surtout, le nombre de PERSONNES derrière — la seconde colonne
+ * corrige la première, qu'un joueur qui remplit cinq catégories gonfle à lui
+ * seul.
+ *
+ * Les brouillons sont là pour la même raison qu'ailleurs : leur rapport aux
+ * dépôts dit si les gens butent au moment de déposer.
+ *
+ * Les brouillons sont comptés par catégorie et non dédupliqués par personne :
+ * dix versions d'un même joueur comptent pour dix, ce qui est voulu — c'est une
+ * mesure de l'activité, pas de l'audience.
+ */
+adminRouter.get('/stats/events', async (_req, res) => {
+  const events = await prisma.event.findMany({
+    orderBy: [{ startsAt: 'desc' }, { year: 'desc' }],
+    select: { id: true, name: true, year: true, slug: true, status: true, startsAt: true },
+  });
+
+  const [filed, draftRows, playerRows] = await Promise.all([
+    prisma.prediction.groupBy({
+      by: ['eventId'],
+      where: { submitted: true },
+      _count: { _all: true },
+      _avg: { points: true },
+      _max: { points: true },
+    }),
+    prisma.prediction.groupBy({
+      by: ['eventId'],
+      where: { submitted: false },
+      _count: { _all: true },
+    }),
+    // Le couple (événement, personne) : sa cardinalité par événement donne le
+    // nombre de joueurs distincts, que `groupBy` seul ne sait pas rendre.
+    prisma.prediction.groupBy({ by: ['eventId', 'userId'], where: { submitted: true }, _count: { _all: true } }),
+  ]);
+
+  const byFiled = new Map(filed.map((r) => [r.eventId, r]));
+  const byDraft = new Map(draftRows.map((r) => [r.eventId, r._count._all]));
+  const players = new Map();
+  for (const row of playerRows) players.set(row.eventId, (players.get(row.eventId) ?? 0) + 1);
+
+  res.json({
+    events: events.map((e) => {
+      const f = byFiled.get(e.id);
+      return {
+        ...e,
+        submitted: f?._count._all ?? 0,
+        players: players.get(e.id) ?? 0,
+        drafts: byDraft.get(e.id) ?? 0,
+        avgPoints: f?._avg.points == null ? null : Math.round(f._avg.points * 10) / 10,
+        maxPoints: f?._max.points ?? null,
+      };
+    }),
+  });
+});
+
+/**
+ * Le détail d'un événement : par catégorie, et la dispersion des scores.
+ *
+ * ─── La dispersion ──────────────────────────────────────────────────────────
+ *
+ * C'est la mesure qui devrait guider `scoring.js` et `maxscore.js`. Si tout le
+ * monde termine entre 40 et 45 points, le barème ne départage personne et le
+ * classement est du bruit — un écart-type proche de zéro est un défaut, pas une
+ * réussite.
+ *
+ * La médiane est calculée ici et non par la base : `groupBy` ne sait pas la
+ * rendre, et `percentile_cont` demanderait du SQL brut pour un tableau de
+ * quelques milliers d'entiers qu'on trie en une milliseconde.
+ */
+adminRouter.get('/stats/events/:eventId', async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { id: req.params.eventId },
+    select: {
+      id: true, name: true, year: true, status: true,
+      categories: { orderBy: { position: 'asc' }, select: { id: true, name: true, kind: true } },
+    },
+  });
+  if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
+
+  const [byCategory, catPlayers, drafts, scored] = await Promise.all([
+    prisma.prediction.groupBy({
+      by: ['categoryId'],
+      where: { eventId: event.id, submitted: true },
+      _count: { _all: true },
+      _avg: { points: true },
+      _max: { points: true },
+    }),
+    prisma.prediction.groupBy({
+      by: ['categoryId', 'userId'],
+      where: { eventId: event.id, submitted: true },
+      _count: { _all: true },
+    }),
+    prisma.prediction.groupBy({
+      by: ['categoryId'],
+      where: { eventId: event.id, submitted: false },
+      _count: { _all: true },
+    }),
+    prisma.prediction.findMany({
+      where: { eventId: event.id, submitted: true, scoredAt: { not: null } },
+      select: { points: true },
+    }),
+  ]);
+
+  const byCat = new Map(byCategory.map((r) => [r.categoryId, r]));
+  const byDraft = new Map(drafts.map((r) => [r.categoryId, r._count._all]));
+  const players = new Map();
+  for (const row of catPlayers) players.set(row.categoryId, (players.get(row.categoryId) ?? 0) + 1);
+
+  const points = scored.map((p) => p.points).sort((a, b) => a - b);
+  const median = points.length
+    ? points.length % 2
+      ? points[(points.length - 1) / 2]
+      : Math.round((points[points.length / 2 - 1] + points[points.length / 2]) / 2)
+    : null;
+  const mean = points.length ? points.reduce((n, p) => n + p, 0) / points.length : null;
+  const spread = points.length
+    ? Math.sqrt(points.reduce((n, p) => n + (p - mean) ** 2, 0) / points.length)
+    : null;
+
+  res.json({
+    event: { id: event.id, name: event.name, year: event.year, status: event.status },
+    categories: event.categories.map((c) => {
+      const r = byCat.get(c.id);
+      return {
+        ...c,
+        submitted: r?._count._all ?? 0,
+        players: players.get(c.id) ?? 0,
+        drafts: byDraft.get(c.id) ?? 0,
+        avgPoints: r?._avg.points == null ? null : Math.round(r._avg.points * 10) / 10,
+        maxPoints: r?._max.points ?? null,
+      };
+    }),
+    scores: {
+      n: points.length,
+      min: points[0] ?? null,
+      max: points.at(-1) ?? null,
+      median,
+      mean: mean == null ? null : Math.round(mean * 10) / 10,
+      spread: spread == null ? null : Math.round(spread * 10) / 10,
+      // Douze paliers : assez pour voir une forme, assez peu pour rester
+      // lisible sur une barre de trois cents pixels.
+      histogram: histogramOf(points, 12),
+    },
+  });
+});
+
+/** Répartit des entiers triés en `buckets` paliers de largeur égale. */
+function histogramOf(sorted, buckets) {
+  if (sorted.length === 0) return [];
+  const min = sorted[0];
+  const max = sorted.at(-1);
+  if (max === min) return [{ from: min, to: max, n: sorted.length }];
+
+  const width = (max - min) / buckets;
+  const bins = Array.from({ length: buckets }, (_, i) => ({
+    from: Math.round(min + i * width),
+    to: Math.round(min + (i + 1) * width),
+    n: 0,
+  }));
+  for (const p of sorted) {
+    const i = Math.min(buckets - 1, Math.floor((p - min) / width));
+    bins[i].n += 1;
+  }
+  return bins;
+}
+
+/**
+ * La rétention par cohorte d'arrivée.
+ *
+ * ─── La donnée était déjà là ────────────────────────────────────────────────
+ *
+ * `Visit` est une table (compte, journée) unique par jour : c'est exactement
+ * une table de fréquentation quotidienne. Croisée avec la date d'inscription,
+ * elle répond à la question que la courbe d'arrivées ne fait qu'effleurer — sur
+ * cent personnes arrivées la semaine du GBB, combien sont revenues ensuite ?
+ * Superposer deux séries suggère la réponse, les relier la donne.
+ *
+ * ─── Pourquoi ce n'est pas du SQL brut ──────────────────────────────────────
+ *
+ * Une jointure latérale ferait ça en une requête. Deux `findMany` et un
+ * croisement en mémoire font la même chose sans quitter Prisma, donc sans
+ * dépendre des noms de colonnes en base — et à l'échelle du site, la table des
+ * visites d'un semestre tient largement en mémoire.
+ *
+ * Les visites sont filtrées par `day`, qui porte un index, et non par une liste
+ * d'identifiants : un `IN` de plusieurs milliers de clés serait plus lent que
+ * le balayage qu'il cherche à éviter.
+ *
+ * ─── Ce qui est compté comme un retour ──────────────────────────────────────
+ *
+ * Une visite un jour STRICTEMENT postérieur à l'inscription. Le jour même ne
+ * compte pas : on vient de s'inscrire, on est évidemment là. La compter
+ * donnerait 100 % de rétention à J+0 et masquerait la seule chose qu'on
+ * regarde, la décroissance.
+ *
+ * Une cohorte incomplète est exclue : demander « combien sont revenus dans les
+ * trente jours ? » à des gens arrivés avant-hier n'a pas de sens, et la
+ * réponse — presque zéro — tirerait la courbe vers le bas sans rien vouloir
+ * dire.
+ */
+adminRouter.get('/stats/retention', async (req, res) => {
+  const days = Math.min(365, Math.max(28, Number(req.query.days) || 180));
+  const since = new Date(Date.now() - days * 86400000);
+  const sinceDay = localDay(since);
+
+  const [users, visits] = await Promise.all([
+    prisma.user.findMany({
+      where: { createdAt: { gte: since } },
+      select: { id: true, createdAt: true },
+    }),
+    prisma.visit.findMany({ where: { day: { gte: sinceDay } }, select: { userId: true, day: true } }),
+  ]);
+
+  const seen = new Map();
+  for (const v of visits) {
+    if (!seen.has(v.userId)) seen.set(v.userId, []);
+    seen.get(v.userId).push(v.day);
+  }
+
+  const dayNumber = (iso) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86400000);
+  const today = dayNumber(localDay(new Date()));
+
+  // Semaines commençant le lundi : une cohorte quotidienne serait trop petite
+  // pour qu'un pourcentage veuille dire quelque chose.
+  const weekKey = (date) => {
+    const d = new Date(date);
+    const shift = (d.getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - shift);
+    return localDay(d);
+  };
+
+  const cohorts = new Map();
+  for (const u of users) {
+    const key = weekKey(u.createdAt);
+    if (!cohorts.has(key)) cohorts.set(key, { week: key, signups: 0, d1: 0, d7: 0, d30: 0, mature: { 1: 0, 7: 0, 30: 0 } });
+    const c = cohorts.get(key);
+    c.signups += 1;
+
+    const born = dayNumber(localDay(u.createdAt));
+    const returns = (seen.get(u.id) ?? []).map(dayNumber).filter((d) => d > born);
+
+    for (const window of [1, 7, 30]) {
+      // La cohorte doit avoir eu le temps : quelqu'un arrivé hier ne peut pas
+      // encore être revenu « dans les trente jours ».
+      if (today - born < window) continue;
+      c.mature[window] += 1;
+      if (returns.some((d) => d - born <= window)) c[`d${window}`] += 1;
+    }
+  }
+
+  res.json({
+    days,
+    cohorts: [...cohorts.values()]
+      .sort((a, b) => (a.week < b.week ? -1 : 1))
+      .map((c) => ({
+        week: c.week,
+        signups: c.signups,
+        d1: c.mature[1] ? Math.round((c.d1 / c.mature[1]) * 100) : null,
+        d7: c.mature[7] ? Math.round((c.d7 / c.mature[7]) * 100) : null,
+        d30: c.mature[30] ? Math.round((c.d30 / c.mature[30]) * 100) : null,
+      })),
+  });
 });
 
 adminRouter.get('/users/activity', async (req, res) => {
