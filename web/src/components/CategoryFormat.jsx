@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
+import { isWildcardCategory, MIN_PLACES, MAX_PLACES, clampPlaces } from '../lib/wildcard.js';
 
 /**
  * Retoucher le format d'une catégorie déjà montée.
@@ -14,6 +15,22 @@ import { api } from '../lib/api.js';
  * affiche SMALL_FINAL donne la petite finale, les phases donnent les paliers de
  * qualification. Deux sources pour la même vérité finissent toujours par
  * diverger.
+ *
+ * ─── Les sélections ne passent pas par ici ──────────────────────────────────
+ *
+ * Une compétition de wildcards n'a pas de tableau : ni taille, ni petite
+ * finale, ni palier de qualification. Ce panneau lui était pourtant servi tel
+ * quel, et il MENTAIT sur toute la ligne — « Top 8 » présélectionné alors
+ * qu'aucun tableau n'existe, un bouton « Wildcards » déjà allumé avec un nombre
+ * à côté qui semblait modifiable, deux autres paliers proposés. Cliquer sur
+ * « Appliquer » répondait 400 : la route refuse une catégorie sans tableau.
+ *
+ * Et pendant ce temps la seule chose qu'une sélection ait à régler — son nombre
+ * de places — n'était modifiable NULLE PART après la création. Il fallait
+ * remonter le format complet de l'événement, ce qui emporte les pronostics.
+ *
+ * D'où l'aiguillage ci-dessous : même bouton « Format » dans la catégorie, deux
+ * panneaux qui n'ont rien à voir l'un avec l'autre.
  */
 const SIZES = [
     ['TOP_32', 'Top 32', 32],
@@ -47,6 +64,86 @@ function readCurrent(category) {
 }
 
 export default function CategoryFormat({ category, onDone, run }) {
+    // L'aiguillage tient sur la STRUCTURE et non sur un drapeau : une phase
+    // unique de type WILDCARD, et c'est une sélection. Un drapeau enregistré
+    // peut mentir après qu'on a retouché le format, la structure non.
+    if (isWildcardCategory(category)) {
+        return <WildcardPlaces category={category} onDone={onDone} run={run} />;
+    }
+    return <BracketFormat category={category} onDone={onDone} run={run} />;
+}
+
+/**
+ * Le seul réglage d'une sélection : combien de places elle offre.
+ *
+ * Libre entre 1 et 100, comme à la composition. Rien n'oblige une sélection sur
+ * vidéo à retenir une puissance de deux — ce n'est pas un tableau, personne n'y
+ * affronte personne, et une compète peut très bien annoncer sept places.
+ *
+ * Le serveur fait le reste : `PATCH /phases/:id/qualifiers` déplace la ligne de
+ * qualification, recalcule qui est marqué qualifié dans le classement déjà
+ * saisi, et rescore les pronostics. Déplacer la coupe change les points de tout
+ * le monde, donc on le dit.
+ */
+function WildcardPlaces({ category, onDone, run }) {
+    const phase = category.phases[0];
+    const current = phase?.qualifierCount ?? null;
+    const [places, setPlaces] = useState(current ?? '');
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => { setPlaces(current ?? ''); }, [current]);
+
+    const value = places === '' ? null : clampPlaces(Number(places));
+    const changed = value !== null && value !== current;
+
+    async function save() {
+        setBusy(true);
+        await run(async () => {
+            await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: value });
+            await onDone();
+            return `${category.name} : ${value} place(s) qualificative(s).`;
+        });
+        setBusy(false);
+    }
+
+    return (
+        <div className="panel stack" style={{ gap: '0.7rem', borderColor: 'var(--m)' }}>
+            <h4 style={{ margin: 0 }}>Places de la sélection</h4>
+
+            <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
+                <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor={`wc-places-${category.id}`}>Places qualificatives</label>
+                    <input
+                        id={`wc-places-${category.id}`}
+                        type="number"
+                        min={MIN_PLACES}
+                        max={MAX_PLACES}
+                        style={{ width: '6rem' }}
+                        value={places}
+                        onChange={(e) => setPlaces(e.target.value)}
+                    />
+                </div>
+                <button className="btn btn--small btn--primary" disabled={!changed || busy} onClick={save}>
+                    {busy ? 'En cours…' : 'Appliquer'}
+                </button>
+                {changed && (
+                    <button className="btn btn--small btn--ghost" onClick={() => setPlaces(current ?? '')}>
+                        Annuler
+                    </button>
+                )}
+            </div>
+
+            <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                Une sélection sur vidéo n'a ni tableau, ni affiches, ni petite finale : c'est une liste
+                d'inscrits et un nombre de places. Déplacer la coupe recalcule qui est marqué qualifié
+                dans le classement déjà saisi et rescore tous les pronostics déposés — donc les points
+                de tout le monde bougent.
+            </p>
+        </div>
+    );
+}
+
+function BracketFormat({ category, onDone, run }) {
     const initial = useMemo(() => readCurrent(category), [category]);
     const [spec, setSpec] = useState(initial);
     const [confirm, setConfirm] = useState(null); // l'impact renvoyé en 409

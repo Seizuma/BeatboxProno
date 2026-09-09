@@ -566,6 +566,7 @@ export default function EventPage() {
           update={update}
           phaseLocked={phaseLocked}
           locked={readOnly || !user}
+          onContender={(contender) => addContender(category.id, contender)}
         />
       )}
 
@@ -685,7 +686,7 @@ export default function EventPage() {
   );
 }
 
-function CategoryEditor({ category, event, state, update, phaseLocked, locked }) {
+function CategoryEditor({ category, event, state, update, phaseLocked, locked, onContender }) {
   const { t } = useI18n();
   // La phase dont on regarde le résultat, ou null. L'état vit ICI et non dans
   // EventPage : la comparaison a besoin des participants, du classement et des
@@ -833,7 +834,7 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 onPool={(next) =>
                   update({ pool: { ...(state.pool ?? {}), [phase.id]: next } })
                 }
-                onContender={(contender) => addContender(category.id, contender)}
+                onContender={onContender}
               />
             ) : RANKING_TYPES.includes(phase.type) ? (
               <RankingBoard
