@@ -366,10 +366,17 @@ adminRouter.patch('/events/:id', async (req, res) => {
       startsAt: z.coerce.date().nullable().optional(),
       endsAt: z.coerce.date().nullable().optional(),
       judgeCount: z.number().int().min(1).max(9).optional(),
-      // Décocher empêche la clôture de distribuer badges et crédit. Ne retire
-      // rien de ce qui l'a déjà été : c'est le script `palmares.js` ou le
-      // panneau de clôture qui reprend.
-      awardsBadges: z.boolean().optional(),
+      /**
+       * Les deux distributions, désormais indépendantes.
+       *
+       * `badgeSet` désigne une famille de dessins, `null` n'en désigne aucune.
+       * Le serveur ne valide pas la valeur contre un catalogue : celui-ci vit
+       * dans le client, et l'y dupliquer imposerait un redéploiement du serveur
+       * à chaque famille ajoutée. Une valeur inconnue ne casse rien — le client
+       * n'affiche simplement aucun dessin.
+       */
+      badgeSet: z.string().min(1).max(32).nullable().optional(),
+      awardsCredits: z.boolean().optional(),
       // null efface la date butoir : c'est le cas « wildcards ouvertes, date
       // de la compète encore inconnue ».
       predictionsCloseAt: z.coerce.date().nullable().optional(),

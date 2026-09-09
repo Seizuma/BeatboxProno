@@ -15,6 +15,15 @@
  * couleur, donc rien à regrouper. C'est la mesure qui a tranché le format.
  */
 
+/**
+ * L'identifiant de la famille.
+ *
+ * Il préfixe toutes les classes CSS. Sans lui, deux familles se marcheraient
+ * dessus : le code `GOLD` existe dans chacune, et la dernière feuille posée
+ * gagnerait. Le registre `badgeSets.js` s'en sert pour retrouver le module.
+ */
+export const SET_ID = 'gbb';
+
 /** Images par tour. */
 export const FRAMES = 24;
 
@@ -71,7 +80,7 @@ export function badgeStylesheet() {
     // horloge, pas une collection.
     Object.entries(SPRITES).forEach(([code, data], i) => {
         out.push(
-            `.cos-badge3d--${code}{background-image:url("data:image/png;base64,${data}");` +
+            `.cos-badge3d--${SET_ID}-${code}{background-image:url("data:image/png;base64,${data}");` +
             `animation-delay:${(-i * 0.9).toFixed(2)}s}`
         );
     });
@@ -110,9 +119,9 @@ export function badgeStylesheet() {
 /** Pose la feuille dans le document, une seule fois. */
 export function installBadges() {
     if (typeof document === 'undefined') return;
-    if (document.getElementById('cos-badges')) return;
+    if (document.getElementById(`cos-badges-${SET_ID}`)) return;
     const style = document.createElement('style');
-    style.id = 'cos-badges';
+    style.id = `cos-badges-${SET_ID}`;
     style.textContent = badgeStylesheet();
     document.head.appendChild(style);
 }

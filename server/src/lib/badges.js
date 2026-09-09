@@ -24,41 +24,46 @@ export async function settleEvent(eventId) {
     const event = await prisma.event.findUnique({
         where: { id: eventId },
         select: {
-            awardsBadges: true,
+            badgeSet: true,
+            awardsCredits: true,
             categories: { select: { phases: { select: { resolved: true } } } },
         },
     });
-    if (!event) return { players: 0, badges: 0, skipped: 'introuvable' };
+    if (!event) return { players: 0, badges: 0, credits: 0, skipped: 'introuvable' };
 
     /**
-     * Deux refus, et ils ne disent pas la même chose.
+     * ─── Le garde-fou : aucun résultat publié ───────────────────────────────
      *
-     * ─── La compète ne décerne pas de palmarès ──────────────────────────────
+     * Il précède les deux réglages parce qu'il ne se discute pas. C'est la
+     * cause de l'incident du 9 septembre : une compète passée en « terminé »
+     * avant publication a distribué quarante badges sur des scores tous à zéro,
+     * le classement se réduisant à l'ordre d'insertion en base.
      *
-     * Les badges ne sont pas propres à un événement : sept codes pour tout le
-     * site, et n'importe quelle compète close les distribuait tous. Une
-     * sélection de wildcards à vingt joueurs décernait les mêmes médailles
-     * qu'un Grand Beatbox Battle. Rien ne permettait de dire non ; maintenant
-     * si.
-     *
-     * ─── Aucun résultat n'est publié ────────────────────────────────────────
-     *
-     * Celui-là est un garde-fou, pas un réglage, et c'est la cause réelle de
-     * l'incident du 9 septembre : une compète passée en « terminé » avant
-     * publication a distribué quarante badges sur des scores tous à zéro. Le
-     * classement se réduisait alors à l'ordre d'insertion en base, et il a
-     * fallu tout reprendre à la main.
-     *
-     * Rien de tout cela n'est perdu : la clôture est rejouable. Publier les
-     * résultats puis repasser par « terminé » distribue le vrai palmarès, et le
-     * crédit est un UPSERT — il se corrige au lieu de s'empiler.
+     * Rien n'est perdu : la clôture est rejouable. Publier puis repasser par
+     * « terminé » pose le vrai palmarès, et le crédit est un UPSERT — il se
+     * corrige au lieu de s'empiler.
      */
-    if (!event.awardsBadges) {
-        return { players: 0, badges: 0, skipped: 'palmares-desactive' };
-    }
     const published = event.categories.some((c) => c.phases.some((p) => p.resolved));
-    if (!published) {
-        return { players: 0, badges: 0, skipped: 'aucun-resultat' };
+    if (!published) return { players: 0, badges: 0, credits: 0, skipped: 'aucun-resultat' };
+
+    /**
+     * ─── Deux distributions indépendantes ───────────────────────────────────
+     *
+     * Un seul booléen commandait les deux, ce qui obligeait à renoncer aux
+     * points de boutique pour se débarrasser des médailles. Un championnat peut
+     * parfaitement rapporter des points sans décerner les médailles d'une autre
+     * compétition — c'est même le cas courant.
+     *
+     * `badgeSet` désigne une FAMILLE de dessins, `null` n'en désigne aucune.
+     * Le serveur ne connaît pas le catalogue : il enregistre le code du badge,
+     * et c'est le client qui sait quel cube dessiner pour la famille de la
+     * compète. Cette ignorance est voulue — ajouter une famille ne doit
+     * demander ni migration ni redéploiement du serveur.
+     */
+    const wantsBadges = Boolean(event.badgeSet);
+    const wantsCredits = event.awardsCredits;
+    if (!wantsBadges && !wantsCredits) {
+        return { players: 0, badges: 0, credits: 0, skipped: 'rien-a-distribuer' };
     }
 
     const grouped = await prisma.prediction.groupBy({
@@ -83,34 +88,63 @@ export async function settleEvent(eventId) {
 
     const total = ranked.length;
     const awards = [];
-    for (const r of ranked) {
-        // La participation se gagne en déposant, pas en marquant : quelqu'un à
-        // zéro point a quand même joué le jeu.
-        awards.push({ userId: r.userId, eventId, code: 'PARTICIPANT' });
+    if (wantsBadges) {
+        for (const r of ranked) {
+            // La participation se gagne en déposant, pas en marquant : quelqu'un
+            // à zéro point a quand même joué le jeu.
+            awards.push({ userId: r.userId, eventId, code: 'PARTICIPANT' });
 
-        // Le plus haut palier seulement : un Gold n'empile pas Silver et Bronze,
-        // le mur de badges se lit compète par compète.
-        const tier = tierForPosition(r.position, total);
-        if (tier) awards.push({ userId: r.userId, eventId, code: tier });
+            // Le plus haut palier seulement : un Gold n'empile pas Silver et
+            // Bronze, le mur de badges se lit compète par compète.
+            const tier = tierForPosition(r.position, total);
+            if (tier) awards.push({ userId: r.userId, eventId, code: tier });
 
-        if (r.position <= 3) {
-            awards.push({ userId: r.userId, eventId, code: `PODIUM_${r.position}` });
+            if (r.position <= 3) {
+                awards.push({ userId: r.userId, eventId, code: `PODIUM_${r.position}` });
+            }
         }
     }
 
-    await prisma.$transaction([
-        prisma.badgeAward.deleteMany({ where: { eventId } }),
-        prisma.badgeAward.createMany({ data: awards, skipDuplicates: true }),
-        ...ranked.map((r) =>
-            prisma.walletEntry.upsert({
-                where: { userId_eventId: { userId: r.userId, eventId } },
-                update: { amount: r.points },
-                create: { userId: r.userId, eventId, kind: 'EVENT_POINTS', amount: r.points },
-            })
-        ),
-    ]);
+    /**
+     * Les badges de la compète sont TOUJOURS effacés d'abord, même quand elle
+     * n'en décerne plus.
+     *
+     * C'est ce qui rend le réglage rétroactif : retirer la famille de dessins
+     * d'une compète et rejouer la clôture nettoie ce qu'elle avait distribué,
+     * au lieu de laisser des médailles orphelines qu'il faudrait aller chercher
+     * à la main.
+     *
+     * Le crédit suit la même logique en sens inverse : il est SUPPRIMÉ quand la
+     * compète ne crédite plus, et remis à jour sinon. Un `upsert` seul aurait
+     * laissé en place le crédit d'une compète qu'on vient de démonétiser.
+     */
+    const ops = [prisma.badgeAward.deleteMany({ where: { eventId } })];
+    if (awards.length > 0) {
+        ops.push(prisma.badgeAward.createMany({ data: awards, skipDuplicates: true }));
+    }
 
-    return { players: total, badges: awards.length };
+    if (wantsCredits) {
+        ops.push(
+            ...ranked.map((r) =>
+                prisma.walletEntry.upsert({
+                    where: { userId_eventId: { userId: r.userId, eventId } },
+                    update: { amount: r.points },
+                    create: { userId: r.userId, eventId, kind: 'EVENT_POINTS', amount: r.points },
+                })
+            )
+        );
+    } else {
+        ops.push(prisma.walletEntry.deleteMany({ where: { eventId, kind: 'EVENT_POINTS' } }));
+    }
+
+    await prisma.$transaction(ops);
+
+    return {
+        players: total,
+        badges: awards.length,
+        credits: wantsCredits ? total : 0,
+        badgeSet: event.badgeSet,
+    };
 }
 
 /**

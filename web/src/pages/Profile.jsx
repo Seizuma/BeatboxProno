@@ -200,6 +200,10 @@ export default function Profile({ preview = null }) {
                     <Badge
                       key={b.code}
                       code={b.code}
+                      /* La famille de dessins vient de la COMPÈTE, pas du code :
+                         deux compètes peuvent décerner le même « or » avec deux
+                         cubes différents. */
+                      set={row.event?.badgeSet}
                       scale={2}
                       label={t(`badge.${b.code}`)}
                       onClick={() => setSheet(b)}

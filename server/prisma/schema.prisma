@@ -133,18 +133,32 @@ model Event {
   // 3 juges donnent 3-0 et 2-1 ; 5 juges ouvrent 5-0, 4-1 et 3-2.
   judgeCount  Int         @default(3)
 
-  /// Cette compète décerne-t-elle un palmarès ?
+  /// Le JEU de badges décerné par cette compète, ou rien.
   ///
-  /// Les badges ne sont PAS propres à un événement : il en existe sept pour
-  /// tout le site — participation, trois paliers, trois places de podium — et
-  /// jusqu'ici la moindre compète passée en « terminé » les distribuait tous.
-  /// Une sélection de wildcards à vingt joueurs décernait donc les mêmes
-  /// médailles qu'un Grand Beatbox Battle, et personne n'avait le moyen de dire
-  /// non.
+  /// ─── Pourquoi un identifiant et pas un booléen ───────────────────────────
   ///
-  /// `true` par défaut : c'est le comportement d'avant, et les compètes déjà
-  /// en base l'ont toutes eu. On décoche pour une compète mineure.
-  awardsBadges Boolean    @default(true)
+  /// Un booléen ne savait dire que « des badges » ou « pas de badges », et les
+  /// badges étaient forcément les mêmes partout : sept dessins pour tout le
+  /// site. Une sélection de wildcards à vingt joueurs décernait donc les
+  /// médailles du Grand Beatbox Battle.
+  ///
+  /// Ici la compète désigne une FAMILLE de dessins. `null` veut dire qu'elle
+  /// n'en décerne aucun ; « gbb » désigne les cubes actuels. Le jour où une
+  /// autre famille est dessinée, elle s'ajoute au registre côté client et
+  /// devient sélectionnable — sans toucher ni au barème ni à la distribution.
+  ///
+  /// La valeur n'est pas une énumération : le catalogue des dessins vit dans le
+  /// client, et graver ses identifiants dans le schéma obligerait à une
+  /// migration pour chaque nouvelle famille.
+  badgeSet     String?
+
+  /// Cette compète crédite-t-elle le porte-monnaie ?
+  ///
+  /// Indépendant des badges, et c'est tout l'intérêt : un championnat peut très
+  /// bien rapporter des points de boutique sans décerner les médailles d'une
+  /// autre compète. Les deux étaient liés par un seul booléen, ce qui obligeait
+  /// à renoncer aux crédits pour se débarrasser des badges.
+  awardsCredits Boolean   @default(true)
 
   // Fermeture globale des pronostics. Volontairement nullable : quand les
   // wildcards sont ouvertes mais que la date de la compète n'est pas connue,
