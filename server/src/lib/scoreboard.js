@@ -153,7 +153,7 @@ export async function buildScoreboard({
     const empty = {
         totals: { players: 0, submitted: 0, points: 0, possible: 0, precision: null },
         players: [],
-        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, all: [] },
+        readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, official: 0, all: [] },
     };
 
     // Un groupe sans membre, ou sans périmètre. Une liste d'événements vide ne
@@ -343,7 +343,11 @@ export async function buildScoreboard({
     };
 
     if (!readings) {
-        return { totals, players, readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, all: [] } };
+        return {
+            totals,
+            players,
+            readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, official: 0, all: [] },
+        };
     }
 
     // --- Précision et upsets --------------------------------------------------
@@ -466,7 +470,27 @@ export async function buildScoreboard({
     return {
         totals,
         players,
-        readings: { wellRead, overRated, underRated, sampled: rows.length, all },
+        readings: {
+            wellRead,
+            overRated,
+            underRated,
+            sampled: rows.length,
+            /**
+             * Combien de places officielles existent dans le périmètre.
+             *
+             * Ce nombre ne sert qu'à une chose : permettre à l'écran de dire
+             * POURQUOI il n'a rien à montrer. Un tableau vide a deux causes
+             * opposées — soit aucun résultat n'est publié, soit ils le sont
+             * mais trop peu de pronostics se recoupent — et les confondre
+             * envoie l'organisateur chercher un défaut du mauvais côté.
+             *
+             * `sampled` seul ne les distingue pas : il vaut zéro dans les deux
+             * cas. Avec `official`, la question se tranche — zéro veut dire
+             * « rien de publié », non-zéro veut dire « publié mais trop mince ».
+             */
+            official: officialRanks.filter((e) => e.rank != null).length,
+            all,
+        },
     };
 }
 

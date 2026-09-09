@@ -181,14 +181,19 @@ export default function ResultStats({ slug, onClose }) {
                 qui n'a pas encore assez de pronostics déposés renvoie donc zéro
                 ligne, et le dire vaut mieux que d'afficher des tableaux vides. */}
             {data && sampled === 0 && (
-                /* Trois conditions indépendantes vident ce tableau, et la phrase
-                   d'origine n'en nommait qu'une : « les résultats arrivent ».
-                   Sur une sélection, c'est presque toujours la troisième qui
-                   joue — chacun ne classe que sa propre pioche, donc les avis se
-                   dispersent au lieu de se concentrer sur les mêmes noms — et
-                   l'organisateur cherchait un défaut qui n'existait pas. */
+                /* Deux causes opposées vident ce tableau, et il faut les
+                   distinguer : soit aucun résultat n'est publié, soit ils le
+                   sont mais trop peu de pronostics se recoupent.
+
+                   Le test portait sur le nombre de pronostics DÉPOSÉS, ce qui
+                   était faux : des pronostics existent bien avant qu'un
+                   résultat soit publié, et l'écran annonçait donc « pas assez
+                   d'avis qui se recoupent » alors qu'il n'y avait tout
+                   simplement rien à comparer. `official` compte les places
+                   officiellement publiées dans le périmètre — c'est la seule
+                   mesure qui tranche. */
                 <p className="empty">
-                    {data.totals?.submitted ? t('stats.empty.thin') : t('stats.empty')}
+                    {data.readings?.official ? t('stats.empty.thin') : t('stats.empty')}
                 </p>
             )}
 
