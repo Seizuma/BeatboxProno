@@ -8,6 +8,10 @@ import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js
 import { shrinkImage, humanSize } from '../lib/image.js';
 import MenuButton from '../components/MenuButton.jsx';
 import { seedFromContenders } from '../lib/bracket.js';
+// Une catégorie sans tableau ne doit pas se voir proposer des tailles de
+// tableau. La règle se lit dans la STRUCTURE — une phase unique de type
+// WILDCARD — et non dans un drapeau enregistré, qui peut mentir.
+import { isWildcardCategory, MIN_PLACES, MAX_PLACES } from '../lib/wildcard.js';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 import SeedingEditor from '../components/SeedingEditor.jsx';
@@ -17,22 +21,63 @@ import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
 import AdminSearch from '../components/AdminSearch.jsx';
+import AdminStats from '../components/AdminStats.jsx';
 import EventExclusions from '../components/EventExclusions.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
 
+/**
+ * Les espaces de l'administration, rangés par SUJET.
+ *
+ * ─── Ce qui était dispersé ──────────────────────────────────────────────────
+ *
+ * La suppression d'un pronostic vivait dans un onglet « Recherche », le
+ * bannissement d'un compte dans « Comptes ». Deux gestes qui répondent au même
+ * signalement, dans deux endroits que rien ne reliait : on cherchait la
+ * sanction là où on avait trouvé la preuve, et elle n'y était pas.
+ *
+ * Symétriquement, « Comptes » s'ouvrait sur la courbe de fréquentation du site,
+ * qui ne parle pas des comptes mais du site — on venait voir si une annonce
+ * avait porté et on tombait sur cent personnes à administrer.
+ *
+ * ─── Le rangement ───────────────────────────────────────────────────────────
+ *
+ * Trois espaces pour la compétition, dans l'ordre où on les traverse : on monte
+ * l'événement, on référence les artistes, on saisit les résultats.
+ *
+ * Un espace pour les personnes, qui réunit tout ce qui s'applique à quelqu'un —
+ * son compte d'un côté, ses pronostics de l'autre.
+ *
+ * Un espace pour les chiffres, qui ne demandent aucune action et n'ont donc
+ * rien à faire au milieu d'écrans où l'on agit.
+ */
 const TABS = [
   ['structure', 'Événements'],
   ['artists', 'Artistes'],
   ['results', 'Résultats'],
-  // Un outil de support : retrouver qui a pronostiqué quoi quand quelqu'un
-  // signale un incident ou conteste un score.
-  ['search', 'Recherche'],
-  ['people', 'Comptes'],
+  ['players', 'Joueurs'],
+  ['stats', 'Statistiques'],
+];
+
+/**
+ * Les deux volets de l'espace « Joueurs ».
+ *
+ * Une personne se traite par son compte ou par ses pronostics ; ce sont deux
+ * lectures du même sujet, pas deux sujets. D'où une navigation secondaire
+ * plutôt que deux onglets de premier rang, qui auraient éloigné à nouveau ce
+ * qu'on vient de rapprocher.
+ */
+const PLAYER_VIEWS = [
+  ['accounts', 'Comptes'],
+  // Retrouver qui a pronostiqué quoi, et le supprimer le cas échéant : l'outil
+  // de support qu'on ouvre quand quelqu'un signale un incident ou conteste un
+  // score.
+  ['predictions', 'Pronostics'],
 ];
 
 export default function Admin() {
   const { user, loading } = useSession();
   const [tab, setTab] = useState('structure');
+  const [playerView, setPlayerView] = useState('accounts');
 
   if (loading) return <p className="faint" style={{ marginTop: '2rem' }}>Chargement…</p>;
   if (!isStaff(user)) {
@@ -61,8 +106,29 @@ export default function Admin() {
       {tab === 'structure' && <StructureAdmin />}
       {tab === 'artists' && <ArtistsAdmin />}
       {tab === 'results' && <ResultsAdmin />}
-      {tab === 'search' && <AdminSearch />}
-      {tab === 'people' && <AdminPeople currentUser={user} useFlash={useFlash} />}
+      {tab === 'stats' && <AdminStats />}
+
+      {tab === 'players' && (
+        <div className="stack">
+          {/* Navigation secondaire, visuellement plus légère que celle du haut :
+              elle range à l'intérieur d'un sujet, elle n'en change pas. */}
+          <nav className="row" style={{ gap: '0.4rem' }}>
+            {PLAYER_VIEWS.map(([id, label]) => (
+              <button
+                key={id}
+                className={`btn btn--small${playerView === id ? ' btn--primary' : ' btn--ghost'}`}
+                aria-pressed={playerView === id}
+                onClick={() => setPlayerView(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          {playerView === 'accounts' && <AdminPeople currentUser={user} useFlash={useFlash} />}
+          {playerView === 'predictions' && <AdminSearch />}
+        </div>
+      )}
     </div>
   );
 }
@@ -1506,7 +1572,14 @@ function ResultsAdmin() {
             run={run}
           />
         ) : (
-          <RankingResults key={phase.id} phase={phase} contenders={category.contenders} onDone={reload} run={run} />
+          <RankingResults
+            key={phase.id}
+            phase={phase}
+            category={category}
+            contenders={category.contenders}
+            onDone={reload}
+            run={run}
+          />
         )
       )}
     </div>
@@ -1733,7 +1806,18 @@ const QUALIFIER_CHOICES = [null, 2, 4, 8, 16, 32];
  * restent invisibles des joueurs et aucun score n'est recalculé — de quoi
  * saisir le Solo pendant que le Tag Team attend encore ses résultats.
  */
-function RankingResults({ phase, contenders, onDone, run }) {
+function RankingResults({ phase, category, contenders, onDone, run }) {
+  /**
+   * Une sélection ne compte pas ses places en tailles de tableau.
+   *
+   * Le sélecteur ci-dessous n'offre que 2, 4, 8, 16 et 32 — la liste des
+   * tailles d'arbre. C'était sans conséquence tant qu'une sélection ne pouvait
+   * pas sortir de ces valeurs ; ce n'est plus le cas depuis que le panneau de
+   * format en accepte 1 à 100. Une sélection à sept places n'y trouverait
+   * aucune option correspondante : le champ retomberait sur « Aucune coupe » et
+   * affirmerait à l'écran que la phase n'en a pas, alors qu'elle en a une.
+   */
+  const isWildcard = isWildcardCategory(category);
   const [order, setOrder] = useState(() =>
     [...(phase.entries ?? [])].sort((a, b) => a.rank - b.rank).map((e) => e.contenderId)
   );
@@ -1787,25 +1871,55 @@ function RankingResults({ phase, contenders, onDone, run }) {
         <div className="row" style={{ gap: '0.6rem' }}>
           <div className="field">
             <label htmlFor={`cut-${phase.id}`}>Qualifiés</label>
-            <select
-              id={`cut-${phase.id}`}
-              value={cut ?? ''}
-              onChange={(e) => {
-                const n = e.target.value === '' ? null : Number(e.target.value);
-                setCut(n);
-                run(async () => {
-                  await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
-                  await onDone();
-                  return n ? `${n} qualifiés sur cette phase.` : 'Phase sans qualification.';
-                });
-              }}
-            >
-              {QUALIFIER_CHOICES.map((n) => (
-                <option key={n ?? 'none'} value={n ?? ''}>
-                  {n ? `${n} qualifiés` : 'Aucune coupe'}
-                </option>
-              ))}
-            </select>
+            {isWildcard ? (
+              /* Saisie libre, enregistrée à la SORTIE du champ et non à chaque
+                 frappe : déplacer la coupe rescore tous les pronostics déposés,
+                 et taper « 12 » aurait lancé ce calcul une première fois sur
+                 « 1 ». */
+              <input
+                id={`cut-${phase.id}`}
+                type="number"
+                min={MIN_PLACES}
+                max={MAX_PLACES}
+                style={{ width: '6rem' }}
+                value={cut ?? ''}
+                onChange={(e) => setCut(e.target.value === '' ? null : Number(e.target.value))}
+                onBlur={() => {
+                  const n = cut === null ? null : Math.min(MAX_PLACES, Math.max(MIN_PLACES, cut));
+                  if (n === (phase.qualifierCount ?? null)) return;
+                  setCut(n);
+                  run(async () => {
+                    await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
+                    await onDone();
+                    return n ? `${n} place(s) sur cette sélection.` : 'Sélection sans coupe.';
+                  });
+                }}
+              />
+            ) : (
+              <select
+                id={`cut-${phase.id}`}
+                value={cut ?? ''}
+                onChange={(e) => {
+                  const n = e.target.value === '' ? null : Number(e.target.value);
+                  setCut(n);
+                  run(async () => {
+                    await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
+                    await onDone();
+                    return n ? `${n} qualifiés sur cette phase.` : 'Phase sans qualification.';
+                  });
+                }}
+              >
+                {/* La valeur en place est injectée si elle n'est pas dans la
+                    liste : un palier réglé à 6 par une autre voie ne doit pas
+                    s'afficher comme « Aucune coupe ». */}
+                {(QUALIFIER_CHOICES.includes(cut) ? QUALIFIER_CHOICES : [...QUALIFIER_CHOICES, cut])
+                  .map((n) => (
+                    <option key={n ?? 'none'} value={n ?? ''}>
+                      {n ? `${n} qualifiés` : 'Aucune coupe'}
+                    </option>
+                  ))}
+              </select>
+            )}
           </div>
 
           <Progress done={order.length} total={contenders.length} />

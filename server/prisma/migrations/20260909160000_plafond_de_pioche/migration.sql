@@ -1,0 +1,22 @@
+-- Le plafond de pioche d'une sélection sur vidéo.
+--
+-- ─── Pourquoi ──────────────────────────────────────────────────────────────
+--
+-- Sans plafond, la stratégie gagnante est de tout prendre. Sur une pioche
+-- libre, chaque nom ajouté ne peut que rapporter et jamais coûter : celui qui
+-- verse les cinquante inscrits ramasse mécaniquement toutes les bonnes
+-- réponses. Ce n'est pas une faille de score, c'est l'absence de contrainte —
+-- et elle vide la compète de son intérêt, puisque deviner cesse d'être le jeu.
+--
+-- ─── Pourquoi NULL par défaut ──────────────────────────────────────────────
+--
+-- NULL signifie « pas de plafond », le comportement d'aujourd'hui. Poser une
+-- valeur ici rétro-appliquerait une règle aux sélections DÉJÀ ouvertes, dont
+-- les joueurs ont composé leur liste sans la connaître : leurs pronostics
+-- deviendraient invalides du jour au lendemain, sans qu'ils aient rien fait.
+-- L'organisateur pose le plafond sur les compètes à venir.
+--
+-- Sur la phase et non sur la catégorie : c'est la phase qui porte déjà
+-- `qualifierCount`, et les deux nombres se lisent ensemble — vingt choix pour
+-- huit places décrit une règle, chacun pris à part n'en décrit aucune.
+ALTER TABLE "Phase" ADD COLUMN "maxPicks" INTEGER;

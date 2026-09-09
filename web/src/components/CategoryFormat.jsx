@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
+import { isWildcardCategory, MIN_PLACES, MAX_PLACES, clampPlaces } from '../lib/wildcard.js';
 
 /**
  * Retoucher le format d'une catégorie déjà montée.
@@ -47,6 +48,140 @@ function readCurrent(category) {
 }
 
 export default function CategoryFormat({ category, onDone, run }) {
+    // L'aiguillage tient sur la STRUCTURE et non sur un drapeau enregistré :
+    // une phase unique de type WILDCARD, et c'est une sélection. Un drapeau
+    // peut mentir après qu'on a retouché le format, la structure non.
+    if (isWildcardCategory(category)) {
+        return <WildcardSettings category={category} onDone={onDone} run={run} />;
+    }
+    return <BracketFormat category={category} onDone={onDone} run={run} />;
+}
+
+/**
+ * Les réglages d'une sélection sur vidéo.
+ *
+ * ─── Pourquoi ce panneau existe ─────────────────────────────────────────────
+ *
+ * Une sélection n'a pas de tableau : ni taille, ni petite finale, ni palier de
+ * qualification. Le formulaire de tableau lui était pourtant servi tel quel, et
+ * il mentait de bout en bout — « Top 8 » présélectionné alors qu'aucun tableau
+ * n'existe, deux paliers proposés, une petite finale à cocher. Cliquer sur
+ * « Appliquer » répondait 400 : la route refuse une catégorie sans tableau.
+ *
+ * Deux nombres suffisent à décrire une sélection, et ils se lisent ENSEMBLE :
+ * vingt choix pour huit places décrit une règle, chacun pris à part n'en décrit
+ * aucune. D'où un seul panneau et un seul bouton.
+ */
+function WildcardSettings({ category, onDone, run }) {
+    const phase = category.phases[0];
+    const places = phase?.qualifierCount ?? null;
+    const cap = phase?.maxPicks ?? null;
+
+    const [form, setForm] = useState({ places: places ?? '', cap: cap ?? '' });
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        setForm({ places: places ?? '', cap: cap ?? '' });
+    }, [places, cap]);
+
+    const nextPlaces = form.places === '' ? null : clampPlaces(Number(form.places));
+    const nextCap = form.cap === '' ? null : Math.min(MAX_PLACES, Math.max(1, Number(form.cap)));
+    const changed = nextPlaces !== places || nextCap !== cap;
+
+    // Un plafond sous le nombre de places rendrait la compète injouable : on ne
+    // peut pas désigner huit qualifiés en ne retenant que cinq noms.
+    const tooLow = nextPlaces !== null && nextCap !== null && nextCap < nextPlaces;
+
+    async function save() {
+        setBusy(true);
+        await run(async () => {
+            await api.patch(`/admin/phases/${phase.id}/qualifiers`, {
+                qualifierCount: nextPlaces,
+                maxPicks: nextCap,
+            });
+            await onDone();
+            return nextCap
+                ? `${category.name} : ${nextPlaces} place(s), ${nextCap} choix au maximum.`
+                : `${category.name} : ${nextPlaces} place(s), pioche libre.`;
+        });
+        setBusy(false);
+    }
+
+    return (
+        <div className="panel stack" style={{ gap: '0.7rem', borderColor: 'var(--m)' }}>
+            <h4 style={{ margin: 0 }}>Réglages de la sélection</h4>
+
+            <div className="row" style={{ gap: '0.6rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor={`wc-places-${category.id}`}>Places qualificatives</label>
+                    <input
+                        id={`wc-places-${category.id}`}
+                        type="number"
+                        min={MIN_PLACES}
+                        max={MAX_PLACES}
+                        style={{ width: '6rem' }}
+                        value={form.places}
+                        onChange={(e) => setForm({ ...form, places: e.target.value })}
+                    />
+                </div>
+
+                <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor={`wc-cap-${category.id}`}>Choix maximum</label>
+                    <input
+                        id={`wc-cap-${category.id}`}
+                        type="number"
+                        min={1}
+                        max={MAX_PLACES}
+                        style={{ width: '6rem' }}
+                        value={form.cap}
+                        placeholder="illimité"
+                        onChange={(e) => setForm({ ...form, cap: e.target.value })}
+                    />
+                </div>
+
+                <button
+                    className="btn btn--small btn--primary"
+                    disabled={!changed || tooLow || busy}
+                    onClick={save}
+                >
+                    {busy ? 'En cours…' : 'Appliquer'}
+                </button>
+
+                {changed && (
+                    <button
+                        className="btn btn--small btn--ghost"
+                        onClick={() => setForm({ places: places ?? '', cap: cap ?? '' })}
+                    >
+                        Annuler
+                    </button>
+                )}
+            </div>
+
+            {tooLow && (
+                <p className="notice" style={{ margin: 0 }}>
+                    Un plafond de {nextCap} choix pour {nextPlaces} places rend la sélection injouable :
+                    personne ne pourrait désigner tous les qualifiés.
+                </p>
+            )}
+
+            <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                Le plafond limite le nombre de noms qu'un joueur peut retenir. Sans lui, la stratégie
+                gagnante est de tout prendre : chaque nom ajouté ne peut que rapporter, jamais coûter, et
+                celui qui verse tous les inscrits ramasse mécaniquement toutes les bonnes réponses.
+                Laissé vide, la pioche reste libre.
+            </p>
+
+            <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                Déplacer les places recalcule qui est marqué qualifié dans le classement déjà saisi et
+                rescore tous les pronostics déposés — les points de tout le monde bougent. Baisser le
+                plafond ne touche pas aux pronostics déjà enregistrés : ils gardent leurs noms jusqu'au
+                prochain enregistrement de leur auteur.
+            </p>
+        </div>
+    );
+}
+
+function BracketFormat({ category, onDone, run }) {
     const initial = useMemo(() => readCurrent(category), [category]);
     const [spec, setSpec] = useState(initial);
     const [confirm, setConfirm] = useState(null); // l'impact renvoyé en 409

@@ -1438,15 +1438,26 @@ adminRouter.put('/phases/:id/seeding', async (req, res) => {
 
 /** Change le nombre de qualifiés d'une phase après coup. */
 adminRouter.patch('/phases/:id/qualifiers', async (req, res) => {
-  const { qualifierCount } = z
+  const { qualifierCount, maxPicks } = z
     // Une place au minimum, cent au plus — les mêmes bornes qu'à la
     // composition. Une sélection n'a pas de raison d'être une puissance de deux.
-    .object({ qualifierCount: z.number().int().min(MIN_PLACES).max(MAX_PLACES).nullable() })
+    .object({
+      qualifierCount: z.number().int().min(MIN_PLACES).max(MAX_PLACES).nullable(),
+      /**
+       * Le plafond de pioche, sur une sélection.
+       *
+       * `undefined` ne touche à rien, `null` retire le plafond : les deux ne
+       * disent pas la même chose, et la saisie des résultats appelle cette
+       * route sans jamais parler de plafond. Les confondre effacerait le
+       * réglage à chaque déplacement de la coupe.
+       */
+      maxPicks: z.number().int().min(1).max(MAX_PLACES).nullable().optional(),
+    })
     .parse(req.body);
 
   const phase = await prisma.phase.update({
     where: { id: req.params.id },
-    data: { qualifierCount },
+    data: { qualifierCount, ...(maxPicks === undefined ? {} : { maxPicks }) },
   });
 
   // Les qualifications déjà saisies suivent la nouvelle coupe : laisser
@@ -1939,6 +1950,45 @@ adminRouter.get('/users', async (req, res) => {
  * ferait basculer le compteur à 2 h du matin l'été, en plein pic d'activité un
  * soir de compète.
  */
+/**
+ * Les compteurs du site, pour l'onglet Statistiques.
+ *
+ * ─── Pourquoi une route et non cinq ─────────────────────────────────────────
+ *
+ * Ce sont cinq `count` sans jointure, que Postgres rend en quelques
+ * millisecondes. Les demander séparément aurait coûté cinq allers-retours pour
+ * un écran qu'on ouvre d'un bloc, et surtout aurait laissé l'affichage se
+ * remplir case par case — un tableau de bord qui se compose sous les yeux
+ * donne l'impression de ramer alors qu'il ne fait rien.
+ *
+ * `Promise.all` et non une suite d'`await` : ces requêtes ne dépendent pas les
+ * unes des autres.
+ *
+ * ─── Ce qui est compté, et pourquoi ces choix ───────────────────────────────
+ *
+ * Les pronostics sont comptés deux fois : le total inclut les brouillons, et
+ * `submitted` ne retient que ce qui est déposé. Le premier dit l'activité —
+ * combien de monde a ouvert un tableau et joué avec — le second dit la
+ * participation réelle. Confondus, on surestime la seconde d'un facteur trois.
+ *
+ * Les événements en brouillon sont exclus du décompte visible : ce sont des
+ * compètes que personne ne voit encore, et les compter donnerait un chiffre
+ * qu'aucun joueur ne pourrait retrouver.
+ */
+adminRouter.get('/stats', async (_req, res) => {
+  const [users, events, drafts, predictions, submitted, groups, artists] = await Promise.all([
+    prisma.user.count(),
+    prisma.event.count({ where: { status: { not: 'DRAFT' } } }),
+    prisma.event.count({ where: { status: 'DRAFT' } }),
+    prisma.prediction.count(),
+    prisma.prediction.count({ where: { submitted: true } }),
+    prisma.group.count(),
+    prisma.artist.count(),
+  ]);
+
+  res.json({ stats: { users, events, drafts, predictions, submitted, groups, artists } });
+});
+
 adminRouter.get('/users/activity', async (req, res) => {
   // Bornes serrées : sous une semaine la courbe n'a pas de forme, au-delà de
   // six mois elle ne tient plus dans la largeur d'un écran.

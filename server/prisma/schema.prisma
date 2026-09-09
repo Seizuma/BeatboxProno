@@ -294,6 +294,18 @@ model Phase {
   name           String    // "Wildcard", "Éliminations", "Bracket"
   position       Int       @default(0)
   qualifierCount Int?      // nb de qualifiés attendus (WILDCARD / ELIMINATION)
+
+  /// Combien de noms un joueur peut retenir sur une SÉLECTION.
+  ///
+  /// Sans plafond, la stratégie gagnante est de tout prendre : sur une pioche
+  /// libre, chaque nom ajouté ne peut que rapporter, jamais coûter. Quelqu'un
+  /// qui verse les cinquante inscrits ramasse mécaniquement toutes les bonnes
+  /// réponses et vide la compète de son intérêt — deviner n'est plus le jeu.
+  ///
+  /// Vide : pas de plafond, ce qui reste le comportement des sélections déjà
+  /// ouvertes. On ne referme pas une compète en cours sur des joueurs qui ont
+  /// composé leur liste sous une autre règle.
+  maxPicks       Int?
   locksAt        DateTime? // fermeture des pronostics
   resolved       Boolean   @default(false)
 
