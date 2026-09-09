@@ -418,6 +418,8 @@ const DICT = {
     'stats.col.precision': 'Precision',
     'stats.precision': 'Average precision',
     'stats.empty': 'Nothing to count yet — stats appear once results are published.',
+    'stats.empty.thin':
+      'Not enough overlapping picks yet. An artist needs at least three predictions on them before an average placement means anything — on a wildcard selection, where everyone ranks their own shortlist, that takes a while.',
     'stats.profile': 'Open profile',
     'stats.wellRead': 'Best read by the crowd',
     'stats.wellRead.lede': 'Smallest gap between the average predicted place and the real one.',
@@ -501,9 +503,9 @@ const DICT = {
       'Every artist is scored on how far your rank sits from the official one. Nothing is lost for being close.',
     'wc.hit.title': 'The qualifiers',
     'wc.hit.short':
-      'Three points for each artist you placed in your top {n} who really got through — whatever position you gave them. It is worth three times the usual qualification point, because here it is not a detail beside a ranking: it is the whole question.',
+      'One point for each artist you placed in your top {n} who really got through, whatever position you gave them. It is a bonus on top of the placement, not a second scoring system: what the game asks of you is to rank, and that is where the points are.',
     'wc.note':
-      'Both add up: calling a qualifier and placing them exactly pays 8 on that artist alone.',
+      'Both add up: calling a qualifier and placing them exactly pays 6 on that artist alone.',
     'wc.board.title': 'Your top {n}',
     'wc.board.lede':
       'Nobody knows yet who sent a wildcard — that is the whole question. Pick the artists you think will get through, then order them.',
@@ -1145,6 +1147,8 @@ const DICT = {
     'stats.col.precision': 'Précision',
     'stats.precision': 'Précision moyenne',
     'stats.empty': 'Rien à compter pour l’instant — les stats arrivent dès les premiers résultats publiés.',
+    'stats.empty.thin':
+      'Pas encore assez de pronostics qui se recoupent. Il faut au moins trois avis sur un même artiste pour qu’une place moyenne veuille dire quelque chose — sur une sélection, où chacun ne classe que sa propre pioche, cela prend du temps.',
     'stats.profile': 'Ouvrir le profil',
     'stats.wellRead': 'Les mieux lus',
     'stats.wellRead.lede': 'Le plus faible écart entre la place moyenne pronostiquée et la place réelle.',
@@ -1228,9 +1232,9 @@ const DICT = {
       'Chaque artiste rapporte selon l’écart entre votre rang et le rang officiel. Être proche ne fait rien perdre.',
     'wc.hit.title': 'Les qualifiés',
     'wc.hit.short':
-      'Trois points par artiste placé dans votre top {n} et réellement retenu — quel que soit le rang que vous lui avez donné. C’est trois fois le point de qualification habituel, parce qu’ici ce n’est pas un détail au bord d’un classement : c’est toute la question.',
+      'Un point par artiste placé dans votre top {n} et réellement retenu, quel que soit le rang que vous lui avez donné. C’est un bonus par-dessus le placement, pas un second barème : ce que le jeu vous demande, c’est de classer, et c’est là que sont les points.',
     'wc.note':
-      'Les deux se cumulent : deviner un qualifié ET le placer au bon rang rapporte 8 points sur ce seul artiste.',
+      'Les deux se cumulent : deviner un qualifié ET le placer au bon rang rapporte 6 points sur ce seul artiste.',
     'wc.board.title': 'Votre top {n}',
     'wc.board.lede':
       'Personne ne sait encore qui a envoyé une wildcard — c’est toute la question. Piochez les artistes que vous voyez passer, puis classez-les.',

@@ -73,8 +73,8 @@ export default function ScoringHelp({ mode = 'all', places, onClose }) {
                     <p style={{ margin: 0 }}>{t('wc.lede', { n })}</p>
 
                     <div className="scorecards">
-                        <Card points="+3" label={t('wc.card.hit')} hint={t('wc.card.hit.hint', { n })} accent />
-                        <Card points="+5" label={t('wc.card.place')} hint={t('wc.card.place.hint')} />
+                        <Card points="+1" label={t('wc.card.hit')} hint={t('wc.card.hit.hint', { n })} />
+                        <Card points="+5" label={t('wc.card.place')} hint={t('wc.card.place.hint')} accent />
                     </div>
 
                     <section>

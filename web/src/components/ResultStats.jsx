@@ -180,7 +180,17 @@ export default function ResultStats({ slug, onClose }) {
                 une « place moyenne pronostiquée » ne mesure rien. Une compète
                 qui n'a pas encore assez de pronostics déposés renvoie donc zéro
                 ligne, et le dire vaut mieux que d'afficher des tableaux vides. */}
-            {data && sampled === 0 && <p className="empty">{t('stats.empty')}</p>}
+            {data && sampled === 0 && (
+                /* Trois conditions indépendantes vident ce tableau, et la phrase
+                   d'origine n'en nommait qu'une : « les résultats arrivent ».
+                   Sur une sélection, c'est presque toujours la troisième qui
+                   joue — chacun ne classe que sa propre pioche, donc les avis se
+                   dispersent au lieu de se concentrer sur les mêmes noms — et
+                   l'organisateur cherchait un défaut qui n'existait pas. */
+                <p className="empty">
+                    {data.totals?.submitted ? t('stats.empty.thin') : t('stats.empty')}
+                </p>
+            )}
 
             {sampled > 0 && (
                 <div className="stack" style={{ gap: '1rem' }}>
@@ -216,62 +226,62 @@ export default function ResultStats({ slug, onClose }) {
                                 {t('stats.all.lede')}
                             </p>
                             {parPhase.map((groupe) => (
-                              <div key={groupe.phaseId} className="stack" style={{ gap: '0.35rem' }}>
-                                {/* L'intertitre n'apparaît qu'à partir de deux
+                                <div key={groupe.phaseId} className="stack" style={{ gap: '0.35rem' }}>
+                                    {/* L'intertitre n'apparaît qu'à partir de deux
                                     classements : sur une catégorie qui n'en
                                     publie qu'un, il répéterait ce que l'onglet
                                     dit déjà. */}
-                                {parPhase.length > 1 && (
-                                  <p className="eyebrow" style={{ margin: 0 }}>{groupe.phase}</p>
-                                )}
-                                <div className="panel panel--flush">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th className="num">{t('result.col.rank')}</th>
-                                            <th>{t('stats.col.artist')}</th>
-                                            <th className="num">{t('stats.col.expected')}</th>
-                                            <th className="num">{t('stats.col.gap')}</th>
-                                            <th className="num col-opt">{t('stats.col.voters')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {groupe.rows.map((r) => (
-                                            // La clé porte la phase : un même
-                                            // participant classé dans deux phases
-                                            // donnait deux lignes de clé identique,
-                                            // et React n'en gardait qu'une.
-                                            <tr key={`${r.contenderId}:${r.phaseId}`}>
-                                                <td className="num data">{r.actual}</td>
-                                                <td>
-                                                    <span className="stat-row">
-                                                        <ArtistFigure src={r.imageUrl} name={r.name} size="xs" />
-                                                        <span>{r.name}</span>
-                                                    </span>
-                                                </td>
-                                                <td className="num muted">{r.expected}</td>
-                                                <td
-                                                    className="num data"
-                                                    // Le signe porte le sens, la couleur ne fait que
-                                                    // le répéter plus vite : vert, il a fini au-dessus
-                                                    // de ce qu'on croyait.
-                                                    style={{
-                                                        color:
-                                                            r.delta > 0 ? 'var(--ok)'
-                                                                : r.delta < 0 ? 'var(--r)'
-                                                                    : undefined,
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    {r.delta > 0 ? `+${r.delta}` : r.delta}
-                                                </td>
-                                                <td className="num muted col-opt">{r.voters}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                    {parPhase.length > 1 && (
+                                        <p className="eyebrow" style={{ margin: 0 }}>{groupe.phase}</p>
+                                    )}
+                                    <div className="panel panel--flush">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th className="num">{t('result.col.rank')}</th>
+                                                    <th>{t('stats.col.artist')}</th>
+                                                    <th className="num">{t('stats.col.expected')}</th>
+                                                    <th className="num">{t('stats.col.gap')}</th>
+                                                    <th className="num col-opt">{t('stats.col.voters')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {groupe.rows.map((r) => (
+                                                    // La clé porte la phase : un même
+                                                    // participant classé dans deux phases
+                                                    // donnait deux lignes de clé identique,
+                                                    // et React n'en gardait qu'une.
+                                                    <tr key={`${r.contenderId}:${r.phaseId}`}>
+                                                        <td className="num data">{r.actual}</td>
+                                                        <td>
+                                                            <span className="stat-row">
+                                                                <ArtistFigure src={r.imageUrl} name={r.name} size="xs" />
+                                                                <span>{r.name}</span>
+                                                            </span>
+                                                        </td>
+                                                        <td className="num muted">{r.expected}</td>
+                                                        <td
+                                                            className="num data"
+                                                            // Le signe porte le sens, la couleur ne fait que
+                                                            // le répéter plus vite : vert, il a fini au-dessus
+                                                            // de ce qu'on croyait.
+                                                            style={{
+                                                                color:
+                                                                    r.delta > 0 ? 'var(--ok)'
+                                                                        : r.delta < 0 ? 'var(--r)'
+                                                                            : undefined,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {r.delta > 0 ? `+${r.delta}` : r.delta}
+                                                        </td>
+                                                        <td className="num muted col-opt">{r.voters}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                              </div>
                             ))}
                         </section>
                     )}
