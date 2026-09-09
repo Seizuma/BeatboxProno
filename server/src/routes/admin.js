@@ -16,6 +16,9 @@ import {
   reseedOfficialBracket,
 } from '../lib/seeding.js';
 import { lastDays, localDay } from '../lib/presence.js';
+// La suppression d'un compte est la MÊME que celle de la page de profil : une
+// seule procédure, groupes transmis compris.
+import { deleteAccount } from '../lib/accounts.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireRole('ADMIN', 'OWNER'));
@@ -1877,6 +1880,9 @@ adminRouter.get('/users', async (req, res) => {
       select: {
         id: true, discordId: true, username: true, globalName: true,
         avatarUrl: true, role: true, createdAt: true, lastSeenAt: true,
+        // L'état de bannissement voyage avec le compte : la liste doit pouvoir
+        // marquer la ligne sans une seconde requête par personne.
+        bannedAt: true, banReason: true,
       },
     }),
   ]);
@@ -1988,6 +1994,127 @@ adminRouter.patch('/users/:id/role', onlyAdmin, async (req, res) => {
   });
 
   res.json({ user });
+});
+
+/**
+ * Les deux garde-fous communs au bannissement et à la suppression.
+ *
+ * Les mêmes que pour le changement de rôle, et pour les mêmes raisons : on ne
+ * se les applique pas à soi-même — un administrateur qui se bannit ne peut plus
+ * se débannir — et le propriétaire du site est hors d'atteinte d'un
+ * administrateur. Sans cette dernière règle, n'importe quel administrateur
+ * prendrait le site en fermant le compte au-dessus de lui.
+ */
+async function targetForSanction(req, res) {
+  const target = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true, username: true, globalName: true, discordId: true,
+      role: true, bannedAt: true, banReason: true,
+    },
+  });
+  if (!target) {
+    res.status(404).json({ error: 'Compte introuvable.' });
+    return null;
+  }
+  if (target.id === req.user.id) {
+    res.status(400).json({ error: 'Vous ne pouvez pas appliquer cette mesure à votre propre compte.' });
+    return null;
+  }
+  if (target.role === 'OWNER') {
+    res.status(403).json({
+      error: 'Le propriétaire du site ne peut être ni banni ni supprimé. Transmettez d’abord le rôle.',
+    });
+    return null;
+  }
+  return target;
+}
+
+/**
+ * Bannir un compte, ou lever le bannissement.
+ *
+ * ─── Ce que ça fait, et ce que ça ne fait pas ───────────────────────────────
+ *
+ * Ça ferme la porte : `attachUser` refuse la session, `auth.js` refuse la
+ * connexion Discord. Rien d'autre ne bouge.
+ *
+ * Les pronostics déposés RESTENT au classement. C'est délibéré : les retirer
+ * réécrirait le palmarès de tous les autres joueurs de l'événement, qui n'ont
+ * rien fait — un score gagné contre trente personnes ne se recalcule pas parce
+ * que l'une d'elles s'est mal tenue. Pour tout retirer, c'est la suppression
+ * qu'il faut, et elle est en dessous.
+ *
+ * Réversible, et c'est la raison d'être de la mesure : la sanction proportionnée
+ * à un incident est celle qu'on peut lever quand il est réglé. Sans elle, la
+ * seule réponse disponible était de supprimer un compte pour de bon.
+ *
+ * Le motif est obligatoire à la pose. Sans lui, la seule réponse possible à
+ * « pourquoi mon compte est fermé ? » six mois plus tard est « je ne sais
+ * plus », et c'est une conversation qu'on n'a qu'une fois avant de le
+ * regretter. Il ne sort jamais vers l'intéressé : la page de connexion dit que
+ * c'est fermé, pas pourquoi.
+ */
+adminRouter.patch('/users/:id/ban', onlyAdmin, async (req, res) => {
+  const { banned, reason } = z
+    .object({ banned: z.boolean(), reason: z.string().max(280).optional() })
+    .parse(req.body ?? {});
+
+  const target = await targetForSanction(req, res);
+  if (!target) return undefined;
+
+  if (banned && !(reason ?? '').trim()) {
+    return res.status(400).json({ error: 'Indiquez un motif : il devra être relu plus tard.' });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: target.id },
+    data: banned
+      ? { bannedAt: new Date(), banReason: reason.trim() }
+      : { bannedAt: null, banReason: null },
+    select: { id: true, username: true, bannedAt: true, banReason: true },
+  });
+
+  console.log(
+    `[comptes] ${banned ? 'bannissement' : 'levée'} de ${target.username} (${target.discordId})` +
+    ` par ${req.user.username}${banned ? ` — ${reason.trim()}` : ''}.`
+  );
+
+  return res.json({ user });
+});
+
+/**
+ * Supprimer un compte.
+ *
+ * Le pendant administratif de la suppression volontaire, et la MÊME procédure :
+ * `deleteAccount` transmet les groupes possédés au plus ancien membre restant
+ * avant de laisser la cascade emporter le reste. Deux implémentations auraient
+ * divergé, et la divergence se serait vue sur un groupe laissé sans
+ * propriétaire — que rien dans l'application ne permet de réparer.
+ *
+ * `?confirm=true` obligatoire, comme pour toute suppression de cet écran : les
+ * routes et l'interface tiennent la même ligne, et un appel direct à l'API ne
+ * doit pas être plus permissif qu'un clic.
+ *
+ * Irréversible, et ça retire les pronostics du classement. Quand ce n'est pas
+ * ce qu'on veut — et la plupart du temps ce n'est pas ce qu'on veut — c'est
+ * `PATCH /users/:id/ban` qu'il faut appeler.
+ */
+adminRouter.delete('/users/:id', onlyAdmin, async (req, res) => {
+  const target = await targetForSanction(req, res);
+  if (!target) return undefined;
+
+  if (req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error: `La suppression de ${target.globalName ?? target.username} est définitive et retire ses pronostics du classement. Confirmez pour continuer.`,
+    });
+  }
+
+  await deleteAccount(target.id);
+  console.log(
+    `[comptes] suppression de ${target.username} (${target.discordId}) par ${req.user.username}.`
+  );
+
+  return res.json({ ok: true, username: target.globalName ?? target.username });
 });
 
 // --- Recalcul -----------------------------------------------------------------

@@ -97,6 +97,10 @@ authRouter.get('/discord/callback', async (req, res) => {
 
     res.redirect(`${home}${next}`);
   } catch (err) {
+    // Un compte fermé n'est pas une panne : le dire « échec de connexion »
+    // enverrait la personne réessayer en boucle. On distingue les deux, sans
+    // pour autant donner le motif — celui-ci ne regarde que l'administration.
+    if (err.code === 'BANNED') return res.redirect(`${home}/?auth=banned`);
     console.error('[auth]', err.message);
     res.redirect(`${home}/?auth=failed`);
   }

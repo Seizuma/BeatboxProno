@@ -214,6 +214,7 @@ function Appearance({ a }) {
  * faudrait ensuite désapprendre un par un pour retrouver l'écran télétexte.
  */
 function RankSpread({ distribution, cut }) {
+  const { t } = useI18n();
   const W = 640;
   const H = 90;
   const PAD = 16;
@@ -230,7 +231,7 @@ function RankSpread({ distribution, cut }) {
       viewBox={`0 0 ${W} ${H}`}
       style={{ width: '100%', height: 'auto', display: 'block' }}
       role="img"
-      aria-label="Distribution des places données"
+      aria-label={t('artists.spread.aria')}
     >
       <line x1={PAD} y1={PAD + innerH} x2={W - PAD} y2={PAD + innerH} stroke="var(--line)" strokeWidth="1" />
 

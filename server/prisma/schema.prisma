@@ -29,6 +29,19 @@ model User {
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime @default(now())
 
+  // Le bannissement. Une DATE et non un booléen : « depuis quand » est la
+  // première question posée quand quelqu'un conteste, et un booléen doublé
+  // d'une date finit toujours par se contredire.
+  //
+  // Le compte reste en base. Ses pronostics déposés restent au classement :
+  // les effacer réécrirait le palmarès de tous les autres, qui n'ont rien
+  // fait. Pour tout retirer, c'est la suppression qu'il faut, pas le
+  // bannissement — les deux gestes existent et ne se remplacent pas.
+  bannedAt    DateTime?
+  // Le motif, pour l'administration seule. Jamais rendu au compte banni : la
+  // page de connexion ne dit pas pourquoi, elle dit que c'est fermé.
+  banReason   String?
+
   // La dernière note de version lue, par son identifiant — « 2026-08-24 ».
   // Une colonne plutôt qu'une table de lectures : il n'y a qu'une chose à
   // retenir par personne, et les notes sont ordonnées.

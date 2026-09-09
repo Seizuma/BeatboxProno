@@ -6,7 +6,6 @@ import { useI18n } from '../lib/i18n.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
-import WildcardHelp from '../components/WildcardHelp.jsx';
 import WildcardBoard from '../components/WildcardBoard.jsx';
 import { isWildcardCategory } from '../lib/wildcard.js';
 import PromptDialog from '../components/PromptDialog.jsx';
@@ -187,6 +186,38 @@ export default function EventPage() {
     deadlinePassed ||
     phase.resolved ||
     (phase.locksAt && new Date(phase.locksAt) <= new Date());
+
+  /**
+   * Verse au référentiel de la page un participant que le serveur vient de
+   * créer.
+   *
+   * Le cas ne se produit que sur une sélection wildcard, où c'est le JOUEUR qui
+   * compose la liste : il cherche un artiste, le serveur crée le participant
+   * correspondant — ou renvoie celui qu'un autre avait déjà proposé — et la
+   * page doit le connaître immédiatement.
+   *
+   * `/events/:slug` n'est appelé qu'au montage, et le recharger entièrement
+   * pour un nom serait à la fois lourd et destructeur : la réponse écraserait
+   * `draft`, donc tout ce qui a été saisi sans être enregistré. On insère donc
+   * la seule ligne qui manque.
+   *
+   * Idempotent : un participant déjà présent n'est pas dupliqué. Le serveur
+   * rend le même à deux joueurs qui piochent le même artiste, et rien
+   * n'empêche de recliquer sur un nom déjà pioché.
+   */
+  function addContender(categoryId, contender) {
+    if (!contender?.id) return;
+    setData((d) => {
+      if (!d) return d;
+      const categories = d.event.categories.map((c) => {
+        if (c.id !== categoryId) return c;
+        const list = c.contenders ?? [];
+        if (list.some((x) => x.id === contender.id)) return c;
+        return { ...c, contenders: [...list, contender] };
+      });
+      return { ...d, event: { ...d.event, categories } };
+    });
+  }
 
   /** Recharge mes versions après une action qui les fait bouger. */
   async function refreshVersions(categoryId, pick) {
@@ -575,19 +606,18 @@ export default function EventPage() {
         ok={flash?.ok}
         onDismiss={() => setFlash(null)}
       />
-      {/* Deux barèmes, deux fenêtres. Quelqu'un qui remplit une sélection n'a
-          aucune raison de lire comment se comptent les affiches d'un tableau :
-          il n'y en a pas. La règle se lit dans la structure de la catégorie
-          ouverte, pas dans un réglage. */}
+      {/* Un seul barème, restreint au type d'événement ouvert : quelqu'un qui
+          remplit une sélection n'a aucune raison de lire comment se comptent
+          les affiches d'un tableau, il n'y en a pas. Le mode se lit dans la
+          STRUCTURE de la catégorie ouverte, pas dans un réglage — et le
+          sous-titre de la fenêtre l'annonce, ce qu'aucune des deux fenêtres
+          précédentes ne faisait. */}
       {helpOpen && (
-        isWildcardCategory(category) ? (
-          <WildcardHelp
-            places={category?.phases?.[0]?.qualifierCount ?? null}
-            onClose={() => setHelpOpen(false)}
-          />
-        ) : (
-          <ScoringHelp onClose={() => setHelpOpen(false)} />
-        )
+        <ScoringHelp
+          mode={isWildcardCategory(category) ? 'wildcard' : 'bracket'}
+          places={category?.phases?.[0]?.qualifierCount ?? null}
+          onClose={() => setHelpOpen(false)}
+        />
       )}
 
       {guard.pending && (
@@ -803,6 +833,7 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 onPool={(next) =>
                   update({ pool: { ...(state.pool ?? {}), [phase.id]: next } })
                 }
+                onContender={(contender) => addContender(category.id, contender)}
               />
             ) : RANKING_TYPES.includes(phase.type) ? (
               <RankingBoard

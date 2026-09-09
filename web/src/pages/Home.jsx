@@ -45,6 +45,14 @@ export default function Home() {
         <p className="notice" style={{ marginTop: '1.5rem' }}>{t('home.auth.failed')}</p>
       )}
 
+      {/* Un compte fermé n'est pas une panne de connexion. Le dire « échec »
+          enverrait la personne réessayer en boucle. Le motif n'est pas donné :
+          il ne regarde que l'administration, et le contester se fait par la
+          boîte à idées, pas en relançant Discord. */}
+      {params.get('auth') === 'banned' && (
+        <p className="notice" style={{ marginTop: '1.5rem' }}>{t('home.auth.banned')}</p>
+      )}
+
       <section className="hero">
         <p className="silkscreen">{t('home.eyebrow')}</p>
         <div className="hero__band">
@@ -187,7 +195,10 @@ export default function Home() {
         </button>
       )}
 
-      {helpOpen && <ScoringHelp onClose={() => setHelpOpen(false)} />}
+      {/* Aucune catégorie ouverte ici : on montre les deux barèmes. L'accueil
+          n'ouvrait que celui des tableaux, ce qui rendait celui des sélections
+          introuvable tant qu'aucune compétition de wildcards n'était en cours. */}
+      {helpOpen && <ScoringHelp mode="all" onClose={() => setHelpOpen(false)} />}
       {postboxOpen && user && <PostboxDialog onClose={() => setPostboxOpen(false)} />}
     </>
   );

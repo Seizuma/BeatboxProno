@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../lib/auth.js';
 import { clearSession } from '../lib/auth.js';
+// La suppression est la même que celle de l'administration : une seule
+// procédure, dans `lib/accounts.js`. Deux copies auraient divergé au premier
+// modèle ajouté, et la divergence se serait vue là où on ne la cherche pas.
+import { deleteAccount } from '../lib/accounts.js';
 
 /**
  * Le compte : ce qu'on en sait, ce qu'on peut en emporter, et comment le faire
@@ -172,48 +176,6 @@ const confirmation = z.object({
     username: z.string(),
 });
 
-/**
- * Transmet les groupes possédés avant que le compte disparaisse.
- *
- * La cascade du schéma efface l'adhésion en même temps que la personne, ce qui
- * laisserait un groupe sans propriétaire : plus personne pour inviter, exclure
- * ou dissoudre, et rien dans l'application pour réparer ça. Le titre passe donc
- * au plus ancien membre restant. Le groupe n'est dissous que s'il ne reste
- * personne — supprimer le cercle de cinq amis parce que son créateur s'en va
- * détruirait leur classement sans qu'ils aient rien demandé.
- *
- * L'ordre compte : l'index partiel interdit deux propriétaires, donc l'ancien
- * est rétrogradé avant que le nouveau soit promu.
- */
-async function handOverGroups(tx, userId) {
-    const owned = await tx.groupMember.findMany({
-        where: { userId, role: 'OWNER' },
-        select: { groupId: true },
-    });
-
-    for (const { groupId } of owned) {
-        const heir = await tx.groupMember.findFirst({
-            where: { groupId, userId: { not: userId } },
-            orderBy: { joinedAt: 'asc' },
-            select: { userId: true },
-        });
-
-        if (!heir) {
-            await tx.group.delete({ where: { id: groupId } });
-            continue;
-        }
-
-        await tx.groupMember.update({
-            where: { groupId_userId: { groupId, userId } },
-            data: { role: 'MEMBER' },
-        });
-        await tx.groupMember.update({
-            where: { groupId_userId: { groupId, userId: heir.userId } },
-            data: { role: 'OWNER' },
-        });
-    }
-}
-
 accountRouter.delete('/', async (req, res, next) => {
     try {
         if (req.user.role === 'OWNER') {
@@ -228,19 +190,9 @@ accountRouter.delete('/', async (req, res, next) => {
             return res.status(400).json({ error: 'Le pseudo saisi ne correspond pas.' });
         }
 
-        // La suppression et la transmission des groupes forment un tout : un
-        // échec à mi-chemin laisserait soit un compte fantôme, soit un cercle
-        // sans personne aux commandes.
-        //
-        // Le reste part en cascade, comme déclaré au schéma : pronostics,
-        // classements pronostiqués, affiches, podiums, messages de la boîte à
-        // idées, journées de visite, adhésions et commentaires. Les écrire à la
-        // main ici créerait une seconde vérité, qui prendrait du retard au
-        // premier modèle ajouté.
-        await prisma.$transaction(async (tx) => {
-            await handOverGroups(tx, req.user.id);
-            await tx.user.delete({ where: { id: req.user.id } });
-        });
+        // Transmission des groupes et suppression en une transaction : voir
+        // `lib/accounts.js`. L'administration appelle exactement la même.
+        await deleteAccount(req.user.id);
 
         clearSession(res);
         console.log(`[compte] suppression de ${req.user.username} (${req.user.discordId}).`);

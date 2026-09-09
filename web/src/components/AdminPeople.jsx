@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { isOwner } from '../lib/context.jsx';
+import MenuButton from './MenuButton.jsx';
+import Modal from './Modal.jsx';
 
 /**
  * L'onglet « Comptes ».
@@ -30,6 +32,12 @@ export default function AdminPeople({ currentUser, useFlash }) {
     // parcourt. En faire une colonne aurait demandé un agrégat par ligne sur
     // cent comptes, pour une information qu'on regarde une fois par mois.
     const [wallet, setWallet] = useState(null);
+
+    // La sanction en cours de confirmation : { user, kind } où kind vaut
+    // « ban », « unban » ou « delete ». Rien ne part au serveur tant que la
+    // fenêtre n'a pas été relue et validée — les routes refusent de toute
+    // façon sans confirmation, l'interface et l'API tiennent la même ligne.
+    const [sanction, setSanction] = useState(null);
 
     const [data, setData] = useState(null);
     const [q, setQ] = useState('');
@@ -177,6 +185,20 @@ export default function AdminPeople({ currentUser, useFlash }) {
                                                                 inscrit le {formatDay(u.createdAt)}
                                                                 {u.lastSeenAt && ` · vu le ${formatDay(u.lastSeenAt)}`}
                                                             </span>
+                                                            {/* Le bannissement se lit sur la ligne, avec
+                                                                sa date et son motif. Une pastille seule
+                                                                obligerait à ouvrir quelque chose pour
+                                                                savoir pourquoi — et le pourquoi est
+                                                                justement ce qu'on vient chercher. */}
+                                                            {u.bannedAt && (
+                                                                <span
+                                                                    className="data"
+                                                                    style={{ display: 'block', fontSize: '0.75rem', color: 'var(--m)' }}
+                                                                >
+                                                                    banni le {formatDay(u.bannedAt)}
+                                                                    {u.banReason ? ` · ${u.banReason}` : ''}
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </span>
                                                 </td>
@@ -207,13 +229,47 @@ export default function AdminPeople({ currentUser, useFlash }) {
                                                     </select>
                                                 </td>
                                                 <td className="num">
-                                                    <button
-                                                        className="btn btn--small btn--ghost"
-                                                        aria-expanded={wallet === u.id}
-                                                        onClick={() => setWallet(wallet === u.id ? null : u.id)}
-                                                    >
-                                                        Points
-                                                    </button>
+                                                    <span className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            className="btn btn--small btn--ghost"
+                                                            aria-expanded={wallet === u.id}
+                                                            onClick={() => setWallet(wallet === u.id ? null : u.id)}
+                                                        >
+                                                            Points
+                                                        </button>
+
+                                                        {/* Deux mesures dans un menu plutôt que deux
+                                                            boutons : elles ne se prennent pas en
+                                                            parcourant une liste, et un « Supprimer »
+                                                            posé en permanence à côté de « Points » se
+                                                            clique un jour par erreur.
+
+                                                            Le menu disparaît sur soi-même et sur le
+                                                            propriétaire : le serveur refuse déjà les deux,
+                                                            le cacher dit la même chose plus tôt. */}
+                                                        {u.id !== currentUser.id && u.role !== 'OWNER' && (
+                                                            <MenuButton
+                                                                label={`Mesures pour ${u.username}`}
+                                                                items={[
+                                                                    u.bannedAt
+                                                                        ? {
+                                                                            label: 'Lever le bannissement',
+                                                                            onClick: () => setSanction({ user: u, kind: 'unban' }),
+                                                                        }
+                                                                        : {
+                                                                            label: 'Bannir ce compte',
+                                                                            onClick: () => setSanction({ user: u, kind: 'ban' }),
+                                                                        },
+                                                                    { separator: true },
+                                                                    {
+                                                                        label: 'Supprimer le compte',
+                                                                        danger: true,
+                                                                        onClick: () => setSanction({ user: u, kind: 'delete' }),
+                                                                    },
+                                                                ]}
+                                                            />
+                                                        )}
+                                                    </span>
                                                 </td>
                                             </tr>,
 
@@ -236,6 +292,21 @@ export default function AdminPeople({ currentUser, useFlash }) {
                 )}
             </section>
 
+            {sanction && (
+                <SanctionDialog
+                    sanction={sanction}
+                    run={run}
+                    onDone={async () => { setSanction(null); await reload().catch(() => { }); }}
+                    onCancel={() => setSanction(null)}
+                />
+            )}
+
+            <p className="faint" style={{ fontSize: '0.85rem' }}>
+                Bannir ferme la porte sans rien effacer : les pronostics déposés restent au classement,
+                parce que les retirer réécrirait le palmarès de tous les autres joueurs de l'événement.
+                C'est réversible. Supprimer emporte tout et ne l'est pas.
+            </p>
+
             <p className="faint" style={{ fontSize: '0.85rem' }}>
                 Un administrateur gère les événements, les artistes et les résultats, et distribue les
                 rôles. Le propriétaire est le seul qu'aucun administrateur ne peut destituer ; il n'y en a
@@ -245,6 +316,150 @@ export default function AdminPeople({ currentUser, useFlash }) {
     );
 }
 
+
+/**
+ * La confirmation d'une mesure sur un compte.
+ *
+ * Trois gestes, une seule fenêtre : ils partagent la forme — on relit de QUI il
+ * s'agit, on lit ce que la mesure emporte, on valide — et trois fenêtres
+ * auraient triplé le même code pour trois phrases différentes.
+ *
+ * Le motif n'est demandé qu'au bannissement, et il y est obligatoire. Le
+ * serveur le refuse vide de toute façon : la seule réponse possible à
+ * « pourquoi mon compte est fermé ? » six mois plus tard serait sinon « je ne
+ * sais plus ».
+ *
+ * La suppression demande la saisie du pseudo, exactement comme la suppression
+ * volontaire depuis le profil. La friction n'est pas là pour arrêter la
+ * décision, elle est là pour arrêter le clic.
+ */
+function SanctionDialog({ sanction, run, onDone, onCancel }) {
+    const { user, kind } = sanction;
+    const [reason, setReason] = useState('');
+    const [typed, setTyped] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const name = user.globalName ?? user.username;
+
+    const ready =
+        kind === 'ban' ? reason.trim().length > 0
+            : kind === 'delete' ? typed.trim() === user.username
+                : true;
+
+    const title =
+        kind === 'ban' ? 'Bannir ce compte ?'
+            : kind === 'unban' ? 'Lever le bannissement ?'
+                : 'Supprimer ce compte ?';
+
+    // Le libellé du bouton dit l'ACTE, là où le titre pose la question. Le
+    // déduire du titre par un remplacement de chaîne aurait tenu jusqu'à la
+    // première reformulation.
+    const confirmLabel =
+        kind === 'ban' ? 'Bannir'
+            : kind === 'unban' ? 'Lever'
+                : 'Supprimer définitivement';
+
+    async function confirm() {
+        if (!ready || busy) return;
+        setBusy(true);
+        await run(async () => {
+            if (kind === 'delete') {
+                await api.del(`/admin/users/${user.id}?confirm=true`);
+                return `${name} supprimé.`;
+            }
+            await api.patch(`/admin/users/${user.id}/ban`, {
+                banned: kind === 'ban',
+                ...(kind === 'ban' ? { reason: reason.trim() } : {}),
+            });
+            return kind === 'ban' ? `${name} banni.` : `Bannissement de ${name} levé.`;
+        });
+        setBusy(false);
+        await onDone();
+    }
+
+    return (
+        <Modal
+            title={title}
+            subtitle={`${name} · ${user.discordId}`}
+            onClose={onCancel}
+            narrow
+            footer={
+                <>
+                    <button
+                        className={`btn ${kind === 'unban' ? 'btn--primary' : 'btn--danger'}`}
+                        disabled={!ready || busy}
+                        onClick={confirm}
+                    >
+                        {busy ? 'En cours…' : confirmLabel}
+                    </button>
+                    <button className="btn" onClick={onCancel} disabled={busy}>Annuler</button>
+                </>
+            }
+        >
+            {kind === 'ban' && (
+                <>
+                    <p style={{ margin: 0 }}>
+                        Le compte ne pourra plus se connecter, et ses sessions ouvertes sont coupées
+                        immédiatement. Ses pronostics déjà déposés restent au classement : les retirer
+                        réécrirait le palmarès de tous les autres joueurs de l'événement.
+                    </p>
+                    <div className="field">
+                        <label htmlFor="ban-reason">Motif (obligatoire)</label>
+                        <input
+                            id="ban-reason"
+                            type="text"
+                            maxLength={280}
+                            value={reason}
+                            autoFocus
+                            placeholder="propos injurieux dans les commentaires de groupe"
+                            onChange={(e) => setReason(e.target.value)}
+                        />
+                    </div>
+                    <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                        Le motif reste dans l'administration : la personne bannie voit que son compte est
+                        fermé, pas pourquoi. Réversible depuis le même menu.
+                    </p>
+                </>
+            )}
+
+            {kind === 'unban' && (
+                <p style={{ margin: 0 }}>
+                    {name} pourra de nouveau se connecter et pronostiquer. Le motif enregistré est effacé.
+                </p>
+            )}
+
+            {kind === 'delete' && (
+                <>
+                    <p className="notice" style={{ margin: 0 }}>
+                        Définitif. Pronostics, brouillons, points, commentaires et adhésions disparaissent,
+                        et le classement de chaque événement est recalculé sans eux.
+                    </p>
+                    <p style={{ margin: 0 }}>
+                        Les groupes que {name} possède passent à leur plus ancien membre restant ; ceux
+                        dont il était le seul membre sont dissous.
+                    </p>
+                    <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                        Dans la plupart des cas c'est un bannissement qu'il faut : il ferme la porte sans
+                        toucher au classement, et il se lève.
+                    </p>
+                    <div className="field">
+                        <label htmlFor="del-confirm">
+                            Saisissez « {user.username} » pour confirmer
+                        </label>
+                        <input
+                            id="del-confirm"
+                            type="text"
+                            value={typed}
+                            autoFocus
+                            autoComplete="off"
+                            onChange={(e) => setTyped(e.target.value)}
+                        />
+                    </div>
+                </>
+            )}
+        </Modal>
+    );
+}
 
 /**
  * Le porte-monnaie d'un joueur : son solde, ses vingt dernières écritures, et

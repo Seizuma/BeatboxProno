@@ -51,6 +51,15 @@ const DICT = {
     'common.search': 'Search',
     'common.clear': 'Clear',
     'common.back': 'Back to events',
+    // La connexion Discord. Le libellé était écrit en dur dans le bouton, en
+    // français : l'anglais du site affichait « Se connecter avec Discord ».
+    'auth.discord': 'Sign in with Discord',
+    // Les pannes réseau. Elles sont levées hors de React, dans `api.js`, qui
+    // passe donc par `translator(detectLang())` plutôt que par le contexte.
+    'api.offline': 'The server is unreachable. Check your connection.',
+    'api.down': 'The server is not responding. Try again in a moment.',
+    'api.unexpected': 'Unexpected response from the server.',
+    'api.failed': 'The request did not go through.',
 
     'notfound.title': 'This page does not exist',
     'notfound.lede': 'The link may have expired.',
@@ -73,6 +82,7 @@ const DICT = {
     'home.events.empty': 'Nothing published yet. Come back when the next competition is announced.',
     'home.draft.hint': 'Staff only — not public',
     'home.auth.failed': 'Discord sign-in did not go through. Start it again from the button at the top right.',
+    'home.auth.banned': 'This account is closed. If you think this is a mistake, get in touch through the postbox.',
     'home.venue.tbc': 'Venue to be confirmed',
     'home.predictions.short': 'preds',
 
@@ -363,6 +373,9 @@ const DICT = {
     'artists.qualifiedShareCut': 'Seen in the top {n} by',
     'artists.averageRank': 'Average rank given',
     'artists.spread': 'Where the crowd places them',
+    // Le libellé du graphique pour les lecteurs d'écran. Il était en dur, en
+    // français, dans un fichier par ailleurs entièrement traduit.
+    'artists.spread.aria': 'Distribution of the places given',
     'artists.voters': '{n} filed predictions',
     'artists.bestWorst': 'Best {best} · worst {worst}',
     'artists.byRound': 'Picked to win, by round',
@@ -500,6 +513,16 @@ const DICT = {
     'help.title': 'How points work',
     'help.matchup.title': 'A battle pays wherever it happens',
     'help.close': 'Got it',
+    // Le sous-titre dit de QUEL type d'événement on parle : la fenêtre est
+    // désormais unique, et sans cette ligne on ne saurait pas quel barème on
+    // est en train de lire.
+    'help.mode.wildcard': 'Wildcard selection — {n} places',
+    'help.mode.bracket': 'Bracket competition',
+    'help.mode.all': 'Every kind of event',
+    'help.kind.wildcard': 'Wildcard selection',
+    'help.kind.bracket': 'Bracket competition',
+    'help.kind.wildcard.lede': 'One list of entrants, a number of places, one question: who gets through?',
+    'help.kind.bracket.lede': 'A ranking to read, then a bracket to draw from the first round to the final.',
     'draft.load': 'Version',
     'draft.manage': 'Manage your drafts from your profile.',
     'draft.snapshot': 'Duplicate as a draft',
@@ -548,6 +571,9 @@ const DICT = {
     'footer.madeby.before': 'Made with ',
     'footer.madeby.heart': 'love',
     'footer.madeby.after': ' by ',
+    // La conjonction est une clé à elle seule : les espaces autour comptent,
+    // puisqu'elle sépare deux liens et non deux mots.
+    'footer.madeby.and': ' and ',
     'account.zone': 'Your account',
     'account.zone.lede':
       'Take your data with you, or close your account. Both are immediate and need no justification.',
@@ -751,6 +777,11 @@ const DICT = {
     'common.search': 'Chercher',
     'common.clear': 'Effacer',
     'common.back': 'Revenir aux événements',
+    'auth.discord': 'Se connecter avec Discord',
+    'api.offline': 'Le serveur est injoignable. Vérifiez votre connexion.',
+    'api.down': 'Le serveur ne répond pas. Réessayez dans un instant.',
+    'api.unexpected': 'Réponse inattendue du serveur.',
+    'api.failed': 'La requête n’a pas abouti.',
 
     'notfound.title': 'Cette page n’existe pas',
     'notfound.lede': 'Le lien est peut-être périmé.',
@@ -773,6 +804,7 @@ const DICT = {
     'home.events.empty': 'Rien de publié pour l’instant. Repassez à l’annonce de la prochaine compète.',
     'home.draft.hint': 'Staff seulement — invisible au public',
     'home.auth.failed': 'La connexion Discord n’a pas abouti. Relancez-la depuis le bouton en haut à droite.',
+    'home.auth.banned': 'Ce compte est fermé. Si vous pensez qu’il s’agit d’une erreur, écrivez-nous depuis la boîte à idées.',
     'home.venue.tbc': 'Lieu à confirmer',
     'home.predictions.short': 'pronos',
 
@@ -1064,6 +1096,7 @@ const DICT = {
     'artists.qualifiedShareCut': 'Vu dans le top {n} par',
     'artists.averageRank': 'Rang moyen donné',
     'artists.spread': 'Où la foule le place',
+    'artists.spread.aria': 'Distribution des places données',
     'artists.voters': '{n} pronostics déposés',
     'artists.bestWorst': 'Meilleur {best} · pire {worst}',
     'artists.byRound': 'Donné vainqueur, par tour',
@@ -1201,6 +1234,13 @@ const DICT = {
     'help.title': 'Comment marchent les points',
     'help.matchup.title': 'Un battle rapporte où qu’il se joue',
     'help.close': 'Compris',
+    'help.mode.wildcard': 'Sélection wildcard — {n} places',
+    'help.mode.bracket': 'Compétition à tableau',
+    'help.mode.all': 'Tous les types d’événement',
+    'help.kind.wildcard': 'Sélection wildcard',
+    'help.kind.bracket': 'Compétition à tableau',
+    'help.kind.wildcard.lede': 'Une liste d’inscrits, un nombre de places, une question : qui passe ?',
+    'help.kind.bracket.lede': 'Un classement à lire, puis un tableau à composer du premier tour à la finale.',
     'draft.load': 'Version',
     'draft.manage': 'Gérez vos brouillons depuis votre profil.',
     'draft.snapshot': 'Dupliquer en brouillon',
@@ -1249,6 +1289,7 @@ const DICT = {
     'footer.madeby.before': 'Fait avec ',
     'footer.madeby.heart': 'amour',
     'footer.madeby.after': ' par ',
+    'footer.madeby.and': ' et ',
     'account.zone': 'Votre compte',
     'account.zone.lede':
       'Emportez vos données, ou fermez votre compte. Les deux sont immédiats et ne demandent aucune justification.',
