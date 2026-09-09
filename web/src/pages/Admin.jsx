@@ -8,11 +8,6 @@ import { splitsForWinner, judgesFor, scoreMatchesWinner } from '../lib/scores.js
 import { shrinkImage, humanSize } from '../lib/image.js';
 import MenuButton from '../components/MenuButton.jsx';
 import { seedFromContenders } from '../lib/bracket.js';
-// La règle d'une catégorie se lit dans sa STRUCTURE : une phase unique de type
-// WILDCARD, et c'est une sélection sur vidéo. Plusieurs écrans d'administration
-// proposaient jusqu'ici des réglages de tableau à des catégories qui n'en ont
-// pas — jury, seed, taille d'arbre, petite finale.
-import { isWildcardCategory, MIN_PLACES, MAX_PLACES } from '../lib/wildcard.js';
 import RankingBoard from '../components/RankingBoard.jsx';
 import BracketBoard from '../components/BracketBoard.jsx';
 import SeedingEditor from '../components/SeedingEditor.jsx';
@@ -483,10 +478,6 @@ function EventSettings({ event, onDone, run }) {
 
 function CategoryPanel({ category, onDone, run, askDelete }) {
   const [open, setOpen] = useState(false);
-  // Une sélection sur vidéo n'a ni affiche, ni score, ni tirage. Trois des
-  // réglages de ce panneau ne la concernent donc pas, et les lui montrer laisse
-  // croire qu'elle fonctionne comme les autres.
-  const isWildcard = isWildcardCategory(category);
   /**
    * Le jury, saisi comme une liste separee par des virgules.
    *
@@ -516,15 +507,9 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           <h3>{category.name}</h3>
         </div>
         <div className="row" style={{ gap: '0.4rem' }}>
-          {/* Sur une sélection, cette liste n'est pas composée par
-              l'organisateur : elle grossit à mesure que les joueurs piochent
-              des noms. Le mot « participants » laissait croire à une liste
-              d'inscrits arrêtée. */}
-          <span className="tag">
-            {category.contenders.length} {isWildcard ? 'noms proposés' : 'participants'}
-          </span>
+          <span className="tag">{category.contenders.length} participants</span>
           <button className="btn btn--small" onClick={() => setOpen(!open)}>
-            {open ? 'Réduire' : isWildcard ? 'Noms proposés' : 'Participants'}
+            {open ? 'Réduire' : 'Participants'}
           </button>
           <button
             className={`btn btn--small${format ? ' btn--primary' : ''}`}
@@ -551,14 +536,7 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
       </div>
 
       {/* Le jury de la categorie. Par categorie et non par evenement : une meme
-          compete juge rarement le Solo et le Loopstation avec le meme panel.
-
-          Absent d'une sélection : le jury sert à déterminer les scores
-          proposables aux pronostiqueurs — trois juges donnent 3-0 et 2-1, cinq
-          ouvrent 5-0, 4-1 et 3-2. Une sélection sur vidéo n'a aucune affiche,
-          donc aucun score. Le champ n'y était pas seulement inutile, il
-          laissait entendre qu'il y aurait des battles à juger. */}
-      {!isWildcard && (
+          compete juge rarement le Solo et le Loopstation avec le meme panel. */}
       <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
         <div className="field" style={{ flex: '1 1 22rem', margin: 0 }}>
           <label htmlFor={`judges-${category.id}`}>Jury (separe par des virgules)</label>
@@ -591,7 +569,6 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           Enregistrer le jury
         </button>
       </div>
-      )}
 
       <div className="row" style={{ gap: '0.35rem' }}>
         {category.phases.map((p) => (
@@ -636,28 +613,10 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
   );
 }
 
-/**
- * Ajout et retrait des participants — jusqu'ici réservé au script de seed.
- *
- * ─── Le seed ────────────────────────────────────────────────────────────────
- *
- * Il n'a de sens que pour un TIRAGE : c'est lui qui décide qui affronte qui au
- * premier tour, et qui sert de repli quand aucune phase de qualification n'a
- * été jouée. Une sélection sur vidéo n'a pas de tableau, donc pas de tirage,
- * donc pas de seed — le champ et sa colonne y étaient du décor, et le décor a
- * ceci de traître qu'on finit par le remplir.
- *
- * ─── Qui compose la liste ───────────────────────────────────────────────────
- *
- * Partout ailleurs, l'organisateur. Sur une sélection, les JOUEURS : chacun
- * cherche des noms dans le référentiel des artistes et le participant est créé
- * à la volée. Ce panneau n'y sert donc pas à composer la liste mais à
- * l'amorcer, et à retirer un nom déposé par erreur.
- */
+/** Ajout et retrait des participants — jusqu'ici réservé au script de seed. */
 function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', seed: '', artistId: '' });
-  const isWildcard = isWildcardCategory(category);
 
   useEffect(() => { api.get('/artists').then(({ artists }) => setArtists(artists)).catch(() => { }); }, []);
 
@@ -682,10 +641,7 @@ function ContenderManager({ category, onDone, run, askDelete }) {
     run(async () => {
       await api.post(`/admin/categories/${category.id}/contenders`, {
         name: form.name || artists.find((a) => a.id === form.artistId)?.name || '',
-        // Rien plutôt qu'un rang d'arrivée déguisé en seed : sur une
-        // sélection, un seed serait lu par le classement officiel comme un
-        // ordre suggéré, alors qu'il ne dirait que l'ordre d'ajout.
-        seed: isWildcard ? null : form.seed === '' ? nextSeed : Number(form.seed),
+        seed: form.seed === '' ? nextSeed : Number(form.seed),
         artistIds: form.artistId ? [form.artistId] : [],
       });
       setForm({ name: '', seed: '', artistId: '' });
@@ -719,16 +675,14 @@ function ContenderManager({ category, onDone, run, askDelete }) {
             placeholder="Alem, ou « Colaps & Zekka »"
           />
         </div>
-        {!isWildcard && (
-          <div className="field">
-            <label htmlFor={`ct-seed-${category.id}`}>Seed</label>
-            <input
-              id={`ct-seed-${category.id}`} type="number" min="1" style={{ width: '5rem' }}
-              value={form.seed} placeholder={String(nextSeed)}
-              onChange={(e) => setForm({ ...form, seed: e.target.value })}
-            />
-          </div>
-        )}
+        <div className="field">
+          <label htmlFor={`ct-seed-${category.id}`}>Seed</label>
+          <input
+            id={`ct-seed-${category.id}`} type="number" min="1" style={{ width: '5rem' }}
+            value={form.seed} placeholder={String(nextSeed)}
+            onChange={(e) => setForm({ ...form, seed: e.target.value })}
+          />
+        </div>
         <button className="btn btn--primary btn--small" disabled={!form.name && !form.artistId} onClick={add}>
           Ajouter
         </button>
@@ -736,34 +690,16 @@ function ContenderManager({ category, onDone, run, askDelete }) {
       </div>
 
 
-      {isWildcard && (
-        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-          Sur une sélection, cette liste se remplit toute seule : chaque joueur pioche les noms qu'il
-          veut voir passer, et le participant est créé à ce moment-là. Ajouter ici sert à amorcer la
-          liste ; retirer sert à effacer un doublon ou une erreur.
-        </p>
-      )}
-
       {category.contenders.length > 0 && (
         <div className="panel panel--flush">
           <table>
-            <thead>
-              <tr>
-                {!isWildcard && <th className="num">Seed</th>}
-                <th>Nom</th>
-                <th></th>
-              </tr>
-            </thead>
+            <thead><tr><th className="num">Seed</th><th>Nom</th><th></th></tr></thead>
             <tbody>
               {[...category.contenders]
-                .sort((a, b) =>
-                  isWildcard
-                    ? a.name.localeCompare(b.name)
-                    : (a.seed ?? 999) - (b.seed ?? 999)
-                )
+                .sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999))
                 .map((c) => (
                   <tr key={c.id}>
-                    {!isWildcard && <td className="num">{c.seed ?? '—'}</td>}
+                    <td className="num">{c.seed ?? '—'}</td>
                     <td>{c.name}</td>
                     <td className="num">
                       <MenuButton
@@ -824,18 +760,6 @@ function FormatBuilder({ event, onDone, onClose, run }) {
           wildcardOnly: Boolean(entry.wildcardOnly),
           // Une sélection : un nombre de places, et rien d'autre.
           places: entry.wildcardOnly ? 8 : '',
-          /**
-           * Legacy se compose affiche par affiche, sans pyramide.
-           *
-           * Le serveur l'a toujours su : pour LEGACY il ignore `format`,
-           * `elimination` et `smallFinal`, et ne lit que `legacyBattles`. Or
-           * l'écran affichait les trois premiers — trois réglages sans effet —
-           * et n'envoyait jamais le quatrième : toute catégorie Legacy sortait
-           * avec quatre affiches, quel qu'ait été le besoin, sans que rien ne
-           * permette de le dire ni de s'en apercevoir.
-           */
-          legacyOnly: entry.kind === 'LEGACY',
-          legacyBattles: 4,
           format: 'TOP_8',
           // Le palier d'éliminations reste ; celui de wildcards a disparu des
           // catégories à tableau — une sélection est désormais un événement à
@@ -860,15 +784,13 @@ function FormatBuilder({ event, onDone, onClose, run }) {
           name: c.name,
           wildcardOnly: c.wildcardOnly,
           ...(c.wildcardOnly
-            ? { places: Math.min(MAX_PLACES, Math.max(MIN_PLACES, Number(c.places) || 1)) }
-            : c.legacyOnly
-              ? { legacyBattles: Math.min(16, Math.max(1, Number(c.legacyBattles) || 1)) }
-              : {
-                format: c.format,
-                elimination: c.elimination,
-                eliminationCount: c.eliminationCount === '' ? null : Number(c.eliminationCount),
-                smallFinal: c.smallFinal,
-              }),
+            ? { places: Math.min(100, Math.max(1, Number(c.places) || 1)) }
+            : {
+              format: c.format,
+              elimination: c.elimination,
+              eliminationCount: c.eliminationCount === '' ? null : Number(c.eliminationCount),
+              smallFinal: c.smallFinal,
+            }),
         })),
       });
       setPicked({});
@@ -962,28 +884,7 @@ function FormatBuilder({ event, onDone, onClose, run }) {
                           petite finale : elle a des places. La ligne fusionne
                           donc ses trois dernières colonnes plutôt que d'afficher
                           trois cases grisées. */}
-                      {/* Legacy : ni taille de tableau, ni éliminations, ni
-                          petite finale — une poignée d'affiches composées à la
-                          main. La ligne fusionne donc ses trois colonnes et
-                          n'expose que ce qui compte. */}
-                      {c.legacyOnly ? (
-                        <td colSpan={3}>
-                          <span className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
-                            <input
-                              type="number"
-                              min="1"
-                              max="16"
-                              value={c.legacyBattles}
-                              style={{ width: '5.5rem' }}
-                              aria-label={`Nombre d'affiches pour ${c.name}`}
-                              onChange={(e) => patch(c.id, { legacyBattles: e.target.value })}
-                            />
-                            <span className="faint" style={{ fontSize: '0.85rem' }}>
-                              affiches à composer une par une — sans pyramide
-                            </span>
-                          </span>
-                        </td>
-                      ) : c.wildcardOnly ? (
+                      {c.wildcardOnly ? (
                         <td colSpan={3}>
                           <span className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
                             <input
@@ -1598,14 +1499,7 @@ function ResultsAdmin() {
             run={run}
           />
         ) : (
-          <RankingResults
-            key={phase.id}
-            phase={phase}
-            category={category}
-            contenders={category.contenders}
-            onDone={reload}
-            run={run}
-          />
+          <RankingResults key={phase.id} phase={phase} contenders={category.contenders} onDone={reload} run={run} />
         )
       )}
     </div>
@@ -1832,20 +1726,7 @@ const QUALIFIER_CHOICES = [null, 2, 4, 8, 16, 32];
  * restent invisibles des joueurs et aucun score n'est recalculé — de quoi
  * saisir le Solo pendant que le Tag Team attend encore ses résultats.
  */
-function RankingResults({ phase, category, contenders, onDone, run }) {
-  /**
-   * Une sélection ne compte pas ses places en puissances de deux.
-   *
-   * Le sélecteur ci-dessous n'offrait que 2, 4, 8, 16 et 32 — la liste des
-   * tailles de tableau. Une sélection annoncée à sept places n'y trouvait donc
-   * AUCUNE option correspondante : le champ retombait sur « Aucune coupe » et
-   * affirmait à l'écran que la phase n'en avait pas, alors qu'elle en avait
-   * une. Pire, y toucher réécrivait silencieusement le nombre de places vers
-   * une puissance de deux, sans moyen de revenir à sept.
-   *
-   * La route accepte 1 à 100 depuis toujours ; c'est l'écran qui bridait.
-   */
-  const isWildcard = isWildcardCategory(category);
+function RankingResults({ phase, contenders, onDone, run }) {
   const [order, setOrder] = useState(() =>
     [...(phase.entries ?? [])].sort((a, b) => a.rank - b.rank).map((e) => e.contenderId)
   );
@@ -1898,67 +1779,31 @@ function RankingResults({ phase, category, contenders, onDone, run }) {
 
         <div className="row" style={{ gap: '0.6rem' }}>
           <div className="field">
-            <label htmlFor={`cut-${phase.id}`}>{isWildcard ? 'Places' : 'Qualifiés'}</label>
-            {isWildcard ? (
-              /* Saisie libre, et enregistrée à la SORTIE du champ plutôt qu'à
-                 chaque frappe : déplacer la coupe rescore tous les pronostics
-                 déposés, et taper « 12 » aurait lancé ce calcul une première
-                 fois sur « 1 ». */
-              <input
-                id={`cut-${phase.id}`}
-                type="number"
-                min={MIN_PLACES}
-                max={MAX_PLACES}
-                style={{ width: '6rem' }}
-                value={cut ?? ''}
-                onChange={(e) => setCut(e.target.value === '' ? null : Number(e.target.value))}
-                onBlur={() => {
-                  const n = cut === null ? null : Math.min(MAX_PLACES, Math.max(MIN_PLACES, cut));
-                  if (n === (phase.qualifierCount ?? null)) return;
-                  setCut(n);
-                  run(async () => {
-                    await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
-                    await onDone();
-                    return n ? `${n} place(s) sur cette sélection.` : 'Sélection sans coupe.';
-                  });
-                }}
-              />
-            ) : (
-              <select
-                id={`cut-${phase.id}`}
-                value={cut ?? ''}
-                onChange={(e) => {
-                  const n = e.target.value === '' ? null : Number(e.target.value);
-                  setCut(n);
-                  run(async () => {
-                    await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
-                    await onDone();
-                    return n ? `${n} qualifiés sur cette phase.` : 'Phase sans qualification.';
-                  });
-                }}
-              >
-                {/* La valeur en place est injectée si elle n'est pas dans la
-                    liste : un palier réglé à 6 par une autre voie ne doit pas
-                    s'afficher comme « Aucune coupe », ce qui était le cas dès
-                    que le nombre sortait des tailles de tableau. */}
-                {(QUALIFIER_CHOICES.includes(cut) ? QUALIFIER_CHOICES : [...QUALIFIER_CHOICES, cut])
-                  .map((n) => (
-                    <option key={n ?? 'none'} value={n ?? ''}>
-                      {n ? `${n} qualifiés` : 'Aucune coupe'}
-                    </option>
-                  ))}
-              </select>
-            )}
+            <label htmlFor={`cut-${phase.id}`}>Qualifiés</label>
+            <select
+              id={`cut-${phase.id}`}
+              value={cut ?? ''}
+              onChange={(e) => {
+                const n = e.target.value === '' ? null : Number(e.target.value);
+                setCut(n);
+                run(async () => {
+                  await api.patch(`/admin/phases/${phase.id}/qualifiers`, { qualifierCount: n });
+                  await onDone();
+                  return n ? `${n} qualifiés sur cette phase.` : 'Phase sans qualification.';
+                });
+              }}
+            >
+              {QUALIFIER_CHOICES.map((n) => (
+                <option key={n ?? 'none'} value={n ?? ''}>
+                  {n ? `${n} qualifiés` : 'Aucune coupe'}
+                </option>
+              ))}
+            </select>
           </div>
 
           <Progress done={order.length} total={contenders.length} />
 
-          {/* Sans seed, ce bouton produisait un ordre arbitraire : sur une
-              sélection tous les participants ont `seed: null`, et le tri les
-              laissait dans l'ordre où la base les avait rendus. */}
-          {!isWildcard && (
-            <button className="btn btn--small" onClick={fillBySeed}>Classer par seed</button>
-          )}
+          <button className="btn btn--small" onClick={fillBySeed}>Classer par seed</button>
           <button className="btn btn--small" onClick={() => send(false)}>
             Enregistrer{dirty ? ' •' : ''}
           </button>
