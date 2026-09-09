@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useI18n } from '../lib/i18n.jsx';
 
 /**
  * Une fenêtre de paramétrage. Rien de plus qu'il n'en faut : un fond qui
@@ -62,6 +63,7 @@ const EXIT_MS = 180;
 const stack = [];
 
 export default function Modal({ title, subtitle, onClose, children, footer, wide = false, narrow = false }) {
+    const { t } = useI18n();
     const panel = useRef(null);
     const returnTo = useRef(null);
     const [closing, setClosing] = useState(false);
@@ -141,7 +143,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
                         {subtitle && <p className="eyebrow" style={{ margin: 0 }}>{subtitle}</p>}
                         <h2 style={{ margin: 0 }}>{title}</h2>
                     </div>
-                    <button className="btn btn--small btn--ghost" onClick={close} aria-label="Fermer">
+                    <button className="btn btn--small btn--ghost" onClick={close} aria-label={t('common.close')}>
                         ✕
                     </button>
                 </header>

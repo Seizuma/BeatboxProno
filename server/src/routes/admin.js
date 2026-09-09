@@ -16,6 +16,9 @@ import {
   reseedOfficialBracket,
 } from '../lib/seeding.js';
 import { lastDays, localDay } from '../lib/presence.js';
+// La suppression d'un compte est la MÊME que celle de la page de profil : une
+// seule procédure, groupes transmis compris.
+import { deleteAccount } from '../lib/accounts.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireRole('ADMIN', 'OWNER'));
@@ -164,11 +167,48 @@ async function contenderImpact(contenderId) {
   };
 }
 
+/**
+ * Ce que la suppression d'un pronostic emporte.
+ *
+ * Les deux nombres qui décident sont `points` et `submitted` : un brouillon ne
+ * pèse rien, un pronostic déposé et scoré retire des points d'un classement où
+ * d'autres se comparent à lui. Le reste — combien de classements, combien
+ * d'affiches — sert à reconnaître qu'on a bien la bonne fiche sous les yeux
+ * avant de cliquer, ce qu'un identifiant seul ne permet pas.
+ */
+async function predictionImpact(predictionId) {
+  const prediction = await prisma.prediction.findUnique({
+    where: { id: predictionId },
+    include: {
+      user: { select: { username: true, globalName: true } },
+      event: { select: { name: true, year: true } },
+      category: { select: { name: true } },
+      _count: { select: { ranks: true, battles: true, comments: true, stamps: true } },
+    },
+  });
+  if (!prediction) return null;
+
+  return {
+    kind: 'prediction',
+    name: prediction.user.globalName ?? prediction.user.username,
+    event: `${prediction.event.name} ${prediction.event.year}`,
+    category: prediction.category.name,
+    label: prediction.label,
+    submitted: prediction.submitted,
+    scored: Boolean(prediction.scoredAt),
+    points: prediction.points,
+    ranks: prediction._count.ranks,
+    battles: prediction._count.battles,
+    comments: prediction._count.comments,
+  };
+}
+
 const IMPACT_LOADERS = {
   artist: artistImpact,
   event: eventImpact,
   category: categoryImpact,
   contender: contenderImpact,
+  prediction: predictionImpact,
 };
 
 /** L'interface interroge ce bilan avant d'ouvrir sa fenêtre de confirmation. */
@@ -1877,6 +1917,9 @@ adminRouter.get('/users', async (req, res) => {
       select: {
         id: true, discordId: true, username: true, globalName: true,
         avatarUrl: true, role: true, createdAt: true, lastSeenAt: true,
+        // L'état de bannissement voyage avec le compte : la liste doit pouvoir
+        // marquer la ligne sans une seconde requête par personne.
+        bannedAt: true, banReason: true,
       },
     }),
   ]);
@@ -1988,6 +2031,281 @@ adminRouter.patch('/users/:id/role', onlyAdmin, async (req, res) => {
   });
 
   res.json({ user });
+});
+
+/**
+ * Les deux garde-fous communs au bannissement et à la suppression.
+ *
+ * Les mêmes que pour le changement de rôle, et pour les mêmes raisons : on ne
+ * se les applique pas à soi-même — un administrateur qui se bannit ne peut plus
+ * se débannir — et le propriétaire du site est hors d'atteinte d'un
+ * administrateur. Sans cette dernière règle, n'importe quel administrateur
+ * prendrait le site en fermant le compte au-dessus de lui.
+ */
+async function targetForSanction(req, res) {
+  const target = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true, username: true, globalName: true, discordId: true,
+      role: true, bannedAt: true, banReason: true,
+    },
+  });
+  if (!target) {
+    res.status(404).json({ error: 'Compte introuvable.' });
+    return null;
+  }
+  if (target.id === req.user.id) {
+    res.status(400).json({ error: 'Vous ne pouvez pas appliquer cette mesure à votre propre compte.' });
+    return null;
+  }
+  if (target.role === 'OWNER') {
+    res.status(403).json({
+      error: 'Le propriétaire du site ne peut être ni banni ni supprimé. Transmettez d’abord le rôle.',
+    });
+    return null;
+  }
+  return target;
+}
+
+/**
+ * Bannir un compte, ou lever le bannissement.
+ *
+ * ─── Ce que ça fait, et ce que ça ne fait pas ───────────────────────────────
+ *
+ * Ça ferme la porte : `attachUser` refuse la session, `auth.js` refuse la
+ * connexion Discord. Rien d'autre ne bouge.
+ *
+ * Les pronostics déposés RESTENT au classement. C'est délibéré : les retirer
+ * réécrirait le palmarès de tous les autres joueurs de l'événement, qui n'ont
+ * rien fait — un score gagné contre trente personnes ne se recalcule pas parce
+ * que l'une d'elles s'est mal tenue. Pour tout retirer, c'est la suppression
+ * qu'il faut, et elle est en dessous.
+ *
+ * Réversible, et c'est la raison d'être de la mesure : la sanction proportionnée
+ * à un incident est celle qu'on peut lever quand il est réglé. Sans elle, la
+ * seule réponse disponible était de supprimer un compte pour de bon.
+ *
+ * Le motif est obligatoire à la pose. Sans lui, la seule réponse possible à
+ * « pourquoi mon compte est fermé ? » six mois plus tard est « je ne sais
+ * plus », et c'est une conversation qu'on n'a qu'une fois avant de le
+ * regretter. Il ne sort jamais vers l'intéressé : la page de connexion dit que
+ * c'est fermé, pas pourquoi.
+ */
+adminRouter.patch('/users/:id/ban', onlyAdmin, async (req, res) => {
+  const { banned, reason } = z
+    .object({ banned: z.boolean(), reason: z.string().max(280).optional() })
+    .parse(req.body ?? {});
+
+  const target = await targetForSanction(req, res);
+  if (!target) return undefined;
+
+  if (banned && !(reason ?? '').trim()) {
+    return res.status(400).json({ error: 'Indiquez un motif : il devra être relu plus tard.' });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: target.id },
+    data: banned
+      ? { bannedAt: new Date(), banReason: reason.trim() }
+      : { bannedAt: null, banReason: null },
+    select: { id: true, username: true, bannedAt: true, banReason: true },
+  });
+
+  console.log(
+    `[comptes] ${banned ? 'bannissement' : 'levée'} de ${target.username} (${target.discordId})` +
+    ` par ${req.user.username}${banned ? ` — ${reason.trim()}` : ''}.`
+  );
+
+  return res.json({ user });
+});
+
+/**
+ * Supprimer un compte.
+ *
+ * Le pendant administratif de la suppression volontaire, et la MÊME procédure :
+ * `deleteAccount` transmet les groupes possédés au plus ancien membre restant
+ * avant de laisser la cascade emporter le reste. Deux implémentations auraient
+ * divergé, et la divergence se serait vue sur un groupe laissé sans
+ * propriétaire — que rien dans l'application ne permet de réparer.
+ *
+ * `?confirm=true` obligatoire, comme pour toute suppression de cet écran : les
+ * routes et l'interface tiennent la même ligne, et un appel direct à l'API ne
+ * doit pas être plus permissif qu'un clic.
+ *
+ * Irréversible, et ça retire les pronostics du classement. Quand ce n'est pas
+ * ce qu'on veut — et la plupart du temps ce n'est pas ce qu'on veut — c'est
+ * `PATCH /users/:id/ban` qu'il faut appeler.
+ */
+adminRouter.delete('/users/:id', onlyAdmin, async (req, res) => {
+  const target = await targetForSanction(req, res);
+  if (!target) return undefined;
+
+  if (req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error: `La suppression de ${target.globalName ?? target.username} est définitive et retire ses pronostics du classement. Confirmez pour continuer.`,
+    });
+  }
+
+  await deleteAccount(target.id);
+  console.log(
+    `[comptes] suppression de ${target.username} (${target.discordId}) par ${req.user.username}.`
+  );
+
+  return res.json({ ok: true, username: target.globalName ?? target.username });
+});
+
+// --- Pronostics et exclusions -------------------------------------------------
+
+/**
+ * Supprimer le pronostic d'un joueur.
+ *
+ * ─── Pourquoi l'administration peut ce que le joueur ne peut pas ────────────
+ *
+ * `DELETE /predictions/:id` côté joueur refuse d'effacer un pronostic déposé ET
+ * scoré : ses points comptent, les faire disparaître par mégarde serait une
+ * mauvaise surprise. Ici c'est justement le cas qu'on vise — un pronostic
+ * tricheur, dupliqué, ou déposé par un compte qu'on écarte. La règle du joueur
+ * le protège de lui-même ; elle n'a pas à protéger un tricheur de
+ * l'organisateur.
+ *
+ * ─── Ce qui suit la suppression ─────────────────────────────────────────────
+ *
+ * Rien à recalculer chez les autres. Le classement est la SOMME des pronostics
+ * déposés, un par personne : retirer celui de quelqu'un ne change le total de
+ * personne d'autre. Les classements et affiches pronostiqués, les commentaires
+ * de groupe et les tampons partent en cascade, comme déclaré au schéma.
+ *
+ * En revanche les points déjà versés au porte-monnaie ne reviennent pas : ils
+ * ont été crédités par la clôture de l'événement et vivent leur propre vie.
+ * Le retrait se fait à la main depuis l'onglet Comptes, avec un motif — c'est
+ * délibéré, une reprise de points automatique et silencieuse serait pire.
+ *
+ * `?confirm=true` obligatoire, comme toute suppression de cet écran.
+ */
+adminRouter.delete('/predictions/:id', onlyAdmin, async (req, res) => {
+  const impact = await predictionImpact(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Pronostic introuvable.' });
+
+  if (req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error:
+        `Ce pronostic de ${impact.name} sur ${impact.category} vaut ${impact.points} point(s). ` +
+        'Confirmez pour le supprimer définitivement.',
+      impact,
+    });
+  }
+
+  await prisma.prediction.delete({ where: { id: req.params.id } });
+  console.log(
+    `[pronostics] suppression du pronostic ${req.params.id} de ${impact.name} ` +
+    `(${impact.event} — ${impact.category}) par ${req.user.username}.`
+  );
+
+  res.json({ ok: true, impact });
+});
+
+/** Les comptes écartés d'un événement, du plus récemment ajouté au plus ancien. */
+adminRouter.get('/events/:eventId/exclusions', async (req, res) => {
+  const exclusions = await prisma.eventExclusion.findMany({
+    where: { eventId: req.params.eventId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: {
+        select: { id: true, username: true, globalName: true, avatarUrl: true, discordId: true },
+      },
+      by: { select: { username: true, globalName: true } },
+    },
+  });
+
+  // Combien de pronostics ces comptes ont déjà déposés sur l'événement. Sans ce
+  // nombre, on croit qu'écarter suffit — alors que ce qui est déjà déposé reste
+  // au classement, et qu'il faut le supprimer à part.
+  const counts = await prisma.prediction.groupBy({
+    by: ['userId'],
+    where: {
+      eventId: req.params.eventId,
+      userId: { in: exclusions.map((e) => e.userId) },
+      submitted: true,
+    },
+    _count: { _all: true },
+  });
+  const filed = new Map(counts.map((c) => [c.userId, c._count._all]));
+
+  res.json({
+    exclusions: exclusions.map((e) => ({ ...e, filedPredictions: filed.get(e.userId) ?? 0 })),
+  });
+});
+
+/**
+ * Écarter un compte d'un événement.
+ *
+ * Le motif est obligatoire, comme pour le bannissement et pour la même raison :
+ * la seule réponse possible à « pourquoi suis-je écarté ? » six mois plus tard
+ * serait sinon « je ne sais plus ».
+ *
+ * Réappliquer sur un compte déjà écarté met le motif à jour plutôt que de
+ * répondre par une erreur d'unicité : corriger un motif mal formulé est un
+ * besoin réel, et l'obliger à passer par un retrait suivi d'une repose ferait
+ * perdre la date d'origine.
+ *
+ * On n'écarte ni le propriétaire du site — il ne pourrait plus rien tester sur
+ * ses propres compètes — ni soi-même.
+ */
+adminRouter.post('/events/:eventId/exclusions', onlyAdmin, async (req, res) => {
+  const { userId, reason } = z
+    .object({ userId: z.string().min(1), reason: z.string().min(1).max(280) })
+    .parse(req.body);
+
+  const [event, user] = await Promise.all([
+    prisma.event.findUnique({ where: { id: req.params.eventId }, select: { id: true, name: true, year: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, role: true } }),
+  ]);
+  if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
+  if (!user) return res.status(404).json({ error: 'Compte introuvable.' });
+
+  if (user.id === req.user.id) {
+    return res.status(400).json({ error: 'Vous ne pouvez pas vous écarter de votre propre événement.' });
+  }
+  if (user.role === 'OWNER') {
+    return res.status(403).json({ error: 'Le propriétaire du site ne peut pas être écarté.' });
+  }
+
+  const exclusion = await prisma.eventExclusion.upsert({
+    where: { eventId_userId: { eventId: event.id, userId: user.id } },
+    create: { eventId: event.id, userId: user.id, reason: reason.trim(), byId: req.user.id },
+    update: { reason: reason.trim(), byId: req.user.id },
+    include: { user: { select: { id: true, username: true, globalName: true, avatarUrl: true } } },
+  });
+
+  console.log(
+    `[exclusions] ${user.username} écarté de ${event.name} ${event.year} ` +
+    `par ${req.user.username} — ${reason.trim()}.`
+  );
+
+  res.status(201).json({ exclusion });
+});
+
+/**
+ * Lever une exclusion.
+ *
+ * Sans confirmation : rien n'est détruit, le compte retrouve simplement le droit
+ * de pronostiquer. Une fenêtre de confirmation sur un geste réversible et sans
+ * conséquence apprend surtout à cliquer sans lire.
+ */
+adminRouter.delete('/exclusions/:id', onlyAdmin, async (req, res) => {
+  const exclusion = await prisma.eventExclusion.findUnique({
+    where: { id: req.params.id },
+    include: { user: { select: { username: true } }, event: { select: { name: true, year: true } } },
+  });
+  if (!exclusion) return res.status(404).json({ error: 'Exclusion introuvable.' });
+
+  await prisma.eventExclusion.delete({ where: { id: exclusion.id } });
+  console.log(
+    `[exclusions] ${exclusion.user.username} réintégré sur ` +
+    `${exclusion.event.name} ${exclusion.event.year} par ${req.user.username}.`
+  );
+
+  res.json({ ok: true, username: exclusion.user.username });
 });
 
 // --- Recalcul -----------------------------------------------------------------

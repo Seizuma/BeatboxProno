@@ -231,7 +231,11 @@ export function drawEventCard(canvas, card, format, palette, { pixelScale = EXPO
   const availH = h - pad * 2;
 
   const layout = buildLayout(ctx, card);
-  const scale = Math.min(MAX_SCALE, availW / layout.width, availH / layout.height);
+  // Borne nominale, comme dans `predictionCard.js` : `availW` et `availH` sont
+  // déjà multipliés par `pixelScale`, donc le plafond doit l'être aussi. Sinon
+  // il signifie « 1,6 fois le format » à l'aperçu et « 0,8 fois » au fichier —
+  // et l'aperçu, non bridé, ne montrait pas ce que l'on téléchargeait.
+  const scale = Math.min(MAX_SCALE * pixelScale, availW / layout.width, availH / layout.height);
 
   // Centré verticalement : une story très courte ne doit pas paraître tombée
   // en haut d'une image vide.

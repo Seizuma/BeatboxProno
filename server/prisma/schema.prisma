@@ -29,6 +29,19 @@ model User {
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime @default(now())
 
+  // Le bannissement. Une DATE et non un booléen : « depuis quand » est la
+  // première question posée quand quelqu'un conteste, et un booléen doublé
+  // d'une date finit toujours par se contredire.
+  //
+  // Le compte reste en base. Ses pronostics déposés restent au classement :
+  // les effacer réécrirait le palmarès de tous les autres, qui n'ont rien
+  // fait. Pour tout retirer, c'est la suppression qu'il faut, pas le
+  // bannissement — les deux gestes existent et ne se remplacent pas.
+  bannedAt    DateTime?
+  // Le motif, pour l'administration seule. Jamais rendu au compte banni : la
+  // page de connexion ne dit pas pourquoi, elle dit que c'est fermé.
+  banReason   String?
+
   // La dernière note de version lue, par son identifiant — « 2026-08-24 ».
   // Une colonne plutôt qu'une table de lectures : il n'y a qu'une chose à
   // retenir par personne, et les notes sont ordonnées.
@@ -59,6 +72,12 @@ model User {
   stamps      GroupStamp[]
   viewsMade     ProfileView[] @relation("ProfileViewer")
   viewsReceived ProfileView[] @relation("ProfileViewed")
+
+  // Les événements dont ce compte est écarté, et ceux qu'il a écartés lui-même
+  // en tant qu'organisateur. Deux relations vers le même modèle : Prisma exige
+  // alors qu'on les nomme.
+  exclusions     EventExclusion[] @relation("Excluded")
+  exclusionsMade EventExclusion[] @relation("ExclusionAuthor")
 }
 
 // --- Référentiel artistes -----------------------------------------------------
@@ -126,6 +145,44 @@ model Event {
   notifications Notification[]
   wallet      WalletEntry[]
   badges      BadgeAward[]
+  exclusions  EventExclusion[]
+}
+
+/// Un compte écarté d'UN événement.
+///
+/// Distinct du bannissement, et volontairement : bannir ferme le site entier,
+/// ce qui est disproportionné quand le problème tient à une seule compète —
+/// quelqu'un qui a triché sur le GBB 2026 n'a pas de raison de perdre l'accès
+/// au reste du site. L'exclusion est le cran d'en dessous.
+///
+/// Elle n'efface RIEN. Les pronostics déjà déposés restent en base et au
+/// classement : les retirer est un second geste, délibéré, qui passe par la
+/// suppression de pronostic. Confondre les deux ferait disparaître des points
+/// sans qu'on l'ait demandé.
+model EventExclusion {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("Excluded", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Le motif, pour l'administration seule. Obligatoire à la pose : la seule
+  /// réponse possible à « pourquoi ? » six mois plus tard serait sinon « je ne
+  /// sais plus ».
+  reason    String
+  createdAt DateTime @default(now())
+
+  /// Qui a posé l'exclusion. `SetNull` et non `Cascade` : le départ de
+  /// l'organisateur ne doit pas lever l'exclusion qu'il avait décidée.
+  byId      String?
+  by        User?    @relation("ExclusionAuthor", fields: [byId], references: [id], onDelete: SetNull)
+
+  // Un compte n'est écarté qu'une fois par événement.
+  @@unique([eventId, userId])
+  // Le contrôle se fait à chaque écriture de pronostic, par (événement, compte) :
+  // c'est l'unicité ci-dessus qui le porte. Cet index-ci sert la question
+  // inverse, « de quoi ce compte est-il écarté ? », posée sur sa fiche.
+  @@index([userId])
 }
 
 model GroupStamp {

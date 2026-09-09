@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../lib/i18n.jsx';
 
 /**
  * Une confirmation passagère, posée dans un coin de l'écran.
@@ -11,6 +12,7 @@ import { useEffect, useState } from 'react';
  * d'enregistrement parce qu'on regardait ailleurs.
  */
 export default function Toast({ message, ok = true, onDismiss, duration = 4000 }) {
+    const { t } = useI18n();
     const [leaving, setLeaving] = useState(false);
 
     useEffect(() => {
@@ -35,7 +37,7 @@ export default function Toast({ message, ok = true, onDismiss, duration = 4000 }
         >
             <span aria-hidden="true">{ok ? '✓' : '!'}</span>
             <span>{message}</span>
-            <button type="button" className="toast__close" onClick={onDismiss} aria-label="Fermer">
+            <button type="button" className="toast__close" onClick={onDismiss} aria-label={t('common.close')}>
                 ✕
             </button>
         </div>

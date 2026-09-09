@@ -52,7 +52,16 @@ import RankingBoard from './RankingBoard.jsx';
  * déposés avant cette colonne n'ont pas de poche, et leur plateau doit
  * continuer de s'afficher.
  */
-export default function WildcardBoard({ category, phase, order, onChange, pool, onPool, locked }) {
+export default function WildcardBoard({
+    category,
+    phase,
+    order,
+    onChange,
+    pool,
+    onPool,
+    onContender,
+    locked,
+}) {
     const { t } = useI18n();
 
     const [artists, setArtists] = useState([]);
@@ -79,6 +88,23 @@ export default function WildcardBoard({ category, phase, order, onChange, pool, 
      * poche existe : leurs classés sont dans les rangs et nulle part ailleurs.
      * Une `Map` plutôt qu'une concaténation filtrée, puisqu'un identifiant peut
      * figurer dans les deux.
+     *
+     * ─── Le filtre `byId.has` ───────────────────────────────────────────────
+     *
+     * Un identifiant que le référentiel ne connaît pas est écarté, et c'est
+     * volontaire : la poche d'un vieux pronostic peut citer un participant que
+     * l'organisateur a retiré depuis, et l'afficher sans nom ni artiste ne
+     * servirait personne.
+     *
+     * Mais ce filtre coûtait le nom d'un artiste fraîchement pioché. La page
+     * événement charge `/events/:slug` UNE fois au montage ; le participant que
+     * le serveur vient de créer n'y figure évidemment pas. Il entrait dans la
+     * poche, puis se faisait jeter ici — rien n'apparaissait, aucune erreur, et
+     * il ne se montrait qu'au rechargement suivant. D'où l'impression que « la
+     * deuxième fois, ça marche ».
+     *
+     * `pick` remonte donc le participant reçu à la page, qui l'ajoute au
+     * référentiel avant que ce calcul ne rejoue.
      */
     const mine = useMemo(() => {
         const byId = new Map((category.contenders ?? []).map((c) => [c.id, c]));
@@ -127,6 +153,15 @@ export default function WildcardBoard({ category, phase, order, onChange, pool, 
             const { contender } = await api.post(`/predictions/categories/${category.id}/pool`, {
                 artistId: artist.id,
             });
+            // Le référentiel D'ABORD, la poche ensuite. Le participant vient
+            // peut-être d'être créé : tant que la page ne le connaît pas, le
+            // plateau le filtre et le nom n'apparaît nulle part.
+            //
+            // L'appel est idempotent côté page — un participant déjà présent
+            // n'est pas dupliqué — ce qui couvre le cas où quelqu'un d'autre
+            // l'avait proposé avant et où le serveur renvoie le même.
+            onContender?.(contender);
+
             // Le participant peut déjà exister — quelqu'un d'autre l'a proposé,
             // et le serveur renvoie alors le même. C'est voulu : le référentiel
             // est commun, seul le plateau est personnel.

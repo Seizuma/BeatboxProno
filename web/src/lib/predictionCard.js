@@ -76,10 +76,43 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 const MAIN_ROUNDS = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'FINAL', 'LEGACY'];
 const ANNEX_ROUND = 'SMALL_FINAL';
 
-/** Les largeurs logiques essayées. La meilleure gagne, aucune n'est privilégiée. */
-const CANDIDATE_WIDTHS = [820, 1100, 1400, 1750, 2100, 2600, 3200];
+/**
+ * Les largeurs logiques essayées. La meilleure gagne, aucune n'est privilégiée.
+ *
+ * La grille était trop lâche : entre 2100 et 2600 il n'y a rien, et c'est
+ * précisément là que tombe le rapport d'un format large. Aucune des deux ne
+ * remplissait le cadre, et l'écart se voyait en marges. Une quinzaine de
+ * paliers ne coûtent qu'une construction de mise en page chacun — sans tracé,
+ * puisque `buildLayout` ne fait que mesurer.
+ */
+const CANDIDATE_WIDTHS = [
+    760, 900, 1050, 1200, 1400, 1600, 1800, 2000, 2200, 2450, 2700, 2950, 3200, 3500,
+];
 
-/** Au-delà, le texte devient énorme sur un pronostic très court. */
+/**
+ * Au-delà, le texte devient énorme sur un pronostic très court.
+ *
+ * ─── Une borne en unités NOMINALES ──────────────────────────────────────────
+ *
+ * C'est ici que se jouait l'export large. Le facteur d'échelle est calculé sur
+ * les dimensions RÉELLES du canvas, donc déjà multipliées par `pixelScale` : à
+ * la définition d'export (×2), un contenu qui demandait 0,86 fois le format
+ * ressortait avec un facteur de 1,72 — plafonné à 1,35, soit 0,68 fois le
+ * format. Il était donc dessiné à 80 % de la taille qu'il pouvait prendre, et
+ * le reste devenait de la marge. Sur un 1920 × 1080, cela faisait plusieurs
+ * centaines de pixels de vide de chaque côté.
+ *
+ * Pire, le défaut ne se voyait pas à l'aperçu. Celui-ci est rendu à la
+ * définition exacte de son affichage — un `pixelScale` de l'ordre de 0,4 — où
+ * le facteur n'atteignait jamais 1,35. L'aperçu remplissait son cadre, le
+ * fichier non : le seul rendu qu'on regardait avant de cliquer était justement
+ * celui qui ne reproduisait pas le problème.
+ *
+ * La borne est donc exprimée en multiples du FORMAT, et multipliée par
+ * `pixelScale` au moment de l'appliquer. Elle veut alors dire la même chose à
+ * toutes les définitions : « pas plus de 1,35 fois la taille nominale », que
+ * l'on dessine un aperçu de 400 pixels ou un fichier de 3840.
+ */
 const MAX_SCALE = 1.35;
 
 /**
@@ -614,7 +647,10 @@ export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_P
         if (!best || scale > best.scale) best = { layout, scale };
     }
 
-    const scale = Math.min(best.scale, MAX_SCALE);
+    // La borne est nominale : voir MAX_SCALE. Sans ce `pixelScale`, elle
+    // signifiait deux choses différentes selon qu'on dessinait l'aperçu ou le
+    // fichier, et bridait le second seul.
+    const scale = Math.min(best.scale, MAX_SCALE * pixelScale);
     const { layout } = best;
 
     // Centré dans le cadre : un contenu court ne doit pas paraître tombé en haut

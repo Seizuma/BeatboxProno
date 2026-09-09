@@ -1,4 +1,5 @@
 import { api } from '../lib/api.js';
+import { useI18n } from '../lib/i18n.jsx';
 
 const Glyph = () => (
   <svg viewBox="0 0 127 96" aria-hidden="true">
@@ -15,15 +16,27 @@ const Glyph = () => (
  * sur une page qui n'a aucun rapport avec ce qu'il voulait faire.
  *
  * Le serveur revérifie la destination : seul un chemin interne est accepté.
+ *
+ * ─── Le libellé ─────────────────────────────────────────────────────────────
+ *
+ * Il vient du dictionnaire, et non plus d'une valeur par défaut écrite en dur.
+ * La précédente était en français : le site en anglais affichait « Se connecter
+ * avec Discord » sur son bouton d'entrée — la toute première chose qu'un
+ * visiteur anglophone voyait.
+ *
+ * `children` reste accepté pour les appels qui veulent autre chose que la
+ * phrase complète : l'en-tête n'a la place que du mot « Discord ».
  */
-export default function DiscordButton({ small = false, next, children = 'Se connecter avec Discord' }) {
+export default function DiscordButton({ small = false, next, children }) {
+  const { t } = useI18n();
+
   return (
     <a
       className={`btn btn--discord${small ? ' btn--small' : ''}`}
       href={next ? api.loginWith(next) : api.loginUrl}
     >
       <Glyph />
-      {children}
+      {children ?? t('auth.discord')}
     </a>
   );
 }

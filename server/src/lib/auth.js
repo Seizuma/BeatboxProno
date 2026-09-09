@@ -93,6 +93,14 @@ export async function upsertDiscordUser(profile) {
     });
   }
 
+  // Un compte banni n'est pas rafraîchi et ne repart pas : la connexion Discord
+  // s'arrête ici. L'erreur est typée pour que la route sache rediriger vers
+  // « compte fermé » plutôt que vers l'échec générique — et elle ne dit pas le
+  // MOTIF, qui ne regarde que l'administration.
+  if (existing.bannedAt) {
+    throw Object.assign(new Error('Ce compte est fermé.'), { code: 'BANNED' });
+  }
+
   return prisma.user.update({
     where: { id: existing.id },
     data: {
@@ -128,7 +136,13 @@ export async function attachUser(req, _res, next) {
 
   try {
     const { sub } = jwt.verify(token, secret());
-    req.user = await prisma.user.findUnique({ where: { id: sub } });
+    const user = await prisma.user.findUnique({ where: { id: sub } });
+
+    // Le bannissement se vérifie à CHAQUE requête, et pas seulement à la
+    // connexion. Le jeton vaut trente jours : sans ce contrôle, bannir
+    // quelqu'un ne l'empêchait de rien tant qu'il gardait l'onglet ouvert —
+    // c'est-à-dire précisément au moment où la mesure sert à quelque chose.
+    req.user = user?.bannedAt ? null : user;
   } catch {
     req.user = null; // cookie périmé ou trafiqué : on continue en anonyme
   }

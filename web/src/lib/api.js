@@ -1,4 +1,20 @@
+import { detectLang, translator } from './i18n.jsx';
+
 const BASE = import.meta.env.VITE_API_URL ?? '/api';
+
+/**
+ * Les messages d'erreur du transport, dans la langue du visiteur.
+ *
+ * Ce module vit hors de React : il n'a pas de contexte, donc pas de `useI18n`.
+ * On relit la langue à chaque appel plutôt que de la figer au chargement — le
+ * sélecteur de langue peut avoir été touché depuis, et une panne réseau ne doit
+ * pas répondre dans celle d'avant.
+ *
+ * Ne concerne QUE les phrases écrites ici. Le texte d'un refus vient du serveur
+ * dans `data.error` et reste tel quel : c'est une autre traduction, à faire
+ * côté serveur le jour où on s'y mettra.
+ */
+const tr = (key) => translator(detectLang())(key);
 
 async function request(method, path, body) {
   // Un File ou un Blob part tel quel, avec son propre type MIME : c'est ce que
@@ -19,7 +35,7 @@ async function request(method, path, body) {
       body: raw ? body : body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error('Le serveur est injoignable. Vérifiez votre connexion.');
+    throw new Error(tr('api.offline'));
   }
 
   const text = await res.text();
@@ -32,9 +48,7 @@ async function request(method, path, body) {
       // Une passerelle en panne renvoie du HTML. Inutile de montrer
       // « unexpected character » à quelqu'un qui voulait juste pronostiquer.
       const err = new Error(
-        res.status >= 500
-          ? 'Le serveur ne répond pas. Réessayez dans un instant.'
-          : 'Réponse inattendue du serveur.'
+        res.status >= 500 ? tr('api.down') : tr('api.unexpected')
       );
       err.status = res.status;
       throw err;
@@ -42,7 +56,7 @@ async function request(method, path, body) {
   }
 
   if (!res.ok) {
-    const err = new Error(data.error ?? "La requête n'a pas abouti.");
+    const err = new Error(data.error ?? tr('api.failed'));
     err.status = res.status;
     err.details = data.details;
     // Le corps complet, pour les refus qui portent une information exploitable

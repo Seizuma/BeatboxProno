@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
 import PredictionView from './PredictionView.jsx';
+import MenuButton from './MenuButton.jsx';
+import ConfirmDelete from './ConfirmDelete.jsx';
 
 const ROUNDS = [
     ['', 'Tous les tours'],
@@ -60,6 +62,10 @@ export default function AdminSearch() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
     const [reading, setReading] = useState(null);
+    // Le pronostic dont on prépare la suppression. Rien ne part au serveur tant
+    // que le bilan n'a pas été relu : la route refuse de toute façon sans
+    // `confirm`, l'interface et l'API tiennent la même ligne.
+    const [deleting, setDeleting] = useState(null);
 
     useEffect(() => {
         api.get('/events').then(({ events }) => setEvents(events)).catch(() => { });
@@ -336,9 +342,27 @@ export default function AdminSearch() {
                                             <td className="num">{r.scored ? r.points : <span className="faint">—</span>}</td>
 
                                             <td className="num">
-                                                <button className="btn btn--small" onClick={() => setReading(r.id)}>
-                                                    Ouvrir
-                                                </button>
+                                                <span className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
+                                                    <button className="btn btn--small" onClick={() => setReading(r.id)}>
+                                                        Ouvrir
+                                                    </button>
+
+                                                    {/* La suppression dans un menu, pas en bouton
+                                                        permanent. C'est la seule action destructrice
+                                                        d'un écran qu'on parcourt : posée à côté de
+                                                        « Ouvrir », elle se clique un jour par erreur
+                                                        sur la mauvaise ligne. */}
+                                                    <MenuButton
+                                                        label={`Actions sur le pronostic de ${r.user.username}`}
+                                                        items={[
+                                                            {
+                                                                label: 'Supprimer ce pronostic',
+                                                                danger: true,
+                                                                onClick: () => setDeleting(r.id),
+                                                            },
+                                                        ]}
+                                                    />
+                                                </span>
                                             </td>
                                         </tr>
                                     ))}
@@ -350,6 +374,21 @@ export default function AdminSearch() {
             )}
 
             {reading && <PredictionView predictionId={reading} onClose={() => setReading(null)} />}
+
+            {deleting && (
+                <ConfirmDelete
+                    kind="prediction"
+                    id={deleting}
+                    onCancel={() => setDeleting(null)}
+                    onConfirmed={() => {
+                        setDeleting(null);
+                        // La fiche ouverte pointerait sur un pronostic qui n'existe
+                        // plus : on la referme avant de relancer la recherche.
+                        setReading(null);
+                        search();
+                    }}
+                />
+            )}
         </div>
     );
 }

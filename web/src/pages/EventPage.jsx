@@ -6,7 +6,6 @@ import { useI18n } from '../lib/i18n.jsx';
 import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
-import WildcardHelp from '../components/WildcardHelp.jsx';
 import WildcardBoard from '../components/WildcardBoard.jsx';
 import { isWildcardCategory } from '../lib/wildcard.js';
 import PromptDialog from '../components/PromptDialog.jsx';
@@ -171,7 +170,17 @@ export default function EventPage() {
   // En cours : la compétition a démarré, les pronostics sont figés. On peut
   // encore tout consulter — versions comprises — mais plus rien modifier.
   const eventLive = event.status === 'LIVE';
-  const readOnly = eventClosed || eventLive;
+  /**
+   * Écarté de cet événement par l'organisateur.
+   *
+   * Traité comme une fermeture et non comme un cas à part : l'écran est déjà
+   * capable de se mettre en lecture seule, et rouvrir un second chemin pour
+   * arriver au même état aurait laissé passer un bouton ici ou là. Le serveur
+   * refuse de toute façon chaque écriture — ceci n'est que la politesse de le
+   * dire avant qu'on ait composé un tableau entier pour rien.
+   */
+  const excluded = Boolean(data.excluded);
+  const readOnly = eventClosed || eventLive || excluded;
 
   const update = (patch) =>
     setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {}, pool: {} }), ...patch } }));
@@ -187,6 +196,38 @@ export default function EventPage() {
     deadlinePassed ||
     phase.resolved ||
     (phase.locksAt && new Date(phase.locksAt) <= new Date());
+
+  /**
+   * Verse au référentiel de la page un participant que le serveur vient de
+   * créer.
+   *
+   * Le cas ne se produit que sur une sélection wildcard, où c'est le JOUEUR qui
+   * compose la liste : il cherche un artiste, le serveur crée le participant
+   * correspondant — ou renvoie celui qu'un autre avait déjà proposé — et la
+   * page doit le connaître immédiatement.
+   *
+   * `/events/:slug` n'est appelé qu'au montage, et le recharger entièrement
+   * pour un nom serait à la fois lourd et destructeur : la réponse écraserait
+   * `draft`, donc tout ce qui a été saisi sans être enregistré. On insère donc
+   * la seule ligne qui manque.
+   *
+   * Idempotent : un participant déjà présent n'est pas dupliqué. Le serveur
+   * rend le même à deux joueurs qui piochent le même artiste, et rien
+   * n'empêche de recliquer sur un nom déjà pioché.
+   */
+  function addContender(categoryId, contender) {
+    if (!contender?.id) return;
+    setData((d) => {
+      if (!d) return d;
+      const categories = d.event.categories.map((c) => {
+        if (c.id !== categoryId) return c;
+        const list = c.contenders ?? [];
+        if (list.some((x) => x.id === contender.id)) return c;
+        return { ...c, contenders: [...list, contender] };
+      });
+      return { ...d, event: { ...d.event, categories } };
+    });
+  }
 
   /** Recharge mes versions après une action qui les fait bouger. */
   async function refreshVersions(categoryId, pick) {
@@ -535,7 +576,15 @@ export default function EventPage() {
           update={update}
           phaseLocked={phaseLocked}
           locked={readOnly || !user}
+          onContender={(contender) => addContender(category.id, contender)}
         />
+      )}
+
+      {/* Le motif n'est pas donné : il est écrit pour l'administration. La page
+          dit que la porte est fermée, pas pourquoi — le contester se fait par
+          la boîte à idées, pas en réessayant. */}
+      {excluded && (
+        <p className="notice" style={{ marginTop: '1.5rem' }}>{t('event.excluded')}</p>
       )}
 
       {user && !readOnly && (
@@ -575,19 +624,18 @@ export default function EventPage() {
         ok={flash?.ok}
         onDismiss={() => setFlash(null)}
       />
-      {/* Deux barèmes, deux fenêtres. Quelqu'un qui remplit une sélection n'a
-          aucune raison de lire comment se comptent les affiches d'un tableau :
-          il n'y en a pas. La règle se lit dans la structure de la catégorie
-          ouverte, pas dans un réglage. */}
+      {/* Un seul barème, restreint au type d'événement ouvert : quelqu'un qui
+          remplit une sélection n'a aucune raison de lire comment se comptent
+          les affiches d'un tableau, il n'y en a pas. Le mode se lit dans la
+          STRUCTURE de la catégorie ouverte, pas dans un réglage — et le
+          sous-titre de la fenêtre l'annonce, ce qu'aucune des deux fenêtres
+          précédentes ne faisait. */}
       {helpOpen && (
-        isWildcardCategory(category) ? (
-          <WildcardHelp
-            places={category?.phases?.[0]?.qualifierCount ?? null}
-            onClose={() => setHelpOpen(false)}
-          />
-        ) : (
-          <ScoringHelp onClose={() => setHelpOpen(false)} />
-        )
+        <ScoringHelp
+          mode={isWildcardCategory(category) ? 'wildcard' : 'bracket'}
+          places={category?.phases?.[0]?.qualifierCount ?? null}
+          onClose={() => setHelpOpen(false)}
+        />
       )}
 
       {guard.pending && (
@@ -655,7 +703,7 @@ export default function EventPage() {
   );
 }
 
-function CategoryEditor({ category, event, state, update, phaseLocked, locked }) {
+function CategoryEditor({ category, event, state, update, phaseLocked, locked, onContender }) {
   const { t } = useI18n();
   // La phase dont on regarde le résultat, ou null. L'état vit ICI et non dans
   // EventPage : la comparaison a besoin des participants, du classement et des
@@ -803,6 +851,7 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked })
                 onPool={(next) =>
                   update({ pool: { ...(state.pool ?? {}), [phase.id]: next } })
                 }
+                onContender={onContender}
               />
             ) : RANKING_TYPES.includes(phase.type) ? (
               <RankingBoard
