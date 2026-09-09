@@ -32,17 +32,28 @@ export const QUALIFIED_POINT = 1;
 /**
  * Le point de qualification d'une COMPÉTITION de wildcards.
  *
- * Trois points au lieu d'un, et ce n'est pas un réglage : c'est la question
- * posée qui change. Dans un événement ordinaire, la qualification est un détail
- * au bord d'un classement — on demande surtout qui finit devant qui. Dans une
- * sélection sur vidéo, « qui passe » EST la compétition, et le classement n'est
- * que la manière de le dire.
+ * Un point, comme partout ailleurs.
  *
- * À un point, deviner juste les huit qualifiés d'un top 8 rapportait huit
- * points contre une centaine pour le placement : le pronostic principal pesait
- * moins que l'accessoire.
+ * ─── Pourquoi ce n'est plus trois ───────────────────────────────────────────
+ *
+ * Le raisonnement d'origine tenait debout — « qui passe » EST la compétition
+ * d'une sélection sur vidéo, alors que dans un tableau la qualification n'est
+ * qu'un détail au bord d'un classement — mais il produisait un barème que
+ * personne ne pouvait lire. Sur une sélection à 16 places, un pronostic parfait
+ * valait 20 × 5 + 16 × 3 = 148 points, dont 48 pour un geste que le joueur ne
+ * distingue pas du placement : il compose UNE liste ordonnée, et le site en
+ * tirait deux récompenses de poids différents sans que rien à l'écran ne le
+ * dise.
+ *
+ * À un point, la qualification redevient ce qu'elle est partout — un bonus
+ * discret au-dessus du placement — et le même pronostic vaut 116 points, dont
+ * la quasi-totalité pour la seule chose qu'on a réellement demandée : classer.
+ *
+ * Une seule constante pour les trois calculs. `scoring.js`, `maxscore.js` et
+ * `scoreboard.js` la lisent tous : la changer ici les déplace ensemble, ce qui
+ * est la raison d'être de cet export.
  */
-export const WILDCARD_HIT = 3;
+export const WILDCARD_HIT = 1;
 
 /**
  * Le podium final, place par place : 5 points pour le vainqueur, 4 pour le
@@ -156,7 +167,7 @@ export function gapPoints(predictedRank, officialRank) {
  */
 /**
  * @param {number} [hitValue]  ce que vaut une qualification devinée. Un point
- *   partout, trois dans une compétition de wildcards où c'est le pronostic
+ *   partout, y compris dans une compétition de wildcards depuis que le barème
  *   principal.
  */
 export function scoreRankingPhase(type, predicted, official, qualifierCount = null, hitValue = QUALIFIED_POINT) {

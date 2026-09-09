@@ -6,7 +6,7 @@ import { contenderName, withName } from '../lib/naming.js';
 import { maxScoreForEvent } from '../lib/maxscore.js';
 import { scorePrediction } from '../lib/scoring.js';
 import { notifyEventOpen } from '../lib/notifications.js';
-import { settleEvent } from '../lib/badges.js';
+import { settleEvent, unsettleEvent } from '../lib/badges.js';
 import { WILDCARD_KINDS, MIN_PLACES, MAX_PLACES } from '../lib/wildcard.js';
 import {
   validateSeedPairs,
@@ -2541,6 +2541,112 @@ adminRouter.delete('/users/:id', onlyAdmin, async (req, res) => {
   );
 
   return res.json({ ok: true, username: target.globalName ?? target.username });
+});
+
+/**
+ * Le palmarès d'une compète : ce qu'elle a distribué, et à qui.
+ *
+ * Sert à répondre à « pourquoi cette personne a-t-elle un badge ici ? » sans
+ * ouvrir la base. La réponse est presque toujours la même — elle a déposé un
+ * pronostic sur CETTE compète et l'événement est passé par FINISHED — mais tant
+ * qu'on ne peut pas le vérifier, on soupçonne le code.
+ */
+adminRouter.get('/events/:eventId/settlement', async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { id: req.params.eventId },
+    select: { id: true, name: true, year: true, status: true },
+  });
+  if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
+
+  const [awards, credits, filed] = await Promise.all([
+    prisma.badgeAward.findMany({
+      where: { eventId: event.id },
+      include: { user: { select: { id: true, username: true, globalName: true } } },
+      orderBy: { awardedAt: 'desc' },
+    }),
+    prisma.walletEntry.findMany({
+      where: { eventId: event.id, kind: 'EVENT_POINTS' },
+      select: { userId: true, amount: true },
+    }),
+    // Qui a RÉELLEMENT déposé sur cet événement. C'est la liste de référence :
+    // tout porteur de badge qui n'y figure pas est une anomalie, et l'écran
+    // doit pouvoir le dire au lieu de laisser deviner.
+    prisma.prediction.groupBy({
+      by: ['userId'],
+      where: { eventId: event.id, submitted: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const players = new Set(filed.map((f) => f.userId));
+  const byUser = new Map();
+  for (const a of awards) {
+    if (!byUser.has(a.userId)) {
+      byUser.set(a.userId, {
+        user: a.user,
+        codes: [],
+        // L'anomalie qu'on cherche : un badge sans pronostic déposé sur la
+        // compète. Le code n'en produit pas — mais si la question se pose,
+        // c'est ici qu'elle se tranche.
+        orphan: !players.has(a.userId),
+      });
+    }
+    byUser.get(a.userId).codes.push(a.code);
+  }
+
+  res.json({
+    event,
+    players: players.size,
+    awards: awards.length,
+    credited: credits.reduce((n, c) => n + c.amount, 0),
+    holders: [...byUser.values()],
+    orphans: [...byUser.values()].filter((h) => h.orphan).length,
+  });
+});
+
+/**
+ * Retirer le palmarès d'une compète.
+ *
+ * Le geste qui n'existait pas : `settleEvent` distribuait sans qu'aucun écran
+ * ne permette de reprendre. Une compète close par erreur laissait ses badges et
+ * ses points définitivement en place.
+ *
+ * `?confirm=true` obligatoire, comme toute suppression de cet écran. Et le
+ * message d'avertissement chiffre ce qui part : « annuler la clôture » ne dit
+ * rien, « 47 badges et 3 100 points retirés à 19 personnes » se comprend.
+ */
+adminRouter.delete('/events/:eventId/settlement', onlyAdmin, async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { id: req.params.eventId },
+    select: { id: true, name: true, year: true },
+  });
+  if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
+
+  const [awards, credits] = await Promise.all([
+    prisma.badgeAward.count({ where: { eventId: event.id } }),
+    prisma.walletEntry.aggregate({
+      where: { eventId: event.id, kind: 'EVENT_POINTS' },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  if (req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error:
+        `${awards} badge(s) et ${credits._sum.amount ?? 0} point(s) répartis sur ` +
+        `${credits._count._all} compte(s) vont être retirés. Confirmez pour continuer.`,
+      impact: { awards, credits: credits._count._all, points: credits._sum.amount ?? 0 },
+    });
+  }
+
+  const removed = await unsettleEvent(event.id);
+  console.log(
+    `[palmares] clôture annulée sur ${event.name} ${event.year} par ${req.user.username} ` +
+    `— ${removed.badges} badge(s), ${removed.credits} crédit(s).`
+  );
+
+  res.json({ ok: true, ...removed });
 });
 
 // --- Pronostics et exclusions -------------------------------------------------

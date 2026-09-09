@@ -74,6 +74,50 @@ export async function settleEvent(eventId) {
 }
 
 /**
+ * Annule la clôture d'une compète : badges retirés, crédit repris.
+ *
+ * ─── Le geste qui manquait ──────────────────────────────────────────────────
+ *
+ * `settleEvent` était rejouable mais IRRÉVERSIBLE. L'en-tête de ce fichier le
+ * dit franchement : « Rien n'est repris quand un événement QUITTE FINISHED ».
+ * C'était un bon choix pour le cas visé — dépublier dix minutes pour corriger
+ * une faute de frappe ne doit pas faire clignoter le palmarès de tout le monde.
+ *
+ * Mais il ne laissait aucune sortie pour le cas d'à côté : une compète close
+ * par erreur, ou close alors qu'elle n'aurait pas dû distribuer de palmarès du
+ * tout. Les badges et les points restaient, définitivement, sans qu'aucun écran
+ * ne permette de les retirer. C'est exactement la situation où l'on se retrouve
+ * quand des badges apparaissent sur une compète qui n'était pas censée en
+ * donner.
+ *
+ * ─── Pourquoi c'est explicite et non automatique ────────────────────────────
+ *
+ * On ne branche PAS ceci sur la transition FINISHED → autre chose. Le
+ * comportement d'origine reste : dépublier pour corriger ne touche à rien.
+ * Reprendre un palmarès est une décision, pas un effet de bord — et une
+ * décision qui efface le travail des joueurs se prend en cliquant, pas en
+ * changeant un menu déroulant.
+ *
+ * ─── Le solde peut passer sous zéro ─────────────────────────────────────────
+ *
+ * Assumé, et déjà le cas dans `settleEvent`. Quelqu'un qui a dépensé les points
+ * d'une compète annulée se retrouve débiteur : un solde négatif bloque les
+ * achats suivants sans jamais confisquer un objet déjà porté. Confisquer serait
+ * pire — l'erreur vient de l'organisateur, pas de l'acheteur.
+ */
+export async function unsettleEvent(eventId) {
+    const [badges, credits] = await prisma.$transaction([
+        prisma.badgeAward.deleteMany({ where: { eventId } }),
+        // Le crédit de clôture SEULEMENT. Un `GRANT` posé à la main par un
+        // organisateur — un dédommagement, un cadeau — n'a rien à voir avec la
+        // clôture et ne doit pas partir avec elle.
+        prisma.walletEntry.deleteMany({ where: { eventId, kind: 'EVENT_POINTS' } }),
+    ]);
+
+    return { badges: badges.count, credits: credits.count };
+}
+
+/**
  * Le solde : la somme du livre de comptes, rien d'autre. Pas de colonne cache
  * sur User — un agrégat sur un index (userId) reste bon marché très longtemps,
  * et il ne peut pas mentir.

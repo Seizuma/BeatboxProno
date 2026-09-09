@@ -23,6 +23,7 @@ import AdminPeople from '../components/AdminPeople.jsx';
 import AdminSearch from '../components/AdminSearch.jsx';
 import AdminStats from '../components/AdminStats.jsx';
 import EventExclusions from '../components/EventExclusions.jsx';
+import EventSettlement from '../components/EventSettlement.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
 
 /**
@@ -428,6 +429,11 @@ function EventStructure({ event, onDone, run, askDelete }) {
           mesure ne vaut QUE pour cette compète, et c'est en la préparant qu'on
           y pense. Le panneau est replié — on l'ouvre trois fois par saison. */}
       <EventExclusions event={event} run={run} />
+
+      {/* Le palmarès distribué par la clôture. À côté des exclusions parce que
+          les deux répondent à la même envie — défaire quelque chose sur CETTE
+          compète — et qu'aucun des deux ne se cherche ailleurs. */}
+      <EventSettlement event={event} run={run} />
 
       <div className="spread">
         <h2>Structure — {event.name} {event.year}</h2>
