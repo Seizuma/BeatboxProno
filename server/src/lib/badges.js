@@ -21,6 +21,46 @@ import { tierForPosition } from './cosmetics.js';
  * tout le monde pendant dix minutes. La re-clôture remettra tout d'équerre.
  */
 export async function settleEvent(eventId) {
+    const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: {
+            awardsBadges: true,
+            categories: { select: { phases: { select: { resolved: true } } } },
+        },
+    });
+    if (!event) return { players: 0, badges: 0, skipped: 'introuvable' };
+
+    /**
+     * Deux refus, et ils ne disent pas la même chose.
+     *
+     * ─── La compète ne décerne pas de palmarès ──────────────────────────────
+     *
+     * Les badges ne sont pas propres à un événement : sept codes pour tout le
+     * site, et n'importe quelle compète close les distribuait tous. Une
+     * sélection de wildcards à vingt joueurs décernait les mêmes médailles
+     * qu'un Grand Beatbox Battle. Rien ne permettait de dire non ; maintenant
+     * si.
+     *
+     * ─── Aucun résultat n'est publié ────────────────────────────────────────
+     *
+     * Celui-là est un garde-fou, pas un réglage, et c'est la cause réelle de
+     * l'incident du 9 septembre : une compète passée en « terminé » avant
+     * publication a distribué quarante badges sur des scores tous à zéro. Le
+     * classement se réduisait alors à l'ordre d'insertion en base, et il a
+     * fallu tout reprendre à la main.
+     *
+     * Rien de tout cela n'est perdu : la clôture est rejouable. Publier les
+     * résultats puis repasser par « terminé » distribue le vrai palmarès, et le
+     * crédit est un UPSERT — il se corrige au lieu de s'empiler.
+     */
+    if (!event.awardsBadges) {
+        return { players: 0, badges: 0, skipped: 'palmares-desactive' };
+    }
+    const published = event.categories.some((c) => c.phases.some((p) => p.resolved));
+    if (!published) {
+        return { players: 0, badges: 0, skipped: 'aucun-resultat' };
+    }
+
     const grouped = await prisma.prediction.groupBy({
         by: ['userId'],
         where: { eventId, submitted: true },
