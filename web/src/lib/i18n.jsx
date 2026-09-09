@@ -100,6 +100,8 @@ const DICT = {
     'event.editable': 'Editable until the phase closes.',
     'event.phase.resolved': 'Result known',
     'event.phase.closed': 'Closed',
+    'event.excluded':
+      'You are not allowed to predict on this event. You can still browse everything. If you think this is a mistake, get in touch through the postbox.',
 
     'rule.SEEDING': 'Placement gap only',
     'rule.WILDCARD': '+1 per qualifier, +1 to 5 per gap',
@@ -822,6 +824,8 @@ const DICT = {
     'event.editable': 'Modifiable tant que la phase n’est pas fermée.',
     'event.phase.resolved': 'Résultat connu',
     'event.phase.closed': 'Fermée',
+    'event.excluded':
+      'Vous n’êtes pas autorisé à pronostiquer sur cet événement. Vous pouvez toujours tout consulter. Si vous pensez qu’il s’agit d’une erreur, écrivez-nous depuis la boîte à idées.',
 
     'rule.SEEDING': 'Écart de placement seul',
     'rule.WILDCARD': '+1 par qualifié, +1 à 5 par écart',

@@ -170,7 +170,17 @@ export default function EventPage() {
   // En cours : la compétition a démarré, les pronostics sont figés. On peut
   // encore tout consulter — versions comprises — mais plus rien modifier.
   const eventLive = event.status === 'LIVE';
-  const readOnly = eventClosed || eventLive;
+  /**
+   * Écarté de cet événement par l'organisateur.
+   *
+   * Traité comme une fermeture et non comme un cas à part : l'écran est déjà
+   * capable de se mettre en lecture seule, et rouvrir un second chemin pour
+   * arriver au même état aurait laissé passer un bouton ici ou là. Le serveur
+   * refuse de toute façon chaque écriture — ceci n'est que la politesse de le
+   * dire avant qu'on ait composé un tableau entier pour rien.
+   */
+  const excluded = Boolean(data.excluded);
+  const readOnly = eventClosed || eventLive || excluded;
 
   const update = (patch) =>
     setDraft((d) => ({ ...d, [stateKey]: { ...(d[stateKey] ?? { orders: {}, picks: {}, pool: {} }), ...patch } }));
@@ -568,6 +578,13 @@ export default function EventPage() {
           locked={readOnly || !user}
           onContender={(contender) => addContender(category.id, contender)}
         />
+      )}
+
+      {/* Le motif n'est pas donné : il est écrit pour l'administration. La page
+          dit que la porte est fermée, pas pourquoi — le contester se fait par
+          la boîte à idées, pas en réessayant. */}
+      {excluded && (
+        <p className="notice" style={{ marginTop: '1.5rem' }}>{t('event.excluded')}</p>
       )}
 
       {user && !readOnly && (

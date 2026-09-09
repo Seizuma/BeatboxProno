@@ -8,6 +8,7 @@ const TITLES = {
     event: "Supprimer l'événement",
     category: 'Supprimer la catégorie',
     contender: 'Retirer le participant',
+    prediction: 'Supprimer le pronostic',
 };
 
 /**
@@ -37,6 +38,7 @@ export default function ConfirmDelete({ kind, id, onCancel, onConfirmed }) {
         event: `/admin/events/${id}?confirm=true`,
         category: `/admin/categories/${id}?confirm=true`,
         contender: `/admin/contenders/${id}?confirm=true`,
+        prediction: `/admin/predictions/${id}?confirm=true`,
     };
 
     const remove = async () => {
@@ -77,6 +79,7 @@ export default function ConfirmDelete({ kind, id, onCancel, onConfirmed }) {
                     {kind === 'event' && <EventImpact impact={impact} />}
                     {kind === 'category' && <CategoryImpact impact={impact} />}
                     {kind === 'contender' && <ContenderImpact impact={impact} />}
+                    {kind === 'prediction' && <PredictionImpact impact={impact} />}
                 </>
             )}
         </Modal>
@@ -202,6 +205,52 @@ function CategoryImpact({ impact }) {
                     Les pronostics des joueurs sur cette catégorie disparaîtront, avec leurs points.
                 </p>
             )}
+        </>
+    );
+}
+
+/**
+ * Le bilan d'une suppression de pronostic.
+ *
+ * Deux informations décident, et elles sont mises en avant : est-il DÉPOSÉ, et
+ * combien vaut-il. Un brouillon ne pèse rien ; un pronostic déposé et scoré
+ * retire des points d'un classement où d'autres se comparent à lui.
+ *
+ * Le nom du joueur, l'événement et la catégorie sont là pour une raison plus
+ * bête et plus importante : reconnaître qu'on a bien la bonne fiche sous les
+ * yeux. Une recherche rend souvent trois lignes qui se ressemblent.
+ */
+function PredictionImpact({ impact }) {
+    return (
+        <>
+            <p className="faint" style={{ margin: 0 }}>
+                {impact.event} — {impact.category}
+                {impact.label ? ` · « ${impact.label} »` : ''}
+            </p>
+
+            <div className="row" style={{ gap: '1.5rem' }}>
+                <Line value={impact.points} label="points au classement" warn={impact.submitted} />
+                <Line value={impact.ranks} label="classements" />
+                <Line value={impact.battles} label="affiches" />
+                <Line value={impact.comments} label="commentaires" />
+            </div>
+
+            {impact.submitted ? (
+                <p className="notice">
+                    C'est le pronostic DÉPOSÉ de ce joueur
+                    {impact.scored ? ', et il est déjà scoré' : ''}. Le supprimer lui retire ces points :
+                    le classement des autres joueurs, lui, ne bouge pas.
+                </p>
+            ) : (
+                <p className="faint" style={{ margin: 0 }}>
+                    C'est un brouillon : il n'est publié nulle part et ne compte pour aucun classement.
+                </p>
+            )}
+
+            <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                Les points déjà versés au porte-monnaie ne reviennent pas : ils ont été crédités à la
+                clôture de l'événement. Reprenez-les depuis l'onglet Comptes si c'est l'intention.
+            </p>
         </>
     );
 }

@@ -17,6 +17,7 @@ import PhotoCompare from '../components/PhotoCompare.jsx';
 import OrphanContenders from '../components/OrphanContenders.jsx';
 import AdminPeople from '../components/AdminPeople.jsx';
 import AdminSearch from '../components/AdminSearch.jsx';
+import EventExclusions from '../components/EventExclusions.jsx';
 import ExportEvent from '../components/ExportEvent.jsx';
 
 const TABS = [
@@ -356,6 +357,12 @@ function EventStructure({ event, onDone, run, askDelete }) {
   return (
     <section className="stack">
       <EventSettings event={event} onDone={onDone} run={run} />
+
+      {/* Les comptes écartés vivent avec l'événement, pas avec le compte : la
+          mesure ne vaut QUE pour cette compète, et c'est en la préparant qu'on
+          y pense. Le panneau est replié — on l'ouvre trois fois par saison. */}
+      <EventExclusions event={event} run={run} />
+
       <div className="spread">
         <h2>Structure — {event.name} {event.year}</h2>
         <div className="row" style={{ gap: '0.6rem' }}>

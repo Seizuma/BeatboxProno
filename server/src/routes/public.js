@@ -165,6 +165,27 @@ publicRouter.get('/events/:slug', guard(async (req, res) => {
   });
   if (!event) return res.status(404).json({ error: 'Événement introuvable.' });
 
+  /**
+   * Ce compte est-il écarté de cet événement ?
+   *
+   * Annoncé à l'ouverture de la page plutôt que découvert au premier
+   * enregistrement. Laisser quelqu'un composer un tableau entier pour lui
+   * répondre « non » au moment de déposer serait une perte de temps infligée
+   * gratuitement — et il ne comprendrait pas ce qui lui arrive.
+   *
+   * Le motif ne descend PAS : il est écrit pour l'administration. La page dit
+   * que la porte est fermée, pas pourquoi.
+   */
+  let excluded = false;
+  if (req.user) {
+    excluded = Boolean(
+      await prisma.eventExclusion.findUnique({
+        where: { eventId_userId: { eventId: event.id, userId: req.user.id } },
+        select: { id: true },
+      })
+    );
+  }
+
   let myPredictions = [];
   if (req.user) {
     // Toutes mes versions, pas seulement la déposée : la page événement laisse
@@ -197,6 +218,7 @@ publicRouter.get('/events/:slug', guard(async (req, res) => {
    * brouillon.
    */
   res.json({
+    excluded,
     event: isStaff(req.user) ? event : redactEvent(event),
     myPredictions,
   });

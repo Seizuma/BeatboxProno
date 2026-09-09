@@ -104,6 +104,10 @@ function phaseIsLocked(phase) {
 }
 
 /** L'événement accepte-t-il encore des pronostics ? */
+/**
+ * Ce qui ferme un événement à TOUT LE MONDE. Synchrone, sans requête : ces
+ * quatre conditions se lisent sur l'événement déjà chargé.
+ */
 function eventGate(event) {
   if (event.status === 'DRAFT') return "Cet événement n'est pas encore ouvert.";
   // « En cours » signifie que la compétition a commencé : les pronostics
@@ -113,6 +117,45 @@ function eventGate(event) {
   // Date butoir facultative : absente, seules les phases ferment.
   if (event.predictionsCloseAt && new Date(event.predictionsCloseAt) <= new Date()) {
     return 'La date limite des pronostics est passée.';
+  }
+  return null;
+}
+
+/**
+ * Ce compte peut-il écrire un pronostic sur cet événement ?
+ *
+ * ─── Pourquoi une seule porte ───────────────────────────────────────────────
+ *
+ * L'exclusion aurait pu se vérifier route par route. C'est exactement comme ça
+ * qu'on en oublie une : il y a cinq chemins d'écriture, ils ne résolvent pas
+ * l'événement de la même façon, et le prochain qu'on ajoutera n'y pensera pas.
+ * En la greffant sur le contrôle que TOUS appellent déjà, un chemin qui
+ * oublierait la barrière serait un chemin qui oublie aussi de fermer après le
+ * coup d'envoi — une négligence bien plus visible.
+ *
+ * ─── Ce qu'elle laisse passer ───────────────────────────────────────────────
+ *
+ * La lecture. Un compte écarté continue de voir l'événement, les résultats et
+ * les pronostics publics : l'exclusion l'empêche de JOUER, elle ne l'aveugle
+ * pas. Renommer un brouillon et poser un tampon restent également possibles —
+ * ni l'un ni l'autre ne dit quoi que ce soit d'un résultat.
+ *
+ * Ses pronostics déjà déposés restent en place et continuent de compter. Les
+ * retirer est un geste distinct, qui passe par la suppression de pronostic.
+ */
+async function predictionGate(event, userId) {
+  const closed = eventGate(event);
+  if (closed) return closed;
+
+  const exclusion = await prisma.eventExclusion.findUnique({
+    where: { eventId_userId: { eventId: event.id, userId } },
+    select: { id: true },
+  });
+  if (exclusion) {
+    // Le motif ne sort pas : il est écrit pour l'administration, pas pour
+    // l'intéressé. On dit que la porte est fermée, pas pourquoi — le contester
+    // se fait par la boîte à idées, pas en relançant la requête.
+    return "Vous n'êtes pas autorisé à pronostiquer sur cet événement.";
   }
   return null;
 }
@@ -201,7 +244,9 @@ predictionRouter.post('/categories/:categoryId/pool', async (req, res) => {
   const category = await prisma.category.findUnique({
     where: { id: req.params.categoryId },
     include: {
-      event: { select: { status: true, predictionsCloseAt: true } },
+      // `id` est nécessaire : c'est lui que `predictionGate` interroge pour
+      // savoir si le compte est écarté de cet événement.
+      event: { select: { id: true, status: true, predictionsCloseAt: true } },
       phases: { select: { id: true, type: true } },
     },
   });
@@ -214,13 +259,14 @@ predictionRouter.post('/categories/:categoryId/pool', async (req, res) => {
   }
 
   // Les mêmes conditions que pour enregistrer un pronostic : une compète fermée
-  // ne doit pas voir son plateau grossir.
-  if (!['OPEN'].includes(category.event.status)) {
-    return res.status(409).json({ error: 'Les pronostics sont fermés sur cet événement.' });
-  }
-  if (category.event.predictionsCloseAt && new Date() > category.event.predictionsCloseAt) {
-    return res.status(409).json({ error: 'La date butoir des pronostics est passée.' });
-  }
+  // ne doit pas voir son plateau grossir, et un compte écarté ne doit pas
+  // pouvoir y ajouter des noms.
+  //
+  // La même porte que partout ailleurs, et non deux contrôles recopiés : cette
+  // route en avait sa propre version, qui a donc échappé à l'exclusion le temps
+  // qu'on s'en aperçoive. Une règle écrite deux fois n'est appliquée qu'une.
+  const closed = await predictionGate(category.event, req.user.id);
+  if (closed) return res.status(409).json({ error: closed });
 
   const artist = await prisma.artist.findUnique({
     where: { id: artistId },
@@ -268,7 +314,7 @@ predictionRouter.post('/categories/:categoryId', async (req, res) => {
   });
   if (!category) return res.status(404).json({ error: 'Catégorie introuvable.' });
 
-  const closed = eventGate(category.event);
+  const closed = await predictionGate(category.event, req.user.id);
   if (closed) return res.status(409).json({ error: closed });
 
   const drafts = await prisma.prediction.count({
@@ -368,7 +414,7 @@ predictionRouter.put('/:predictionId', async (req, res) => {
   if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
 
   const { category } = prediction;
-  const closed = eventGate(category.event);
+  const closed = await predictionGate(category.event, req.user.id);
   if (closed) return res.status(409).json({ error: closed });
 
   const validContenders = new Set(category.contenders.map((c) => c.id));
@@ -556,7 +602,7 @@ predictionRouter.post('/:predictionId/submit', async (req, res) => {
   const prediction = await loadMine(req.params.predictionId, req.user.id);
   if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
 
-  const closed = eventGate(prediction.category.event);
+  const closed = await predictionGate(prediction.category.event, req.user.id);
   if (closed) return res.status(409).json({ error: closed });
 
   const result = await prisma.$transaction(async (tx) => {
@@ -603,7 +649,7 @@ predictionRouter.post('/:predictionId/withdraw', async (req, res) => {
   const prediction = await loadMine(req.params.predictionId, req.user.id);
   if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
 
-  const closed = eventGate(prediction.category.event);
+  const closed = await predictionGate(prediction.category.event, req.user.id);
   if (closed) return res.status(409).json({ error: closed });
 
   const updated = await prisma.prediction.update({
