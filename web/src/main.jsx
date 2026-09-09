@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { SessionProvider, ThemeProvider } from './lib/context.jsx';
 import { I18nProvider } from './lib/i18n.jsx';
 import { installFrames } from './lib/frames.js';
-import { installBadges } from './lib/badgeSprites.js';
+import { installBadgeSets } from './lib/badgeSets.js';
 import App from './App.jsx';
 
 /* L'ordre compte : chaque feuille surcharge les précédentes à spécificité
@@ -30,7 +30,7 @@ installFrames();
 /* Et les badges, pour la même raison : leurs vingt-quatre angles sont
    pré-calculés, la feuille ne fait que les nommer. Deux appels visibles valent
    mieux qu'un effet de bord à l'import qu'on cherche pendant une heure. */
-installBadges();
+installBadgeSets();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

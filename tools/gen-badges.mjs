@@ -2,6 +2,19 @@ import fs from 'fs';
 import { createCanvas } from 'canvas';
 
 /**
+ * La famille dessinée par cette exécution.
+ *
+ * Pour en produire une nouvelle : changer `SET`, ajuster les couleurs plus
+ * haut, lancer le script, puis déclarer le module dans `web/src/lib/badgeSets.js`.
+ * Chaque famille a son propre fichier — les écraser l'une l'autre reviendrait
+ * à n'en avoir jamais qu'une.
+ *
+ * Rappel : ce script DESSINE. Il ne tourne qu'en local, jamais dans Docker et
+ * jamais sur le VPS, dont l'image n'a pas ce qu'il lui faut.
+ */
+const SET = 'gbb';
+
+/**
  * Les badges en rotation — deuxième version.
  *
  * ─── Ce qui n'allait pas ────────────────────────────────────────────────────
@@ -310,6 +323,15 @@ const out = `/**
  * couleur, donc rien à regrouper. C'est la mesure qui a tranché le format.
  */
 
+/**
+ * L'identifiant de la famille.
+ *
+ * Il préfixe toutes les classes CSS. Sans lui, deux familles se marcheraient
+ * dessus : le code \`GOLD\` existe dans chacune, et la dernière feuille posée
+ * gagnerait. Le registre \`badgeSets.js\` s'en sert pour retrouver le module.
+ */
+export const SET_ID = '${SET}';
+
 /** Images par tour. */
 export const FRAMES = ${FRAMES};
 
@@ -360,7 +382,7 @@ export function badgeStylesheet() {
     // horloge, pas une collection.
     Object.entries(SPRITES).forEach(([code, data], i) => {
         out.push(
-            \`.cos-badge3d--\${code}{background-image:url("data:image/png;base64,\${data}");\` +
+            \`.cos-badge3d--\${SET_ID}-\${code}{background-image:url("data:image/png;base64,\${data}");\` +
             \`animation-delay:\${(-i * 0.9).toFixed(2)}s}\`
         );
     });
@@ -399,9 +421,9 @@ export function badgeStylesheet() {
 /** Pose la feuille dans le document, une seule fois. */
 export function installBadges() {
     if (typeof document === 'undefined') return;
-    if (document.getElementById('cos-badges')) return;
+    if (document.getElementById(\`cos-badges-\${SET_ID}\`)) return;
     const style = document.createElement('style');
-    style.id = 'cos-badges';
+    style.id = \`cos-badges-\${SET_ID}\`;
     style.textContent = badgeStylesheet();
     document.head.appendChild(style);
 }
@@ -419,7 +441,14 @@ export const BADGE_CODES = Object.keys(SPRITES);
  * répertoire courant aurait produit le classique « ça marche chez moi », suivi
  * d'un fichier écrit au mauvais endroit sans que rien ne le signale.
  */
-const cible = new URL('../web/src/lib/badgeSprites.js', import.meta.url);
+const cible = new URL(
+  SET === 'gbb'
+    // La famille d'origine garde son nom de fichier : le renommer casserait
+    // les imports pour rien.
+    ? '../web/src/lib/badgeSprites.js'
+    : `../web/src/lib/badgeSprites.${SET}.js`,
+  import.meta.url
+);
 
 // CRLF, comme le reste du dépôt : sans ça, chaque génération ferait apparaître
 // le fichier entier comme modifié dans git.

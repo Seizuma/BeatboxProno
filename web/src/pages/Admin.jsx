@@ -24,6 +24,7 @@ import AdminSearch from '../components/AdminSearch.jsx';
 import AdminStats from '../components/AdminStats.jsx';
 import EventExclusions from '../components/EventExclusions.jsx';
 import EventSettlement from '../components/EventSettlement.jsx';
+import { SET_LIST } from '../lib/badgeSets.js';
 import ExportEvent from '../components/ExportEvent.jsx';
 
 /**
@@ -399,11 +400,14 @@ function StructureAdmin() {
                     if (settled?.skipped === 'aucun-resultat') {
                       return 'Pronostics fermés. Aucun palmarès : rien n’est encore publié. Publiez les résultats puis repassez par « terminé ».';
                     }
-                    if (settled?.skipped === 'palmares-desactive') {
-                      return 'Pronostics fermés. Cette compète ne décerne pas de palmarès.';
+                    if (settled?.skipped === 'rien-a-distribuer') {
+                      return 'Pronostics fermés. Cette compète ne décerne ni badge ni crédit.';
                     }
-                    if (settled?.badges) {
-                      return `Pronostics fermés. ${settled.badges} badge(s) distribués à ${settled.players} joueur(s).`;
+                    if (settled?.badges || settled?.credits) {
+                      const parts = [];
+                      if (settled.badges) parts.push(`${settled.badges} badge(s)`);
+                      if (settled.credits) parts.push(`le crédit de ${settled.credits} joueur(s)`);
+                      return `Pronostics fermés. Distribué : ${parts.join(' et ')}.`;
                     }
                     return 'Pronostics fermés.';
                   })
@@ -559,28 +563,48 @@ function EventSettings({ event, onDone, run }) {
         </button>
       </div>
 
-      {/* Le palmarès.
+      {/* Le palmarès : DEUX réglages, et c'est le point.
 
-          Les badges ne sont PAS propres à une compète : il en existe sept pour
-          tout le site, et jusqu'ici la moindre compète passée en « terminé » les
-          distribuait tous. Une sélection de wildcards à vingt joueurs décernait
-          les mêmes médailles qu'un Grand Beatbox Battle, et rien ne permettait
-          de dire non. */}
-      <div className="stack" style={{ gap: '0.3rem' }}>
+          Un seul booléen commandait les médailles et le crédit ensemble : pour
+          se débarrasser des unes, il fallait renoncer à l'autre. Un championnat
+          peut parfaitement rapporter des points de boutique sans décerner les
+          médailles d'une autre compétition.
+
+          Et les badges appartiennent désormais à une FAMILLE de dessins,
+          choisie par la compète — « aucune » étant un choix comme un autre. */}
+      <div className="stack" style={{ gap: '0.5rem' }}>
+        <div className="field" style={{ margin: 0, maxWidth: '22rem' }}>
+          <label htmlFor={`badgeset-${event.id}`}>Jeu de badges décerné</label>
+          <select
+            id={`badgeset-${event.id}`}
+            value={event.badgeSet ?? ''}
+            onChange={(e) => save({ badgeSet: e.target.value || null })}
+          >
+            <option value="">Aucun badge</option>
+            {SET_LIST.map((set) => (
+              <option key={set.id} value={set.id}>{set.label}</option>
+            ))}
+          </select>
+        </div>
+
         <label className="row" style={{ gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}>
           <input
             type="checkbox"
-            checked={event.awardsBadges !== false}
-            onChange={(e) => save({ awardsBadges: e.target.checked })}
+            checked={event.awardsCredits !== false}
+            onChange={(e) => save({ awardsCredits: e.target.checked })}
           />
-          <span>Cette compète décerne un palmarès</span>
+          <span>Crédite le porte-monnaie</span>
         </label>
+
         <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-          Décoché, le passage en « terminé » ne distribue ni badges ni points de porte-monnaie.
-          Les badges sont ceux du site — participation, paliers, podium — et sont les mêmes sur
-          toutes les compètes : une sélection mineure n'a pas de raison de décerner les mêmes
-          médailles qu'un Grand Beatbox Battle. Ce réglage ne reprend rien de ce qui a déjà été
-          distribué : pour cela, voir le panneau « Badges et points distribués ».
+          Les deux sont indépendants : une compète peut rapporter des points de boutique sans
+          décerner de médaille. Le jeu de badges décide de QUELS dessins tombent — chaque famille
+          a les siens, et « aucun » veut dire que cette compète n'en donne pas.
+        </p>
+        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+          Changer ces réglages ne touche pas à ce qui a déjà été distribué. Pour l'appliquer,
+          utilisez « Recalculer le palmarès » dans le panneau ci-dessous : la clôture est rejouable
+          et nettoie ce qui n'a plus lieu d'être.
         </p>
       </div>
 

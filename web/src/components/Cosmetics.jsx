@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { itemById } from '../lib/cosmetics.js';
 import { BAND_ART, gridToSvg, gridToDataUrl } from '../lib/pixels.js';
-import { BADGE_CODES, SCALES } from '../lib/badgeSprites.js';
+import { SCALES } from '../lib/badgeSprites.js';
+import { hasBadge } from '../lib/badgeSets.js';
 
 /**
  * Le rendu des cosmétiques.
@@ -54,14 +55,19 @@ export function PixelArt({ rows, scale = 3, label }) {
  *
  * `scale` reste l'API d'avant, en multiples ENTIERS du dessin : un multiple
  * fractionnaire ferait rééchantillonner le navigateur.
+ *
+ * `set` désigne la FAMILLE de dessins, celle que la compète a choisie. Sans
+ * elle, toutes les compètes affichaient les mêmes cubes — ceux du Grand Beatbox
+ * Battle — y compris celles qui n'avaient rien à voir. Une famille inconnue, ou
+ * qui ne dessine pas ce code, ne rend rien plutôt qu'une case vide.
  */
-export function Badge({ code, scale = 2, label, onClick }) {
-    if (!BADGE_CODES.includes(code)) return null;
+export function Badge({ code, set, scale = 2, label, onClick }) {
+    if (!hasBadge(set, code)) return null;
 
     const k = SCALES.includes(scale) ? scale : 2;
     const art = (
         <span
-            className={`cos-badge3d cos-badge3d--x${k} cos-badge3d--${code}`}
+            className={`cos-badge3d cos-badge3d--x${k} cos-badge3d--${set}-${code}`}
             role={onClick ? undefined : 'img'}
             aria-label={onClick ? undefined : label}
         />

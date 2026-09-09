@@ -13,7 +13,7 @@ import { Badge } from './Cosmetics.jsx';
  * RÈGLE, sans compétition ni date. Depuis un profil, il porte en plus la compète
  * où il est tombé et le jour où il l'a fait.
  */
-export default function BadgeDetail({ code, award, t, date, onClose }) {
+export default function BadgeDetail({ code, set, award, t, date, onClose }) {
     if (!code) return null;
 
     return (
@@ -29,7 +29,7 @@ export default function BadgeDetail({ code, award, t, date, onClose }) {
                     {/* Trois fois la taille du mur : assez pour regarder le
                         dessin plutôt que de le reconnaître, pas au point de
                         remplir la fenêtre à lui seul. */}
-                    <Badge code={code} scale={3} label={t(`badge.${code}`)} />
+                    <Badge code={code} set={set ?? award?.event?.badgeSet} scale={3} label={t(`badge.${code}`)} />
                 </span>
 
                 <p className="cos-sheet__text">{t(`badge.${code}.detail`)}</p>

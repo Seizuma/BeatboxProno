@@ -401,7 +401,10 @@ publicRouter.get('/users/:id', requireAuth, guard(async (req, res) => {
   // l'intérieur d'une compète dépend du prestige, que seul le catalogue connaît.
   const badges = await prisma.badgeAward.findMany({
     where: { userId: user.id },
-    include: { event: { select: { slug: true, name: true, year: true } } },
+    // `badgeSet` voyage avec la compète : c'est lui qui dit QUEL dessin
+    // afficher. Sans lui, le mur retomberait sur une seule famille et deux
+    // compètes aux médailles différentes se ressembleraient.
+    include: { event: { select: { slug: true, name: true, year: true, badgeSet: true } } },
     orderBy: { awardedAt: 'desc' },
   });
 

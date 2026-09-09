@@ -6,6 +6,7 @@ import DiscordButton from '../components/DiscordButton.jsx';
 import { Badge, Preview } from '../components/Cosmetics.jsx';
 import CosmeticPreview from '../components/CosmeticPreview.jsx';
 import BadgeDetail from '../components/BadgeDetail.jsx';
+import { DEFAULT_SET } from '../lib/badgeSets.js';
 import { BADGES, SLOTS, discountedPrice, itemsForSlot } from '../lib/cosmetics.js';
 
 /**
@@ -201,6 +202,10 @@ export default function Shop() {
                         <div className="shop-legend__item" key={b.code}>
                             <Badge
                                 code={b.code}
+                                /* La légende décrit la RÈGLE, sans compète :
+                                   pas de famille à déduire, on retombe sur
+                                   celle du catalogue. */
+                                set={DEFAULT_SET}
                                 scale={2}
                                 label={t(`badge.${b.code}`)}
                                 onClick={() => setSheet(b.code)}
@@ -223,7 +228,7 @@ export default function Shop() {
             )}
 
             {sheet && (
-                <BadgeDetail code={sheet} t={t} date={date} onClose={() => setSheet(null)} />
+                <BadgeDetail code={sheet} set={DEFAULT_SET} t={t} date={date} onClose={() => setSheet(null)} />
             )}
         </div>
     );

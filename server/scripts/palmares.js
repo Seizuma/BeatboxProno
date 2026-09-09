@@ -39,6 +39,10 @@ import { prisma } from '../src/lib/prisma.js';
  *   node scripts/palmares.js --event fbc-loop-2026 --purge --confirm
  *       Retire badges et crédits de clôture de cette compète.
  *
+ *   node scripts/palmares.js --event fbc-loop-2026 --purge --disable --confirm
+ *       Les retire ET coupe la distribution pour de bon. À préférer dans la
+ *       quasi-totalité des cas : voir plus bas.
+ *
  *   node scripts/palmares.js --orphans --purge --confirm
  *       Retire les crédits dont la compète a disparu.
  *
@@ -200,16 +204,56 @@ if (purge) {
         process.exit(0);
     }
 
+    /**
+     * Couper la distribution en même temps que l'on nettoie.
+     *
+     * ─── Pourquoi les deux gestes doivent être UN seul ──────────────────────
+     *
+     * Purger sans couper ne tient pas : une compète décerne un jeu de badges
+     * par défaut, et le moindre aller-retour de statut — corriger une date,
+     * republier une phase, repasser par « en cours » puis « terminé » pour
+     * remettre le porte-monnaie d'équerre — redistribue tout. On nettoie, on
+     * touche à autre chose, et les badges sont revenus sans qu'on comprenne
+     * pourquoi.
+     *
+     * C'est exactement ce qui s'est produit le 10 septembre : la case existait
+     * déjà et n'avait simplement jamais été décochée.
+     *
+     * `--disable` est donc à préférer dans la quasi-totalité des cas. Il n'est
+     * pas le défaut parce qu'un nettoyage peut aussi précéder une
+     * redistribution VOULUE — après un changement de barème, par exemple — et
+     * couper d'office obligerait alors à recocher sans le savoir.
+     */
     const ops = [];
     if (badgeWhere) ops.push(prisma.badgeAward.deleteMany({ where: badgeWhere }));
     ops.push(prisma.walletEntry.deleteMany({ where: creditWhere }));
+    if (flag('disable')) {
+        ops.push(
+            prisma.event.updateMany({
+                where: where.eventId ? { id: where.eventId } : {},
+                // `badgeSet: null` coupe les médailles, `awardsCredits: false`
+                // coupe le crédit. On coupe les deux : `--disable` sert à
+                // neutraliser une compète, pas à la démonétiser à moitié.
+                data: { badgeSet: null, awardsCredits: false },
+            })
+        );
+    }
     const done = await prisma.$transaction(ops);
 
     console.log(`\nSupprimé : ${done.map((d) => d.count).join(' + ')} ligne(s).`);
-    console.log(
-        'Attention : repasser une compète par « terminé » redistribuera son palmarès.\n' +
-        'Si elle ne doit rien donner, laissez-la hors de FINISHED.\n'
-    );
+    if (flag('disable')) {
+        console.log(
+            'Distribution coupée : ni badge ni crédit, quel que soit le statut de la compète.\n' +
+            'Pour la rouvrir, choisissez un jeu de badges et recochez le crédit dans ses réglages.\n'
+        );
+    } else {
+        console.log(
+            'ATTENTION : les réglages de la compète sont inchangés.\n' +
+            'Tant qu\'un jeu de badges y est choisi, le moindre aller-retour de statut\n' +
+            'redistribuera tout. Relancez avec --disable, ou mettez « Aucun badge » dans\n' +
+            'les réglages de l\'événement.\n'
+        );
+    }
     await prisma.$disconnect();
     process.exit(0);
 }
@@ -220,7 +264,13 @@ if (purge) {
 
 const events = await prisma.event.findMany({
     orderBy: [{ year: 'desc' }, { name: 'asc' }],
-    select: { id: true, slug: true, name: true, year: true, status: true },
+    // Les deux réglages sont la première chose à regarder quand un palmarès
+    // revient après un nettoyage : tant qu'un jeu de badges est choisi, toute
+    // bascule vers « terminé » le redistribue.
+    select: {
+        id: true, slug: true, name: true, year: true, status: true,
+        badgeSet: true, awardsCredits: true,
+    },
 });
 
 console.log(`\nPALMARÈS DISTRIBUÉS\n${'='.repeat(72)}`);
@@ -245,7 +295,9 @@ for (const e of events) {
     console.log(
         `\n${e.name} ${e.year}  [${e.status}]  (${e.slug})\n` +
         `  ${badges} badge(s) · ${credits._count._all} crédit(s) pour ${credits._sum.amount ?? 0} point(s)\n` +
-        `  ${players.length} personne(s) ont déposé un pronostic ici`
+        `  ${players.length} personne(s) ont déposé un pronostic ici\n` +
+        `  badges : ${e.badgeSet ? `« ${e.badgeSet} » — toute bascule vers « terminé » redistribue` : 'aucun'}\n` +
+        `  crédite le porte-monnaie : ${e.awardsCredits ? 'oui' : 'non'}`
     );
     if (e.status !== 'FINISHED') {
         console.log('  → la compète a distribué puis a QUITTÉ « terminé ». Rien n\'est repris tout seul.');
