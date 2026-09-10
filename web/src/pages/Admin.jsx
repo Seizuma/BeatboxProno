@@ -24,6 +24,7 @@ import AdminSearch from '../components/AdminSearch.jsx';
 import AdminStats from '../components/AdminStats.jsx';
 import EventExclusions from '../components/EventExclusions.jsx';
 import EventSettlement from '../components/EventSettlement.jsx';
+import ReplaceContender from '../components/ReplaceContender.jsx';
 import { SET_LIST } from '../lib/badgeSets.js';
 import ExportEvent from '../components/ExportEvent.jsx';
 
@@ -759,6 +760,10 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
 function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', seed: '', artistId: '' });
+  // Le participant en cours de remplacement. Un forfait ne se règle pas en
+  // retirant puis rajoutant : le seed se recalculerait à l'ajout, et il
+  // faudrait défaire toute la liste pour rendre à chacun sa place.
+  const [replacing, setReplacing] = useState(null);
 
   useEffect(() => { api.get('/artists').then(({ artists }) => setArtists(artists)).catch(() => { }); }, []);
 
@@ -832,6 +837,17 @@ function ContenderManager({ category, onDone, run, askDelete }) {
       </div>
 
 
+      {replacing && (
+        <ReplaceContender
+          contender={replacing}
+          category={category}
+          artists={artists}
+          run={run}
+          onCancel={() => setReplacing(null)}
+          onDone={async () => { setReplacing(null); await onDone(); }}
+        />
+      )}
+
       {category.contenders.length > 0 && (
         <div className="panel panel--flush">
           <table>
@@ -847,6 +863,11 @@ function ContenderManager({ category, onDone, run, askDelete }) {
                       <MenuButton
                         label={`Actions pour ${c.name}`}
                         items={[
+                          {
+                            label: 'Remplacer (forfait)',
+                            onClick: () => setReplacing(c),
+                          },
+                          { separator: true },
                           {
                             label: 'Retirer de la catégorie',
                             danger: true,

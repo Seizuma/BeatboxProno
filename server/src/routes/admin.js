@@ -577,6 +577,115 @@ adminRouter.post('/orphan-contenders/repair', async (req, res) => {
   res.json({ repaired: todo.length, linked, created });
 });
 
+/**
+ * Remplacer l'artiste d'un participant — un forfait de dernière minute.
+ *
+ * ─── Pourquoi on ne supprime pas pour recréer ───────────────────────────────
+ *
+ * C'est ce qu'il fallait faire jusqu'ici, et c'est destructeur. Le participant
+ * n'est pas qu'un nom : c'est une LIGNE que référencent le seed, les entrées de
+ * classement, les affiches du tableau, et tous les pronostics déjà déposés. La
+ * supprimer emporte tout ça ; la recréer laisse un tableau troué et des
+ * pronostics amputés, qu'il faut ensuite reconstruire à la main.
+ *
+ * Ici la ligne SURVIT. Seul le rattachement à l'artiste change. Le seed reste
+ * en place — c'est tout l'intérêt — et l'arbre n'a pas à être retouché.
+ *
+ * ─── Ce que ça fait aux pronostics déjà déposés ─────────────────────────────
+ *
+ * Ils suivent. Quelqu'un qui avait misé sur le partant voit désormais le
+ * remplaçant à sa place, sans l'avoir choisi. C'est inévitable — les deux
+ * options sont « leur pronostic suit le remplacement » ou « leur pronostic
+ * disparaît » — et suivre est le moindre mal : le pronostic portait sur une
+ * position du tableau autant que sur un nom.
+ *
+ * Le compte des pronostics touchés est donc renvoyé avant d'agir, et la
+ * confirmation devient obligatoire dès qu'il y en a. Sur une compète encore
+ * ouverte, c'est sans conséquence : chacun peut réviser. Sur une compète
+ * fermée, c'est une décision.
+ *
+ * ─── Le nom et l'image repartent de zéro ────────────────────────────────────
+ *
+ * `name` repasse à `null` pour que le participant suive le nom de son nouvel
+ * artiste, et `imageUrl` aussi : garder la photo du partant sur le remplaçant
+ * serait la faute la plus visible possible.
+ */
+adminRouter.patch('/contenders/:id/artist', async (req, res) => {
+  const { artistId, name, country } = z
+    .object({
+      artistId: z.string().min(1).nullable().optional(),
+      // Comme à la création : sans artiste choisi, on en crée un d'après le nom.
+      name: z.string().min(1).nullable().optional(),
+      country: z.string().max(60).nullable().optional(),
+    })
+    .parse(req.body);
+
+  if (!artistId && !name) {
+    return res.status(400).json({ error: 'Indiquez un artiste ou un nom.' });
+  }
+
+  const impact = await contenderImpact(req.params.id);
+  if (!impact) return res.status(404).json({ error: 'Participant introuvable.' });
+
+  if (impact.predictedRanks > 0 && req.query.confirm !== 'true') {
+    return res.status(409).json({
+      error:
+        `${impact.name} apparaît dans ${impact.predictedRanks} pronostic(s) déjà déposé(s). ` +
+        'Ils suivront le remplaçant. Confirmez pour continuer.',
+      impact,
+    });
+  }
+
+  const contender = await prisma.$transaction(async (tx) => {
+    const current = await tx.contender.findUnique({
+      where: { id: req.params.id },
+      select: { categoryId: true },
+    });
+
+    let linked = artistId;
+
+    if (!linked) {
+      const slug = slugify(name);
+      const artist =
+        (await tx.artist.findUnique({ where: { slug } })) ??
+        (await tx.artist.create({ data: { name, slug, country: country ?? null } }));
+      linked = artist.id;
+    }
+
+    // Le remplaçant ne doit pas être déjà engagé ailleurs dans la catégorie :
+    // ce serait un doublon, et les deux lignes se disputeraient le même nom
+    // dans le tableau. Le cas se présente vite — le remplaçant d'un forfait est
+    // souvent le premier non-qualifié, déjà présent à un autre seed.
+    const already = await tx.contenderArtist.findFirst({
+      where: {
+        artistId: linked,
+        contenderId: { not: req.params.id },
+        contender: { categoryId: current.categoryId },
+      },
+    });
+    if (already) {
+      throw Object.assign(new Error('Cet artiste est déjà engagé dans cette catégorie.'), { status: 409 });
+    }
+
+    await tx.contenderArtist.deleteMany({ where: { contenderId: req.params.id } });
+    await tx.contenderArtist.create({ data: { contenderId: req.params.id, artistId: linked } });
+
+    return tx.contender.update({
+      where: { id: req.params.id },
+      // Le seed n'est pas touché : c'est la raison d'être de cette route.
+      data: { name: null, imageUrl: null },
+      include: { artists: { include: { artist: true } } },
+    });
+  });
+
+  console.log(
+    `[participants] ${impact.name} remplacé par ${contenderName(contender)} ` +
+    `sur ${impact.event} — ${impact.category} (seed ${contender.seed ?? '—'}) par ${req.user.username}.`
+  );
+
+  res.json({ contender: { ...contender, name: contenderName(contender) }, replaced: impact.name });
+});
+
 adminRouter.delete('/contenders/:id', async (req, res) => {
   const impact = await contenderImpact(req.params.id);
   if (!impact) return res.status(404).json({ error: 'Participant introuvable.' });
