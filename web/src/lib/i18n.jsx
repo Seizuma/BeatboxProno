@@ -384,10 +384,10 @@ const DICT = {
     // La lecture du graphique de distribution. Elle remplace l'infobulle
     // native, qui mettait une seconde à venir et ne se déclenchait pas du tout
     // au toucher.
-    'artists.spread.read': '{n} l’ont placé {rank}e',
-    'artists.spread.readOne': '1 l’a placé {rank}e',
-    'artists.spread.hint': 'Survolez ou touchez le graphique. Les flèches marchent aussi.',
-    'artists.spread.cut': 'ligne de qualification',
+    'artists.spread.read': '{n} placed them at {rank}',
+    'artists.spread.readOne': '1 placed them at {rank}',
+    'artists.spread.hint': 'Hover or tap the chart. Arrow keys work too.',
+    'artists.spread.cut': 'qualifying line',
     'artists.byRound': 'Picked to win, by round',
     'artists.noData': 'No filed prediction on this competition yet.',
     'artists.podiums': 'Podiums',

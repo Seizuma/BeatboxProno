@@ -234,13 +234,26 @@ function RankSpread({ distribution, cut }) {
   const [active, setActive] = useState(null);
 
   const W = 640;
-  const H = 90;
+  /**
+   * Une bande réservée EN HAUT du tracé pour la lecture.
+   *
+   * La valeur se lisait sous le graphique, ce qui obligeait l'œil à sortir de
+   * l'image pour savoir ce qu'il regardait. La poser par-dessus les barres
+   * réglerait ça mais la rendrait illisible dès qu'une barre monte haut —
+   * c'est-à-dire précisément là où l'on regarde.
+   *
+   * Une bande qui lui appartient résout les deux : la lecture est DANS le
+   * graphique, et rien ne peut venir dessous.
+   */
+  const READ = 20;
+  const H = 108;
   const PAD = 16;
 
   const maxRank = Math.max(...distribution.map((d) => d.rank));
   const maxN = Math.max(...distribution.map((d) => d.n));
   const innerW = W - PAD * 2;
-  const innerH = H - PAD - 18;
+  const top = READ + 6;
+  const innerH = H - top - 18;
   const step = innerW / maxRank;
   const barW = Math.max(2, step * 0.7);
 
@@ -297,7 +310,7 @@ function RankSpread({ distribution, cut }) {
         onKeyDown={key}
         onBlur={() => setActive(null)}
       >
-        <line x1={PAD} y1={PAD + innerH} x2={W - PAD} y2={PAD + innerH} stroke="var(--line)" strokeWidth="1" />
+        <line x1={PAD} y1={top + innerH} x2={W - PAD} y2={top + innerH} stroke="var(--line)" strokeWidth="1" />
 
         {/* La colonne de lecture : toute la hauteur du tracé, pas seulement la
             barre. C'est ce qui rend le survol utilisable — viser un rectangle
@@ -305,7 +318,7 @@ function RankSpread({ distribution, cut }) {
         {active != null && (
           <rect
             x={PAD + (active - 1) * step}
-            y={PAD - 6}
+            y={top - 6}
             width={step}
             height={innerH + 6}
             fill="var(--surface-2)"
@@ -323,7 +336,7 @@ function RankSpread({ distribution, cut }) {
             <rect
               key={d.rank}
               x={x - barW / 2}
-              y={PAD + innerH - h}
+              y={top + innerH - h}
               width={barW}
               height={h}
               fill={on ? 'var(--y)' : inCut ? 'var(--ok)' : 'var(--ink-faint)'}
@@ -336,13 +349,35 @@ function RankSpread({ distribution, cut }) {
         {cut && cut < maxRank && (
           <line
             x1={PAD + cut * step}
-            y1={PAD - 4}
+            y1={top - 4}
             x2={PAD + cut * step}
-            y2={PAD + innerH}
+            y2={top + innerH}
             stroke="var(--y)"
             strokeWidth="2"
             strokeDasharray="4 3"
           />
+        )}
+
+        {/* La lecture SUIT la colonne active, dans sa bande.
+            Elle est calée à l'aplomb de ce qu'on regarde, ce qu'un texte fixe
+            à gauche ne ferait pas, et l'ancrage bascule près des bords pour
+            qu'elle ne sorte jamais du cadre. */}
+        {shown && (
+          <text
+            x={Math.min(W - PAD, Math.max(PAD, PAD + (shown.rank - 0.5) * step))}
+            y={READ - 6}
+            textAnchor={
+              shown.rank <= 2 ? 'start' : shown.rank >= maxRank - 1 ? 'end' : 'middle'
+            }
+            fill={active != null ? 'var(--y)' : 'var(--ink-faint)'}
+            style={{ fontFamily: 'var(--font-data)', fontSize: '12px' }}
+          >
+            {t(shown.n === 1 ? 'artists.spread.readOne' : 'artists.spread.read', {
+              n: shown.n,
+              rank: shown.rank,
+            })}
+            {cut && shown.rank <= cut ? ` · ${t('artists.spread.cut')}` : ''}
+          </text>
         )}
 
         {[1, Math.ceil(maxRank / 2), maxRank].map((r) => (
@@ -359,30 +394,18 @@ function RankSpread({ distribution, cut }) {
         ))}
       </svg>
 
-      {/* La lecture, à une place FIXE sous le graphique.
-          Une infobulle suit le curseur, donc l'œil la cherche à chaque
-          déplacement ; ici la valeur change, l'endroit non. `aria-live` la rend
-          audible pour qui navigue au clavier. */}
-      <p
-        className="data"
-        aria-live="polite"
-        style={{
-          margin: '0.3rem 0 0',
-          fontSize: '0.82rem',
-          color: active != null ? 'var(--y)' : 'var(--ink-faint)',
-          minHeight: '1.2em',
-        }}
-      >
+      {/* La même lecture, invisible, pour les lecteurs d'écran : un `<text>`
+          dans un SVG marqué `role="img"` n'est pas annoncé, et la navigation
+          aux flèches serait muette sans ce relais. */}
+      <p className="visually-hidden" aria-live="polite">
         {shown
           ? t(shown.n === 1 ? 'artists.spread.readOne' : 'artists.spread.read', {
             n: shown.n,
             rank: shown.rank,
           })
           : ''}
-        {cut && shown && shown.rank <= cut && (
-          <span className="faint"> · {t('artists.spread.cut')}</span>
-        )}
       </p>
+
     </div>
   );
 }
