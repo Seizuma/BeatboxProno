@@ -1171,6 +1171,11 @@ td.num {
    --------------------------------------------------------------------------- */
 
 .sr {
+  /* Les deux mesures qui commandent la géométrie. Elles sont nommées parce que
+     le calage horizontal les réutilise : les écrire trois fois en dur, c'est
+     s'assurer qu'un jour l'une des trois sera oubliée. */
+  --sr-width: 420px;
+  --sr-gap: 1.5rem;
   position: fixed;
   inset: 0;
   z-index: 85;
@@ -1188,17 +1193,31 @@ td.num {
      police du système et du nombre de pavés de navigation : aucun nombre écrit
      ici ne resterait vrai. Le repli de 5,5 rem ne sert que le temps de la
      première image, avant que la mesure ne tombe. */
-  padding: calc(var(--sr-top, 5.5rem) + 0.9rem) 1.5rem 1.5rem;
+  /* La fenêtre SUIT LA COLONNE au lieu de se coller au bord droit.
+     La colonne de lecture fait 980 px et se centre : son bord droit est donc à
+     `50% - 490px` du bord droit de l'écran. On pose la fenêtre à une gouttière
+     de là. Sur un écran très large la marge restante peut faire cinq cents
+     pixels — s'y coller éloignait la recherche de ce qu'on était en train de
+     lire, pour aucune raison.
+
+     `max()` garde la gouttière minimale : quand la place vient à manquer, la
+     fenêtre revient vers le bord plutôt que de sortir de l'écran. */
+  padding: calc(var(--sr-top, 5.5rem) + 0.9rem) max(var(--sr-gap), calc(50% - 490px - var(--sr-gap) - var(--sr-width))) var(--sr-gap) var(--sr-gap);
   pointer-events: none;
 }
 
 .sr__panel {
   position: relative;
   pointer-events: auto;
-  width: min(360px, 100%);
+  width: min(var(--sr-width), 100%);
   /* Pas de `height` : la fenêtre fait la taille de ce qu'elle contient et se
      borne à la place disponible. Une fenêtre vide qui descendrait jusqu'en bas
-     de l'écran promettrait des résultats qu'elle n'a pas. */
+     de l'écran promettrait des résultats qu'elle n'a pas.
+
+     Un plancher tout de même : sans lui, la fenêtre se redimensionne à chaque
+     lettre tapée — deux résultats, puis cinq, puis un — et ce sautillement est
+     plus fatigant que le vide qu'il évite. */
+  min-height: 13rem;
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -1436,15 +1455,14 @@ td.num {
   color: var(--ink-faint);
 }
 
-/* Sous 1400 px la marge droite ne suffit plus à contenir la fenêtre : elle
-   passe par-dessus le texte, et un voile redevient nécessaire pour dire que
-   c'est elle qu'on lit. Il capture aussi les clics, sinon on toucherait la page
-   à travers.
+/* Le seuil du voile est celui du RECOUVREMENT, pas une taille d'appareil.
 
-   Le seuil est celui du RECOUVREMENT, pas une taille d'appareil : la colonne
-   fait 980 px et la fenêtre 360 plus ses marges, donc en dessous de 1400 les
-   deux se chevauchent. */
-@media (max-width: 1400px) {
+   Il faut 490 px de demi-colonne, 24 de gouttière et 420 de fenêtre de chaque
+   côté du centre pour que rien ne se chevauche : 2 × (490 + 24 + 420) = 1868.
+   En dessous, la fenêtre passe par-dessus le texte, et un voile devient
+   nécessaire pour dire que c'est elle qu'on lit. Il capture aussi les clics,
+   sinon on toucherait la page à travers. */
+@media (max-width: 1868px) {
   .sr {
     pointer-events: auto;
     background: rgba(0, 0, 0, 0.82);
