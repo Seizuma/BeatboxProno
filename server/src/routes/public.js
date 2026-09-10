@@ -326,6 +326,185 @@ publicRouter.get('/leaderboard', guard(async (req, res) => {
   });
 }));
 
+/* ---------------------------------------------------------------------------
+   La recherche générale
+   --------------------------------------------------------------------------- */
+
+/**
+ * Deux caractères avant de chercher.
+ *
+ * En dessous, la requête ramènerait la moitié de la base pour une frappe qui
+ * n'est pas encore une intention : personne ne cherche « a ».
+ */
+const SEARCH_MIN = 2;
+
+/** Ce qu'on renvoie par famille. Au-delà, on affine plutôt qu'on déroule. */
+const SEARCH_PER_KIND = 6;
+
+/**
+ * Le rang d'une correspondance.
+ *
+ * Postgres rend les lignes dans l'ordre qu'on lui demande, pas dans l'ordre de
+ * pertinence : « ALEM » et « SALEM » sortaient à égalité sur « alem ». Un début
+ * de nom vaut mieux qu'un milieu de nom, et une égalité vaut mieux que tout le
+ * reste. Trois rangs suffisent — au-delà on invente une science.
+ */
+function matchRank(needle, ...fields) {
+  let best = 3;
+  for (const field of fields) {
+    if (!field) continue;
+    const hay = String(field).toLowerCase();
+    if (hay === needle) return 0;
+    if (hay.startsWith(needle)) best = Math.min(best, 1);
+    else if (hay.includes(needle)) best = Math.min(best, 2);
+  }
+  return best;
+}
+
+/**
+ * Chercher un joueur, un artiste, une compétition ou un de ses groupes.
+ *
+ * ─── Pourquoi cette route existe ────────────────────────────────────────────
+ *
+ * On peut déjà filtrer le classement par pseudo, et la question « peut-on voir
+ * les pronostics des autres ? » continuait de revenir. C'est le signe que la
+ * réponse était là où personne ne la cherchait : dans un champ d'une page
+ * précise, plutôt que dans l'en-tête où l'on cherche partout ailleurs.
+ *
+ * ─── Ce que chaque famille expose ───────────────────────────────────────────
+ *
+ * Les compétitions passent par `visible()` : les brouillons ne sortent que pour
+ * l'organisation, exactement comme sur `/events`.
+ *
+ * Les artistes sont ouverts — leur fiche l'est aussi, c'est la meilleure porte
+ * d'entrée du site.
+ *
+ * Les joueurs demandent une session, parce que `/users/:id` en demande une. Les
+ * rendre trouvables sans compte fabriquerait des liens qui refusent d'ouvrir,
+ * et publierait de fait une liste d'inscrits.
+ *
+ * Les groupes sont privés : on ne renvoie que ceux dont la personne est déjà
+ * membre. La recherche aide à retrouver le sien, elle ne fait pas l'annuaire de
+ * ceux des autres.
+ *
+ * ─── Les alias d'artiste ────────────────────────────────────────────────────
+ *
+ * `has` est une égalité, pas un « contient » : Prisma ne sait pas chercher un
+ * fragment dans un tableau Postgres sans requête brute. On cherche donc l'alias
+ * exact, ce qui couvre le cas réel — on tape « Napom », pas « Napo ».
+ */
+publicRouter.get('/search', guard(async (req, res) => {
+  const q = String(req.query.q ?? '').trim().slice(0, 80);
+  if (q.length < SEARCH_MIN) return res.json({ query: q, results: [] });
+
+  const needle = q.toLowerCase();
+  const like = { contains: q, mode: 'insensitive' };
+  // « 2026 » est un millésime avant d'être un morceau de nom.
+  const year = /^\d{4}$/.test(q) ? Number(q) : null;
+
+  const [events, artists, players, groups] = await Promise.all([
+    prisma.event.findMany({
+      where: {
+        ...visible(req.user),
+        OR: [{ name: like }, { location: like }, ...(year ? [{ year }] : [])],
+      },
+      select: { slug: true, name: true, year: true, location: true, status: true },
+      orderBy: [{ year: 'desc' }, { name: 'asc' }],
+      take: 20,
+    }),
+
+    prisma.artist.findMany({
+      where: { OR: [{ name: like }, { aliases: { has: q } }] },
+      select: { slug: true, name: true, country: true, imageUrl: true, aliases: true },
+      orderBy: { name: 'asc' },
+      take: 20,
+    }),
+
+    req.user
+      ? prisma.user.findMany({
+        where: { OR: [{ username: like }, { globalName: like }] },
+        select: {
+          id: true,
+          username: true,
+          globalName: true,
+          avatarUrl: true,
+          // La tenue voyage avec le nom, ici comme au classement : un cadre
+          // payé qui ne se montrerait qu'en fin de parcours ne vaut rien.
+          equippedFrame: true,
+          equippedNameFx: true,
+        },
+        take: 20,
+      })
+      : [],
+
+    req.user
+      ? prisma.group.findMany({
+        where: { name: like, members: { some: { userId: req.user.id } } },
+        select: { slug: true, name: true, _count: { select: { members: true } } },
+        orderBy: { name: 'asc' },
+        take: 20,
+      })
+      : [],
+  ]);
+
+  /**
+   * Une seule liste, triée par pertinence puis par famille.
+   *
+   * Un résultat porte SON type : c'est lui qui dit au lecteur ce qu'il va
+   * ouvrir. Sans ça, « GBB 2026 » et « GBB » — la compète et le groupe qui la
+   * suit — se ressemblent au point qu'on clique au hasard.
+   */
+  const rows = [
+    ...players.map((u) => ({
+      kind: 'player',
+      rank: matchRank(needle, u.globalName, u.username),
+      to: `/players/${u.id}`,
+      label: u.globalName ?? u.username,
+      hint: u.globalName && u.globalName !== u.username ? `@${u.username}` : null,
+      avatarUrl: u.avatarUrl,
+      frameId: u.equippedFrame,
+      nameFx: u.equippedNameFx,
+    })),
+    ...artists.map((a) => ({
+      kind: 'artist',
+      rank: matchRank(needle, a.name, ...(a.aliases ?? [])),
+      to: `/artists/${a.slug}`,
+      label: a.name,
+      hint: a.country,
+      avatarUrl: a.imageUrl,
+    })),
+    ...events.map((e) => ({
+      kind: 'event',
+      rank: matchRank(needle, e.name, e.location, String(e.year)),
+      to: `/events/${e.slug}`,
+      label: `${e.name} ${e.year}`,
+      hint: e.location,
+      status: e.status,
+    })),
+    ...groups.map((g) => ({
+      kind: 'group',
+      rank: matchRank(needle, g.name),
+      to: `/groups/${g.slug}`,
+      label: g.name,
+      // Un NOMBRE, pas une phrase : « 3 membres » et « 3 members » se composent
+      // côté écran, où vit le dictionnaire. Le serveur ne parle aucune langue.
+      members: g._count.members,
+    })),
+  ];
+
+  // Le plafond s'applique PAR famille et après le tri : sans quoi vingt
+  // artistes homonymes évinceraient le seul joueur cherché.
+  const kept = [];
+  const seen = { player: 0, artist: 0, event: 0, group: 0 };
+  for (const row of rows.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))) {
+    if (seen[row.kind] >= SEARCH_PER_KIND) continue;
+    seen[row.kind] += 1;
+    kept.push(row);
+  }
+
+  res.json({ query: q, results: kept });
+}));
+
 /** Fiche publique d'un pronostiqueur. */
 /**
  * Le profil d'un joueur.

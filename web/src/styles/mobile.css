@@ -171,6 +171,21 @@
     padding: 0.35rem 0.4rem;
   }
 
+  /* La loupe fait 2,1 rem au bureau, où l'on vise à la souris. Au doigt c'est
+     une cible de trente-quatre pixels de large : on la porte à la largeur d'un
+     pouce sans toucher à la grille des pavés, qui garde ce qui reste. */
+  .nav__search {
+    width: 2.7rem;
+  }
+
+  /* Plus de marge à occuper : le tiroir prend l'écran, comme les fenêtres. Le
+     liseré passe en haut, seul bord encore visible. */
+  .sr__panel {
+    width: 100%;
+    border-left: 0;
+    border-top: var(--border-w) solid var(--y);
+  }
+
   .shell {
     padding: 0 0.9rem;
   }

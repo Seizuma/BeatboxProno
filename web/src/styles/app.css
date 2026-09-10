@@ -341,17 +341,48 @@ img {
   padding: 0 1.2rem 0.7rem;
 }
 
+/* Une rangée, pas un bloc : la grille des pavés occupe ce qui reste et la
+   loupe garde la largeur de son dessin. `align-items: stretch` lui donne la
+   hauteur des pavés sans qu'on ait à la chiffrer — elle suivra le jour où un
+   intitulé passera à la ligne. */
 .nav {
-  display: block;
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
 }
 
 /* Colonnes de largeur égale, dont le minimum tient le libellé le plus long des
    deux langues, numéro de page compris. `auto-fit` passe à la ligne plutôt que
    de comprimer : on ne tronque jamais un intitulé de navigation. */
 .nav__links {
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
   gap: 0.35rem;
+}
+
+/* La loupe. Cyan comme les pavés : elle mène ailleurs, c'est le rôle de la
+   couleur. Jaune une fois ouverte, comme tout ce que l'on tient. */
+.nav__search {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  border: 0;
+  padding: 0;
+  background: var(--c);
+  color: #000;
+  cursor: pointer;
+}
+
+.nav__search:hover {
+  background: var(--w);
+}
+
+.nav__search[aria-expanded='true'] {
+  background: var(--y);
 }
 
 .nav__aside {
@@ -543,14 +574,26 @@ img {
 }
 
 @keyframes btn-beacon {
-  0%, 80% { outline: var(--border-w) solid transparent; outline-offset: 2px; }
-  80.01%, 100% { outline: var(--border-w) solid var(--y); outline-offset: 2px; }
+
+  0%,
+  80% {
+    outline: var(--border-w) solid transparent;
+    outline-offset: 2px;
+  }
+
+  80.01%,
+  100% {
+    outline: var(--border-w) solid var(--y);
+    outline-offset: 2px;
+  }
 }
 
 /* Le mouvement n'est jamais la seule information : le bouton reste un
    `btn--primary`, donc jaune plein, animé ou non. Ici on ne perd que le rappel. */
 @media (prefers-reduced-motion: reduce) {
-  .btn--beacon { animation: none; }
+  .btn--beacon {
+    animation: none;
+  }
 }
 
 .btn--ghost {
@@ -1094,9 +1137,315 @@ td.num {
   line-height: 1.45;
 }
 
+/* ---------------------------------------------------------------------------
+   LE TIROIR DE RECHERCHE
+
+   ─── Pourquoi il n'assombrit pas la page ────────────────────────────────────
+
+   Les fenêtres du site s'ouvrent au centre sur un voile noir : elles demandent
+   une décision, et la page attend. Chercher n'est pas de cette nature — on
+   cherche EN LISANT, pour aller voir autre chose. Le tiroir se range donc dans
+   la marge droite, celle que la colonne de 980 px laisse vide sur un écran de
+   bureau, et la page reste lisible derrière lui. `pointer-events: none` sur le
+   conteneur : rien n'est capturé hors du panneau, on peut continuer à cliquer
+   dans la page.
+
+   Le voile ne revient que sous 1200 px, quand la marge n'existe plus et que le
+   tiroir passe forcément par-dessus le contenu.
+
+   ─── z-index 85 ─────────────────────────────────────────────────────────────
+
+   Au-dessus des notifications (80), sous la fenêtre modale (90). Une modale
+   ouverte doit toujours gagner : elle attend une réponse, le tiroir non.
+
+   ─── Le dépliage ────────────────────────────────────────────────────────────
+
+   Une fente horizontale de quelques pixels apparaît contre le bord droit, se
+   déploie sur toute la hauteur, puis se déplie vers la gauche — un tissu tiré
+   d'un espace étroit. Le pli de tête est un simple filet cyan qui accompagne la
+   découpe : aucune ombre, aucun dégradé, la charte tient.
+
+   `clip-path: inset(haut droite bas gauche)`. Les deux premières phases ne
+   touchent qu'aux valeurs verticales, la troisième qu'à la gauche : c'est ce
+   découpage qui donne les deux temps.
+   --------------------------------------------------------------------------- */
+
+.sr {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.sr__panel {
+  position: relative;
+  pointer-events: auto;
+  width: min(380px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--screen);
+  border-left: var(--border-w) solid var(--y);
+  animation: sr-fold 0.44s both;
+}
+
+/* Le pli de tête : le filet qui accompagne le bord du tissu pendant qu'il se
+   déplie, et qui s'efface une fois le panneau posé. */
+.sr__panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--c);
+  pointer-events: none;
+  animation: sr-crease 0.44s both;
+}
+
+.sr--out .sr__panel,
+.sr--out .sr__panel::before {
+  animation-duration: 0.22s;
+  animation-direction: reverse;
+}
+
+@keyframes sr-fold {
+  0% {
+    clip-path: inset(48% 0 48% 96%);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.35, 1);
+  }
+
+  30% {
+    clip-path: inset(0 0 0 96%);
+    animation-timing-function: cubic-bezier(0.16, 0.9, 0.3, 1);
+  }
+
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes sr-crease {
+  0% {
+    left: calc(96% - 2px);
+    opacity: 0;
+  }
+
+  30% {
+    left: calc(96% - 2px);
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.16, 0.9, 0.3, 1);
+  }
+
+  96% {
+    opacity: 1;
+  }
+
+  100% {
+    left: 0;
+    opacity: 0;
+  }
+}
+
+.sr__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-bottom: var(--frame);
+}
+
+.sr__title {
+  margin: 0;
+  background: var(--b);
+  color: var(--y);
+  padding: 0 0.4em;
+  font-size: 1.35rem;
+}
+
+/* Le champ et sa loupe sur la même ligne, séparés par un filet du reste. La
+   loupe est décorative ici : le bouton qui a ouvert le tiroir a déjà dit ce
+   que c'était. Elle sert de repère, pas de cible. */
+.sr__field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: var(--frame);
+}
+
+.sr__glass {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--c);
+}
+
+.sr__field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Chrome et Safari collent une croix d'effacement propriétaire dans les
+     champs `type=search`. Elle est grise, arrondie, et n'appartient à aucune
+     charte : on la retire, Échap et la croix du bandeau font le travail. */
+  appearance: none;
+}
+
+.sr__field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.sr__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.6rem 0.8rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.sr__note {
+  margin: 0.4rem 0;
+  color: var(--ink-faint);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.sr__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* L'intitulé de famille. C'est LUI la réponse à « qu'est-ce que je vais
+   ouvrir » : une compète et le groupe qui la suit portent le même nom, et sans
+   cette ligne on clique au hasard.
+
+   Une couleur par famille, prise dans les six : bleu comme tout fond de
+   bandeau, et l'encre change pour distinguer. Aucune nuance nouvelle. */
+.sr__kind {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-data);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: var(--b);
+  padding: 0.05rem 0.4rem;
+  align-self: flex-start;
+}
+
+.sr__kind--player {
+  color: var(--c);
+}
+
+.sr__kind--artist {
+  color: var(--m);
+}
+
+.sr__kind--event {
+  color: var(--g);
+}
+
+.sr__kind--group {
+  color: var(--w);
+}
+
+.sr__hit {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.4rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* Un seul état visuel pour le survol et pour la sélection au clavier : la
+   flèche du bas et la souris désignent la même chose, elles doivent le dire de
+   la même façon. C'est le composant qui pose `data-active`, y compris au
+   survol, plutôt qu'une règle `:hover` séparée qui pourrait en montrer deux. */
+.sr__hit[data-active='1'] {
+  background: var(--y);
+  color: #000;
+}
+
+.sr__hit[data-active='1'] .sr__hint,
+.sr__hit[data-active='1'] .sr__badge {
+  color: #000;
+}
+
+.sr__thumb {
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  object-fit: cover;
+  border: var(--frame);
+}
+
+.sr__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sr__label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr__hint {
+  display: block;
+  font-family: var(--font-data);
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr__badge {
+  flex: 0 0 auto;
+  font-family: var(--font-data);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+/* Sous 1200 px la marge droite n'existe plus : le tiroir recouvre le texte, et
+   un voile redevient nécessaire pour dire que c'est lui qu'on lit. Il capture
+   aussi les clics, sinon on toucherait la page à travers. */
+@media (max-width: 1200px) {
+  .sr {
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.82);
+    animation: sr-veil 0.18s ease-out both;
+  }
+
+  .sr--out {
+    animation: sr-veil 0.18s ease-in reverse both;
+  }
+}
+
+@keyframes sr-veil {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
     transition: none !important;
+  }
+
+  /* Le pli de tête n'existe QUE pendant le dépliage : privé d'animation, il
+     resterait un filet cyan collé au bord gauche du panneau, pour toujours. */
+  .sr__panel::before {
+    display: none;
   }
 }

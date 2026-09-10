@@ -41,6 +41,20 @@ const DICT = {
     'nav.menu': 'Menu',
     'nav.shop': 'Shop',
 
+    // La recherche générale de l'en-tête.
+    'search.title': 'Search',
+    'search.open': 'Search the site',
+    'search.placeholder': 'Player, artist, event…',
+    'search.hint': 'Type at least two characters. Players, artists, competitions — and the groups you belong to.',
+    'search.empty': 'Nothing matches “{q}”.',
+    'search.signin': 'Sign in to look players and your groups up as well.',
+    'search.kind.player': 'Player',
+    'search.kind.artist': 'Artist',
+    'search.kind.event': 'Competition',
+    'search.kind.group': 'Group',
+    'search.member': '{n} member',
+    'search.members': '{n} members',
+
     'footer.tagline': 'Predictions close when each phase kicks off.',
 
     'common.loading': 'Loading…',
@@ -782,6 +796,20 @@ const DICT = {
     'nav.language': 'Langue',
     'nav.menu': 'Menu',
     'nav.shop': 'Boutique',
+
+    // La recherche générale de l'en-tête.
+    'search.title': 'Recherche',
+    'search.open': 'Chercher sur le site',
+    'search.placeholder': 'Joueur, artiste, compétition…',
+    'search.hint': 'Tapez au moins deux caractères. Joueurs, artistes, compétitions — et les groupes dont vous êtes membre.',
+    'search.empty': 'Rien ne correspond à « {q} ».',
+    'search.signin': 'Connectez-vous pour chercher aussi les joueurs et vos groupes.',
+    'search.kind.player': 'Joueur',
+    'search.kind.artist': 'Artiste',
+    'search.kind.event': 'Compétition',
+    'search.kind.group': 'Groupe',
+    'search.member': '{n} membre',
+    'search.members': '{n} membres',
 
     'footer.tagline': 'Les pronostics ferment au coup d’envoi de chaque phase.',
 

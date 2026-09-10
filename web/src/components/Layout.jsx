@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Link, Outlet, useLocation } from 'react-router-dom';
 import { useSession, isStaff } from '../lib/context.jsx';
 import { useI18n, LANGS } from '../lib/i18n.jsx';
 import DiscordButton from './DiscordButton.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import SearchDrawer, { GlassIcon } from './SearchDrawer.jsx';
 import { FramedAvatar } from './Cosmetics.jsx';
 
 /* ---------------------------------------------------------------------------
@@ -26,6 +27,19 @@ export default function Layout() {
   const { user } = useSession();
   const { t } = useI18n();
   const { pathname } = useLocation();
+  // Le tiroir de recherche. Monté dans la mise en page et non dans une page :
+  // on cherche depuis n'importe où, et un composant par page en ferait cinq
+  // copies à tenir d'accord.
+  const [searching, setSearching] = useState(false);
+  /**
+   * La fermeture ANIMÉE du tiroir, prêtée par lui.
+   *
+   * Sans elle, la loupe n'aurait que `setSearching(false)` : le tiroir
+   * disparaîtrait d'un coup, alors qu'il se replie partout ailleurs — clic à
+   * côté, Échap, croix. C'est le tiroir qui sait combien de temps dure son
+   * repli, pas l'en-tête.
+   */
+  const foldSearch = useRef(null);
 
   useEffect(() => {
     if (IS_DEV_ENV) document.title = 'DEV — beatboxpredictions';
@@ -97,9 +111,37 @@ export default function Layout() {
               {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
               {isStaff(user) && <NavLink to="/admin">{t('nav.admin')}</NavLink>}
             </span>
+
+            {/* La loupe est HORS de `nav__links` : cette grille répartit des
+                colonnes de largeur égale, et une icône carrée y prendrait la
+                place d'un intitulé. Elle se pose au bout de la rangée, à la
+                largeur de son dessin.
+
+                Un <button> et non un lien : la recherche n'a pas d'adresse à
+                elle, et lui en donner une obligerait à gérer un retour arrière
+                qui ne rouvre rien. */}
+            <button
+              type="button"
+              className="nav__search"
+              aria-expanded={searching}
+              aria-label={t('search.open')}
+              title={t('search.open')}
+              onClick={() => (searching ? foldSearch.current?.() : setSearching(true))}
+            >
+              <GlassIcon size={15} />
+            </button>
           </nav>
         </div>
       </header>
+
+      {searching && (
+        <SearchDrawer
+          onClose={() => setSearching(false)}
+          onReady={(fold) => {
+            foldSearch.current = fold;
+          }}
+        />
+      )}
 
       {/* L'administration s'élargit, les pages de lecture non.
 
