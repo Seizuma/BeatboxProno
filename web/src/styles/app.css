@@ -1248,19 +1248,41 @@ td.num {
   animation-direction: reverse;
 }
 
+/**
+ * Le dépliage.
+ *
+ * ─── Pourquoi la dernière image sort du cadre ───────────────────────────────
+ *
+ * L'animation est en `both` : sa dernière image reste appliquée tant que la
+ * fenêtre est ouverte. Avec `inset(0)`, la découpe tombe donc EXACTEMENT sur le
+ * bord du panneau, et y reste — pour de bon, pas seulement pendant le
+ * mouvement.
+ *
+ * Or ce bord n'est presque jamais sur un pixel entier. Le haut vaut
+ * `--sr-top + 0.9rem`, soit un nombre rond plus 14,4 px ; la gauche dépend d'un
+ * `50%` qui tombe à la moitié d'une largeur d'écran quelconque. Le
+ * rastériseur arrondit, et l'arrondi mange une rangée — soit le liseré jaune de
+ * deux pixels, en bas ou à droite selon la hauteur du contenu et le zoom. D'où
+ * le « parfois » : le défaut n'apparaît que quand l'arrondi tombe du mauvais
+ * côté.
+ *
+ * Deux pixels de marge négative mettent la découpe HORS du panneau. Elle ne
+ * peut plus rogner quoi que ce soit, et comme il n'y a rien au-delà du bord,
+ * rien de plus n'apparaît pendant le mouvement.
+ */
 @keyframes sr-fold {
   0% {
-    clip-path: inset(48% 0 48% 96%);
+    clip-path: inset(48% -2px 48% 96%);
     animation-timing-function: cubic-bezier(0.2, 0.7, 0.35, 1);
   }
 
   30% {
-    clip-path: inset(0 0 0 96%);
+    clip-path: inset(-2px -2px -2px 96%);
     animation-timing-function: cubic-bezier(0.16, 0.9, 0.3, 1);
   }
 
   100% {
-    clip-path: inset(0 0 0 0);
+    clip-path: inset(-2px);
   }
 }
 
