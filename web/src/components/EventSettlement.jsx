@@ -24,8 +24,11 @@ import { api } from '../lib/api.js';
  * de l'événement — mais tant qu'on ne peut pas le vérifier soi-même, on
  * soupçonne le code. Une ligne vide vaut mieux qu'une supposition.
  */
-export default function EventSettlement({ event, run }) {
-    const [open, setOpen] = useState(false);
+export default function EventSettlement({ event, run, defaultOpen = false }) {
+    // `defaultOpen` sert au rail : la section est déjà choisie, un second
+    // clic pour la déplier serait un clic de trop. Le repli reste utile
+    // partout où le panneau est posé au milieu d'autres.
+    const [open, setOpen] = useState(defaultOpen);
     const [data, setData] = useState(null);
     const [confirming, setConfirming] = useState(null);
 
@@ -51,7 +54,7 @@ export default function EventSettlement({ event, run }) {
     const awards = data?.awards ?? 0;
 
     return (
-        <div className="panel stack" style={{ gap: '0.6rem' }}>
+        <div className={`stack${defaultOpen ? '' : ' panel'}`} style={{ gap: '0.6rem' }}>
             <div className="spread">
                 <div>
                     <p className="eyebrow" style={{ margin: 0 }}>Clôture</p>
@@ -59,9 +62,15 @@ export default function EventSettlement({ event, run }) {
                 </div>
                 <div className="row" style={{ gap: '0.4rem' }}>
                     <span className="tag">{data === null ? '—' : `${awards} badges`}</span>
-                    <button className="btn btn--small" aria-expanded={open} onClick={() => setOpen(!open)}>
-                        {open ? 'Réduire' : 'Voir'}
-                    </button>
+                    {!defaultOpen && (
+                        <button
+                            className="btn btn--small"
+                            aria-expanded={open}
+                            onClick={() => setOpen(!open)}
+                        >
+                            {open ? 'Réduire' : 'Voir'}
+                        </button>
+                    )}
                 </div>
             </div>
 

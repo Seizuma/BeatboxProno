@@ -25,6 +25,7 @@ import AdminStats from '../components/AdminStats.jsx';
 import EventExclusions from '../components/EventExclusions.jsx';
 import EventSettlement from '../components/EventSettlement.jsx';
 import ReplaceContender from '../components/ReplaceContender.jsx';
+import Hint from '../components/Hint.jsx';
 import { SET_LIST } from '../lib/badgeSets.js';
 import ExportEvent from '../components/ExportEvent.jsx';
 
@@ -437,26 +438,66 @@ function StructureAdmin() {
   );
 }
 
+/**
+ * La structure d'un événement : un index à gauche, une page à droite.
+ *
+ * ─── Ce que l'empilement coûtait ────────────────────────────────────────────
+ *
+ * Réglages, Accès, Clôture et les quatre catégories étaient posés les uns sous
+ * les autres, chacun dépliable. Ouvrir le Solo poussait Tag Team, Loopstation
+ * et Crew hors de l'écran ; ouvrir deux catégories rendait la page impossible à
+ * parcourir. On perdait sa place à chaque action, et la hauteur dépendait de ce
+ * qu'on avait déplié — c'est-à-dire qu'elle était imprévisible.
+ *
+ * ─── Pourquoi un rail et pas des onglets ────────────────────────────────────
+ *
+ * Le nombre d'entrées varie : trois sections fixes plus autant de catégories
+ * que la compète en compte. Une rangée d'onglets horizontale déborderait à la
+ * cinquième et se mettrait à défiler, ce qui est le défaut qu'on cherche à
+ * corriger. Un rail vertical accepte n'importe quel nombre et laisse de la
+ * place pour un compte à droite de chaque ligne.
+ *
+ * Ce compte n'est pas décoratif : « où en est le Crew ? » est la question qu'on
+ * se pose le plus souvent en préparant une compète, et elle trouve sa réponse
+ * sans un clic.
+ *
+ * ─── Pourquoi pas une URL par catégorie ─────────────────────────────────────
+ *
+ * Ce serait plus propre, et ça rendrait chaque catégorie partageable. Mais cela
+ * sort du routeur et rend le retour arrière du navigateur ambigu — revenir
+ * en arrière depuis une catégorie devrait-il fermer l'événement ? Le rail donne
+ * le même confort sans toucher aux routes.
+ */
 function EventStructure({ event, onDone, run, askDelete }) {
   const [building, setBuilding] = useState(false);
+  // La page affichée : « settings », « access », « settlement », ou
+  // l'identifiant d'une catégorie.
+  const [page, setPage] = useState('settings');
+
+  // Une catégorie supprimée ne doit pas laisser le rail pointer dans le vide.
+  const known = ['settings', 'access', 'settlement', ...event.categories.map((c) => c.id)];
+  const current = known.includes(page) ? page : 'settings';
+
+  const category = event.categories.find((c) => c.id === current);
+
+  const item = (id, label, count) => (
+    <button
+      key={id}
+      type="button"
+      className="rail__item"
+      aria-current={current === id}
+      onClick={() => setPage(id)}
+    >
+      <span>{label}</span>
+      {count != null && <span className="rail__count">{count}</span>}
+    </button>
+  );
 
   return (
     <section className="stack">
-      <EventSettings event={event} onDone={onDone} run={run} />
-
-      {/* Les comptes écartés vivent avec l'événement, pas avec le compte : la
-          mesure ne vaut QUE pour cette compète, et c'est en la préparant qu'on
-          y pense. Le panneau est replié — on l'ouvre trois fois par saison. */}
-      <EventExclusions event={event} run={run} />
-
-      {/* Le palmarès distribué par la clôture. À côté des exclusions parce que
-          les deux répondent à la même envie — défaire quelque chose sur CETTE
-          compète — et qu'aucun des deux ne se cherche ailleurs. */}
-      <EventSettlement event={event} run={run} />
-
       <div className="spread">
-        <h2>Structure — {event.name} {event.year}</h2>
-        <div className="row" style={{ gap: '0.6rem' }}>
+        <h2 style={{ margin: 0 }}>{event.name} {event.year}</h2>
+        <div className="row" style={{ gap: '0.6rem', alignItems: 'center' }}>
           <span className="silkscreen">{event.categories.length} catégorie(s)</span>
           <button className="btn btn--primary btn--small" onClick={() => setBuilding(true)}>
             Paramétrer le format
@@ -464,15 +505,58 @@ function EventStructure({ event, onDone, run, askDelete }) {
         </div>
       </div>
 
-      {event.categories.length === 0 && (
-        <p className="empty">
-          Aucune catégorie. Ouvrez « Paramétrer le format » pour composer l'événement.
-        </p>
-      )}
+      <div className="panel railed" style={{ padding: 0 }}>
+        <nav className="railed__nav rail" aria-label="Sections de l'événement">
+          <p className="eyebrow rail__group">Événement</p>
+          {item('settings', 'Réglages')}
+          {item('access', 'Accès')}
+          {item('settlement', 'Clôture')}
 
-      {event.categories.map((cat) => (
-        <CategoryPanel key={cat.id} category={cat} onDone={onDone} run={run} askDelete={askDelete} />
-      ))}
+          <p className="eyebrow rail__group" style={{ marginTop: '1rem' }}>Catégories</p>
+          {event.categories.length === 0 ? (
+            <p className="faint" style={{ margin: '0 0.8rem', fontSize: '0.85rem' }}>
+              Aucune.
+            </p>
+          ) : (
+            event.categories.map((c) => item(c.id, c.name, c.contenders.length))
+          )}
+        </nav>
+
+        <div className="railed__panel">
+          {current === 'settings' && (
+            <>
+              <p className="eyebrow" style={{ margin: '0 0 0.6rem' }}>Réglages</p>
+              <EventSettings event={event} onDone={onDone} run={run} />
+            </>
+          )}
+
+          {/* Les comptes écartés vivent avec l'événement, pas avec le compte :
+              la mesure ne vaut QUE pour cette compète, et c'est en la préparant
+              qu'on y pense. */}
+          {current === 'access' && <EventExclusions event={event} run={run} defaultOpen />}
+
+          {/* Le palmarès distribué par la clôture. Voisin des exclusions parce
+              que les deux répondent à la même envie — défaire quelque chose sur
+              CETTE compète. */}
+          {current === 'settlement' && <EventSettlement event={event} run={run} defaultOpen />}
+
+          {category && (
+            <CategoryPanel
+              key={category.id}
+              category={category}
+              onDone={onDone}
+              run={run}
+              askDelete={askDelete}
+            />
+          )}
+
+          {event.categories.length === 0 && !['settings', 'access', 'settlement'].includes(current) && (
+            <p className="empty">
+              Aucune catégorie. Ouvrez « Paramétrer le format » pour composer l'événement.
+            </p>
+          )}
+        </div>
+      </div>
 
       {building && (
         <FormatBuilder
@@ -513,10 +597,8 @@ function EventSettings({ event, onDone, run }) {
     }, 'Réglages enregistrés.');
 
   return (
-    <div className="panel stack" style={{ gap: '0.7rem' }}>
-      <h3>Réglages</h3>
-
-      <div className="row" style={{ alignItems: 'flex-end', gap: '1rem' }}>
+    <div className="stack" style={{ gap: '0.7rem' }}>
+      <div className="row" style={{ alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
         <div className="field">
           <label htmlFor={`judges-${event.id}`}>Nombre de juges</label>
           <select
@@ -597,30 +679,74 @@ function EventSettings({ event, onDone, run }) {
           <span>Crédite le porte-monnaie</span>
         </label>
 
-        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-          Les deux sont indépendants : une compète peut rapporter des points de boutique sans
-          décerner de médaille. Le jeu de badges décide de QUELS dessins tombent — chaque famille
-          a les siens, et « aucun » veut dire que cette compète n'en donne pas.
-        </p>
-        <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-          Changer ces réglages ne touche pas à ce qui a déjà été distribué. Pour l'appliquer,
-          utilisez « Recalculer le palmarès » dans le panneau ci-dessous : la clôture est rejouable
-          et nettoie ce qui n'a plus lieu d'être.
-        </p>
       </div>
 
-      <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
-        {event.predictionsCloseAt
-          ? "Passé cette date, plus aucun pronostic n'est enregistrable sur l'événement."
-          : "Aucune date butoir : les pronostics restent ouverts tant que les phases ne sont pas verrouillées. C'est le réglage à garder tant que la date de la compète n'est pas connue."}
-        {' '}Les {judges} juges déterminent les scores proposés aux pronostiqueurs.
-      </p>
+      {/* Cinq lignes d'explication utiles la première fois, encombrantes les
+          cinquante suivantes. Repliées et non supprimées : elles disent des
+          choses qu'on ne devine pas, et c'est à ce titre qu'elles évitent des
+          incidents. */}
+      <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <Hint label="Comprendre ces réglages">
+          <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+            {event.predictionsCloseAt
+              ? "Passé la date butoir, plus aucun pronostic n'est enregistrable sur l'événement."
+              : "Aucune date butoir : les pronostics restent ouverts tant que les phases ne sont pas verrouillées. C'est le réglage à garder tant que la date de la compète n'est pas connue."}
+            {' '}Les {judges} juges déterminent les scores proposés aux pronostiqueurs.
+          </p>
+          <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+            Badges et crédit sont indépendants : une compète peut rapporter des points de boutique
+            sans décerner de médaille. Le jeu de badges décide de QUELS dessins tombent — chaque
+            famille a les siens, et « aucun » veut dire que cette compète n'en donne pas.
+          </p>
+          <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+            Changer ces réglages ne touche pas à ce qui a déjà été distribué. Pour l'appliquer,
+            passez par « Recalculer le palmarès » dans Clôture : la distribution est rejouable et
+            nettoie ce qui n'a plus lieu d'être.
+          </p>
+        </Hint>
+      </div>
     </div>
   );
 }
 
+/**
+ * Les métiers d'une catégorie, dans l'ordre où on les traverse.
+ *
+ * Composer la liste, tirer le premier tour, régler la forme du tableau, saisir
+ * le jury. Le jury est en dernier parce qu'on y touche une fois par compète,
+ * les participants en premier parce qu'on y revient sans arrêt.
+ */
+const CATEGORY_VIEWS = [
+  ['contenders', 'Participants'],
+  ['seeding', 'Tirage'],
+  ['format', 'Format'],
+  ['judges', 'Jury'],
+];
+
+/**
+ * Une catégorie, en onglets.
+ *
+ * ─── Ce que l'empilement coûtait ────────────────────────────────────────────
+ *
+ * Les quatre métiers étaient dépliables les uns sous les autres. Ouvrir le
+ * tirage poussait les participants hors de l'écran, ouvrir les deux ne laissait
+ * plus voir la catégorie suivante, et sur quatre catégories la page devenait un
+ * ruban qu'on parcourait en cherchant sa place.
+ *
+ * Un onglet à la fois : trois panneaux sur quatre ne sont plus rendus, la
+ * hauteur devient prévisible, et on sait toujours où l'on est. Les composants
+ * eux-mêmes — SeedingEditor, CategoryFormat, ContenderManager — n'ont pas
+ * changé ; seul leur montage a changé.
+ *
+ * ─── Le tirage reste ici ────────────────────────────────────────────────────
+ *
+ * C'est une décision de STRUCTURE — qui affronte qui au premier tour — et non
+ * une saisie de résultat. Sa place est à côté du format, pas dans l'écran où
+ * l'on enregistre ce qui s'est passé.
+ */
 function CategoryPanel({ category, onDone, run, askDelete }) {
-  const [open, setOpen] = useState(false);
+  const [view, setView] = useState('contenders');
+
   /**
    * Le jury, saisi comme une liste separee par des virgules.
    *
@@ -629,12 +755,7 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
    * bloc est le geste reel. Le decoupage se fait a l'enregistrement.
    */
   const [judges, setJudges] = useState((category.judges ?? []).join(', '));
-  // Le tirage réglé, s'il y en a un d'ouvert. Un seul à la fois : deux tableaux
-  // ouverts côte à côte n'aideraient personne à s'y retrouver.
   const [seeding, setSeeding] = useState(null);
-  // Le format se replie par défaut : on ne retouche pas la forme d'un tableau
-  // tous les jours, et déplié en permanence il noierait le jury et le tirage.
-  const [format, setFormat] = useState(false);
 
   // Un tirage ne concerne qu'un tableau, et seulement une fois ses affiches
   // créées : sans elles, il n'y a rien à apparier.
@@ -642,25 +763,31 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
     (p) => ['BRACKET', 'LEGACY'].includes(p.type) && (p.battles?.length ?? 0) > 0
   );
 
+  // Un onglet vide n'est pas proposé : cliquer sur « Tirage » pour lire « aucun
+  // tableau » est une déception qu'on peut éviter en amont.
+  const views = CATEGORY_VIEWS.filter(([id]) => id !== 'seeding' || brackets.length > 0);
+
+  const saveJudges = () =>
+    run(async () => {
+      // Decoupage a l'enregistrement : blancs retires et entrees vides
+      // ecartees, pour qu'une virgule en trop ne cree pas un juge sans nom.
+      const list = judges.split(',').map((n) => n.trim()).filter(Boolean);
+      await api.patch(`/admin/categories/${category.id}`, { judges: list });
+      await onDone();
+      return list.length
+        ? `Jury de ${category.name} : ${list.length} nom(s).`
+        : `Jury de ${category.name} efface.`;
+    });
+
   return (
-    <div className="panel stack" style={{ gap: '0.6rem' }}>
+    <div className="stack" style={{ gap: '0.7rem' }}>
       <div className="spread">
         <div>
           <p className="eyebrow" style={{ margin: 0 }}>{category.kind}</p>
-          <h3>{category.name}</h3>
+          <h3 style={{ margin: 0 }}>{category.name}</h3>
         </div>
-        <div className="row" style={{ gap: '0.4rem' }}>
+        <div className="row" style={{ gap: '0.4rem', alignItems: 'center' }}>
           <span className="tag">{category.contenders.length} participants</span>
-          <button className="btn btn--small" onClick={() => setOpen(!open)}>
-            {open ? 'Réduire' : 'Participants'}
-          </button>
-          <button
-            className={`btn btn--small${format ? ' btn--primary' : ''}`}
-            aria-expanded={format}
-            onClick={() => setFormat(!format)}
-          >
-            Format
-          </button>
           <MenuButton
             label={`Actions pour ${category.name}`}
             items={[
@@ -678,42 +805,9 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
         </div>
       </div>
 
-      {/* Le jury de la categorie. Par categorie et non par evenement : une meme
-          compete juge rarement le Solo et le Loopstation avec le meme panel. */}
-      <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
-        <div className="field" style={{ flex: '1 1 22rem', margin: 0 }}>
-          <label htmlFor={`judges-${category.id}`}>Jury (separe par des virgules)</label>
-          <input
-            id={`judges-${category.id}`}
-            value={judges}
-            placeholder="Alem, NaPoM, Kaila Mullady"
-            onChange={(e) => setJudges(e.target.value)}
-          />
-        </div>
-        <button
-          className="btn btn--small"
-          onClick={() =>
-            run(async () => {
-              // Decoupage a l'enregistrement : blancs retires et entrees vides
-              // ecartees, pour qu'une virgule en trop ne cree pas un juge sans
-              // nom.
-              const list = judges
-                .split(',')
-                .map((n) => n.trim())
-                .filter(Boolean);
-              await api.patch(`/admin/categories/${category.id}`, { judges: list });
-              await onDone();
-              return list.length
-                ? `Jury de ${category.name} : ${list.length} nom(s).`
-                : `Jury de ${category.name} efface.`;
-            })
-          }
-        >
-          Enregistrer le jury
-        </button>
-      </div>
-
-      <div className="row" style={{ gap: '0.35rem' }}>
+      {/* Les phases, en lecture seule : c'est le repère qui dit dans quelle
+          forme on travaille, et il doit rester visible quel que soit l'onglet. */}
+      <div className="row" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
         {category.phases.map((p) => (
           <span className={`tag${p.resolved ? ' tag--done' : ''}`} key={p.id}>
             {p.name}
@@ -723,35 +817,77 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
         ))}
       </div>
 
-      {/* Le tirage est une décision de STRUCTURE — qui affronte qui au premier
-          tour — pas une saisie de résultat. Sa place est ici, à côté du format,
-          et non dans l'écran où l'on enregistre ce qui s'est passé. */}
-      {brackets.length > 0 && (
-        <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
-          {brackets.map((p) => (
-            <button
-              key={p.id}
-              className={`btn btn--small${seeding === p.id ? ' btn--primary' : ''}`}
-              onClick={() => setSeeding(seeding === p.id ? null : p.id)}
-            >
-              Tirage — {p.name}
-            </button>
-          ))}
+      <nav
+        className="row"
+        style={{ gap: '0.3rem', borderBottom: 'var(--frame)', paddingBottom: '0.5rem' }}
+      >
+        {views.map(([id, label]) => (
+          <button
+            key={id}
+            className={`btn btn--small${view === id ? ' btn--primary' : ' btn--ghost'}`}
+            aria-pressed={view === id}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {view === 'contenders' && (
+        <ContenderManager category={category} onDone={onDone} run={run} askDelete={askDelete} />
+      )}
+
+      {view === 'seeding' && brackets.length > 0 && (
+        <div className="stack" style={{ gap: '0.6rem' }}>
+          {brackets.length > 1 && (
+            <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+              {brackets.map((p) => (
+                <button
+                  key={p.id}
+                  className={`btn btn--small${(seeding ?? brackets[0].id) === p.id ? ' btn--primary' : ''}`}
+                  onClick={() => setSeeding(p.id)}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <SeedingEditor
+            key={seeding ?? brackets[0].id}
+            phase={brackets.find((p) => p.id === (seeding ?? brackets[0].id))}
+            onDone={onDone}
+            run={run}
+          />
         </div>
       )}
 
-      {seeding && (
-        <SeedingEditor
-          key={seeding}
-          phase={brackets.find((p) => p.id === seeding)}
-          onDone={onDone}
-          run={run}
-        />
+      {view === 'format' && <CategoryFormat category={category} onDone={onDone} run={run} />}
+
+      {view === 'judges' && (
+        <div className="stack" style={{ gap: '0.5rem' }}>
+          <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="field" style={{ flex: '1 1 24rem', margin: 0 }}>
+              <label htmlFor={`judges-${category.id}`}>Jury (séparé par des virgules)</label>
+              <input
+                id={`judges-${category.id}`}
+                value={judges}
+                placeholder="Alem, NaPoM, Kaila Mullady"
+                onChange={(e) => setJudges(e.target.value)}
+              />
+            </div>
+            <button className="btn btn--small btn--primary" onClick={saveJudges}>
+              Enregistrer le jury
+            </button>
+            <Hint label="À quoi sert le jury">
+              <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+                Par catégorie et non par événement : une même compète juge rarement le Solo et le
+                Loopstation avec le même panel. Les noms sont découpés à l'enregistrement, une
+                virgule en trop ne crée donc pas de juge sans nom.
+              </p>
+            </Hint>
+          </div>
+        </div>
       )}
-
-      {format && <CategoryFormat category={category} onDone={onDone} run={run} />}
-
-      {open && <ContenderManager category={category} onDone={onDone} run={run} askDelete={askDelete} />}
     </div>
   );
 }
@@ -796,8 +932,8 @@ function ContenderManager({ category, onDone, run, askDelete }) {
     }, 'Participant ajouté.');
 
   return (
-    <div className="stack" style={{ gap: '0.5rem', borderTop: 'var(--frame)', paddingTop: '0.7rem' }}>
-      <div className="row" style={{ alignItems: 'flex-end' }}>
+    <div className="stack" style={{ gap: '0.6rem' }}>
+      <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div className="field">
           <label htmlFor={`ct-artist-${category.id}`}>Artiste</label>
           <select
@@ -848,42 +984,48 @@ function ContenderManager({ category, onDone, run, askDelete }) {
         />
       )}
 
-      {category.contenders.length > 0 && (
-        <div className="panel panel--flush">
-          <table>
-            <thead><tr><th className="num">Seed</th><th>Nom</th><th></th></tr></thead>
-            <tbody>
-              {[...category.contenders]
-                .sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999))
-                .map((c) => (
-                  <tr key={c.id}>
-                    <td className="num">{c.seed ?? '—'}</td>
-                    <td>{c.name}</td>
-                    <td className="num">
-                      <MenuButton
-                        label={`Actions pour ${c.name}`}
-                        items={[
-                          {
-                            label: 'Remplacer (forfait)',
-                            onClick: () => setReplacing(c),
-                          },
-                          { separator: true },
-                          {
-                            label: 'Retirer de la catégorie',
-                            danger: true,
-                            onClick: () =>
-                              askDelete('contender', c.id, async () => {
-                                await onDone();
-                                await run(async () => `${c.name} retiré.`);
-                              }),
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+      {category.contenders.length === 0 ? (
+        <p className="empty">Aucun participant. Ajoutez-les un par un ci-dessus.</p>
+      ) : (
+        /**
+         * Les participants en colonnes plutôt qu'en lignes.
+         *
+         * Vingt participants faisaient vingt rangées, et sur quatre catégories
+         * c'était un écran entier de défilement pour une information qui tient
+         * sur cinq lignes. La grille s'adapte à la largeur disponible : quatre
+         * colonnes sur un écran d'ordinateur, une seule sur un téléphone, sans
+         * qu'on ait à choisir.
+         *
+         * L'ordre reste celui du seed, lu en colonnes — c'est-à-dire de haut en
+         * bas puis de gauche à droite, comme une liste qu'on aurait pliée.
+         */
+        <div className="seedgrid">
+          {[...category.contenders]
+            .sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999))
+            .map((c) => (
+              <span className="seedgrid__item" key={c.id}>
+                <span className="seedgrid__seed">{c.seed ?? '—'}</span>
+                <span className="seedgrid__name" title={c.name}>{c.name}</span>
+                <span className="seedgrid__actions">
+                  <MenuButton
+                    label={`Actions pour ${c.name}`}
+                    items={[
+                      { label: 'Remplacer (forfait)', onClick: () => setReplacing(c) },
+                      { separator: true },
+                      {
+                        label: 'Retirer de la catégorie',
+                        danger: true,
+                        onClick: () =>
+                          askDelete('contender', c.id, async () => {
+                            await onDone();
+                            await run(async () => `${c.name} retiré.`);
+                          }),
+                      },
+                    ]}
+                  />
+                </span>
+              </span>
+            ))}
         </div>
       )}
     </div>

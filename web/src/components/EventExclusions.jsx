@@ -30,8 +30,11 @@ import MenuButton from './MenuButton.jsx';
  * table de comptes est un coût qu'on ne paie pas pour un geste qu'on fait trois
  * fois par saison.
  */
-export default function EventExclusions({ event, run }) {
-    const [open, setOpen] = useState(false);
+export default function EventExclusions({ event, run, defaultOpen = false }) {
+    // `defaultOpen` sert au rail : la section est déjà choisie, un second
+    // clic pour la déplier serait un clic de trop. Le repli reste utile
+    // partout où le panneau est posé au milieu d'autres.
+    const [open, setOpen] = useState(defaultOpen);
     const [rows, setRows] = useState(null);
 
     const [q, setQ] = useState('');
@@ -94,7 +97,7 @@ export default function EventExclusions({ event, run }) {
     const count = rows?.length ?? 0;
 
     return (
-        <div className="panel stack" style={{ gap: '0.6rem' }}>
+        <div className={`stack${defaultOpen ? '' : ' panel'}`} style={{ gap: '0.6rem' }}>
             <div className="spread">
                 <div>
                     <p className="eyebrow" style={{ margin: 0 }}>Accès</p>
@@ -102,9 +105,15 @@ export default function EventExclusions({ event, run }) {
                 </div>
                 <div className="row" style={{ gap: '0.4rem' }}>
                     <span className="tag">{rows === null ? '—' : count}</span>
-                    <button className="btn btn--small" aria-expanded={open} onClick={() => setOpen(!open)}>
-                        {open ? 'Réduire' : 'Gérer'}
-                    </button>
+                    {!defaultOpen && (
+                        <button
+                            className="btn btn--small"
+                            aria-expanded={open}
+                            onClick={() => setOpen(!open)}
+                        >
+                            {open ? 'Réduire' : 'Gérer'}
+                        </button>
+                    )}
                 </div>
             </div>
 
