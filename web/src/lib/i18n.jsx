@@ -358,6 +358,7 @@ const DICT = {
     'leaderboard.search': 'Find a player',
     'leaderboard.search.hint': 'Type a name…',
     'leaderboard.search.none': 'No player matches “{q}” in this scope.',
+    'leaderboard.capped': 'Showing the top {shown} of {total} players.',
     'leaderboard.clickable':
       'Click a name to open that player’s profile and read the predictions they have filed.',
     'leaderboard.col.player': 'Player',
@@ -1089,6 +1090,7 @@ const DICT = {
     'leaderboard.search': 'Chercher un joueur',
     'leaderboard.search.hint': 'Tapez un pseudo…',
     'leaderboard.search.none': 'Aucun joueur ne correspond à « {q} » sur ce périmètre.',
+    'leaderboard.capped': 'Les {shown} premiers sur {total} joueurs.',
     'leaderboard.clickable':
       'Cliquez un pseudo pour ouvrir son profil et lire les pronostics qu’il a déposés.',
     'leaderboard.col.player': 'Pronostiqueur',
