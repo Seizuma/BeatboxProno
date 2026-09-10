@@ -151,7 +151,7 @@ export async function buildScoreboard({
     take = 200,
 } = {}) {
     const empty = {
-        totals: { players: 0, submitted: 0, points: 0, possible: 0, precision: null },
+        totals: { players: 0, submitted: 0, points: 0, possible: 0, precision: null, shown: 0 },
         players: [],
         readings: { wellRead: [], overRated: [], underRated: [], sampled: 0, official: 0, all: [] },
     };
@@ -183,7 +183,7 @@ export async function buildScoreboard({
     };
     const phaseScope = Object.keys(categoryScope).length ? { category: categoryScope } : {};
 
-    const [grouped, submissions, categories, officialRanks, predictedRanks] = await Promise.all([
+    const [grouped, submissions, categories, officialRanks, predictedRanks, overall] = await Promise.all([
         prisma.prediction.groupBy({
             by: ['userId'],
             where: predictionWhere,
@@ -301,16 +301,10 @@ export async function buildScoreboard({
     });
     const byId = new Map(users.map((u) => [u.id, u]));
 
-    let globalPoints = 0;
-    let globalPossible = 0;
-
     const players = [
         ...grouped.map((g) => {
             const points = g._sum.points ?? 0;
             const possible = possibleFor(g.userId);
-
-            globalPoints += points;
-            globalPossible += possible;
 
             return {
                 user: byId.get(g.userId) ?? null,
@@ -334,12 +328,31 @@ export async function buildScoreboard({
         })),
     ];
 
+    /**
+     * Les totaux portent sur TOUT le périmètre, la liste sur les seuls affichés.
+     *
+     * Les sommes se faisaient auparavant en accumulant les lignes rendues, ce
+     * qui revenait à décrire le site par son top 200.
+     *
+     * `submissions` contient déjà chaque couple (joueur, catégorie) du
+     * périmètre, sans plafond : il donne à la fois le nombre de joueurs
+     * distincts et, via `possibleFor`, le dénominateur de la précision. Aucune
+     * requête de plus.
+     */
+    const everyone = [...new Set(submissions.map((s) => s.userId))];
+    const scopePoints = overall._sum.points ?? 0;
+    let scopePossible = 0;
+    for (const id of everyone) scopePossible += possibleFor(id);
+
     const totals = {
-        players: grouped.length,
-        submitted: grouped.reduce((n, g) => n + g._count._all, 0),
-        points: globalPoints,
-        possible: globalPossible,
-        precision: globalPossible ? Math.round((globalPoints / globalPossible) * 100) : null,
+        players: everyone.length,
+        submitted: overall._count._all,
+        points: scopePoints,
+        possible: scopePossible,
+        precision: scopePossible ? Math.round((scopePoints / scopePossible) * 100) : null,
+        // Le plafond d'affichage, pour que l'écran puisse dire « top 200 sur
+        // 247 » au lieu de laisser croire que la liste est complète.
+        shown: grouped.length,
     };
 
     if (!readings) {
@@ -465,6 +478,30 @@ export async function buildScoreboard({
                 )
             )
             : Promise.resolve([]),
+
+        /**
+         * Les totaux du PÉRIMÈTRE ENTIER, hors plafond d'affichage.
+         *
+         * `grouped` est borné par `take` — deux cents lignes sur la page de
+         * classement. Les quatre chiffres de l'en-tête étaient calculés en
+         * additionnant ces lignes-là, donc ils ne décrivaient pas le site mais
+         * son top 200 : « 692 pronostics déposés » quand il y en avait 742, et
+         * « 200 joueurs » qui n'était rien d'autre que le plafond relu.
+         *
+         * L'écart passe inaperçu tant que le site tient sous deux cents
+         * joueurs, puis grandit sans que rien ne le signale — et le compteur de
+         * l'accueil, lui, comptait juste. Deux nombres pour la même chose, dont
+         * un faux.
+         *
+         * Un `aggregate` séparé plutôt qu'un `groupBy` sans limite : on ne veut
+         * pas rapatrier une ligne par joueur pour en faire une somme que
+         * Postgres calcule mieux.
+         */
+        prisma.prediction.aggregate({
+            where: predictionWhere,
+            _count: { _all: true },
+            _sum: { points: true },
+        }),
     ]);
 
     return {

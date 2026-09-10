@@ -126,6 +126,19 @@ export default function Leaderboard() {
             />
           </div>
 
+          {/* La liste est plafonnée, les chiffres au-dessus ne le sont plus.
+              Sans cette ligne, un joueur classé au-delà du plafond chercherait
+              son nom dans une liste qui ne peut pas le contenir, et croirait à
+              une erreur. */}
+          {data.totals.shown < data.totals.players && (
+            <p className="faint" style={{ margin: 0, fontSize: '0.85rem' }}>
+              {t('leaderboard.capped', {
+                shown: number(data.totals.shown),
+                total: number(data.totals.players),
+              })}
+            </p>
+          )}
+
           {data.players.length === 0 ? (
             <p className="empty">{t('leaderboard.empty')}</p>
           ) : shown.length === 0 ? (
