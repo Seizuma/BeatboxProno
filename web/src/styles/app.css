@@ -1174,7 +1174,7 @@ td.num {
   /* Les deux mesures qui commandent la géométrie. Elles sont nommées parce que
      le calage horizontal les réutilise : les écrire trois fois en dur, c'est
      s'assurer qu'un jour l'une des trois sera oubliée. */
-  --sr-width: 420px;
+  --sr-width: 440px;
   --sr-gap: 1.5rem;
   position: fixed;
   inset: 0;
@@ -1372,8 +1372,8 @@ td.num {
 .sr__note {
   margin: 0.4rem 0;
   color: var(--ink-faint);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .sr__group {
@@ -1391,11 +1391,11 @@ td.num {
 .sr__kind {
   margin: 0 0 0.2rem;
   font-family: var(--font-data);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   background: var(--b);
-  padding: 0.05rem 0.4rem;
+  padding: 0.08rem 0.45rem;
   align-self: flex-start;
 }
 
@@ -1418,8 +1418,8 @@ td.num {
 .sr__hit {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.35rem 0.4rem;
+  gap: 0.6rem;
+  padding: 0.45rem 0.5rem;
   color: var(--ink);
   text-decoration: none;
 }
@@ -1440,8 +1440,11 @@ td.num {
 
 .sr__thumb {
   flex: 0 0 auto;
-  width: 1.8rem;
-  height: 1.8rem;
+  /* À la taille du cadre d'avatar porté par les joueurs (`cos-frame--sm`) :
+     une liste où les vignettes ne font pas toutes la même hauteur se lit comme
+     une liste mal alignée, pas comme deux familles de résultats. */
+  width: 2.4rem;
+  height: 2.4rem;
   object-fit: cover;
   border: var(--frame);
 }
@@ -1453,6 +1456,12 @@ td.num {
 
 .sr__label {
   display: block;
+  /* Le nom est l'information qu'on est venu chercher : il se lit à la taille du
+     texte courant, pas en dessous. Sans cette règle il héritait des 15 px du
+     corps, ce qui allait, mais la ligne de dessous descendait à 11 — et c'est
+     l'écart entre les deux qui rendait l'ensemble illisible. */
+  font-size: 1.05rem;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1461,7 +1470,7 @@ td.num {
 .sr__hint {
   display: block;
   font-family: var(--font-data);
-  font-size: 0.74rem;
+  font-size: 0.88rem;
   color: var(--ink-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1471,7 +1480,7 @@ td.num {
 .sr__badge {
   flex: 0 0 auto;
   font-family: var(--font-data);
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-faint);
@@ -1479,12 +1488,12 @@ td.num {
 
 /* Le seuil du voile est celui du RECOUVREMENT, pas une taille d'appareil.
 
-   Il faut 490 px de demi-colonne, 24 de gouttière et 420 de fenêtre de chaque
-   côté du centre pour que rien ne se chevauche : 2 × (490 + 24 + 420) = 1868.
+   Il faut 490 px de demi-colonne, 24 de gouttière et 440 de fenêtre de chaque
+   côté du centre pour que rien ne se chevauche : 2 × (490 + 24 + 440) = 1908.
    En dessous, la fenêtre passe par-dessus le texte, et un voile devient
    nécessaire pour dire que c'est elle qu'on lit. Il capture aussi les clics,
    sinon on toucherait la page à travers. */
-@media (max-width: 1868px) {
+@media (max-width: 1908px) {
   .sr {
     pointer-events: auto;
     background: rgba(0, 0, 0, 0.82);

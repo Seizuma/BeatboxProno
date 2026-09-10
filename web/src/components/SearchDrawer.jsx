@@ -345,7 +345,7 @@ export default function SearchDrawer({ onClose, onReady }) {
                         rien — la liste doit se lire, pas se remplir. */}
                                         {row.avatarUrl &&
                                             (row.kind === 'player' ? (
-                                                <FramedAvatar url={row.avatarUrl} frameId={row.frameId} size="xs" />
+                                                <FramedAvatar url={row.avatarUrl} frameId={row.frameId} size="sm" />
                                             ) : (
                                                 <img className="sr__thumb" src={row.avatarUrl} alt="" />
                                             ))}
