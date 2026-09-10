@@ -111,6 +111,7 @@ export default function SearchDrawer({ onClose, onReady }) {
     const { t } = useI18n();
     const { user } = useSession();
     const { pathname } = useLocation();
+    const shell = useRef(null);
     const panel = useRef(null);
     const input = useRef(null);
     const returnTo = useRef(null);
@@ -150,6 +151,34 @@ export default function SearchDrawer({ onClose, onReady }) {
     useEffect(() => {
         if (pathname !== openedAt.current) close();
     }, [pathname, close]);
+
+    /**
+     * La hauteur de la ligne de service, posée en variable CSS.
+     *
+     * La fenêtre se cale SOUS l'en-tête. Écrire cette hauteur en dur dans la
+     * feuille de styles serait un nombre juste aujourd'hui et faux demain :
+     * elle change avec la langue — « Classement » et « Leaderboard » ne tiennent
+     * pas sur le même nombre de lignes une fois les pavés serrés —, avec la
+     * taille de police du système, et le jour où une entrée de navigation
+     * s'ajoutera. On mesure donc, une fois à l'ouverture et à chaque
+     * redimensionnement.
+     *
+     * La valeur est posée sur le conteneur de la fenêtre et non sur `:root` :
+     * elle ne concerne qu'elle, et une variable globale finirait par être lue
+     * par quelque chose d'autre.
+     */
+    useEffect(() => {
+        const el = shell.current;
+        const head = document.querySelector('.masthead');
+        if (!el || !head) return undefined;
+
+        const measure = () =>
+            el.style.setProperty('--sr-top', `${Math.round(head.getBoundingClientRect().height)}px`);
+
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, []);
 
     useEffect(() => {
         returnTo.current = document.activeElement;
@@ -249,7 +278,7 @@ export default function SearchDrawer({ onClose, onReady }) {
     };
 
     return createPortal(
-        <div className={`sr${closing ? ' sr--out' : ''}`}>
+        <div className={`sr${closing ? ' sr--out' : ''}`} ref={shell}>
             <aside
                 className="sr__panel"
                 role="dialog"
@@ -316,7 +345,7 @@ export default function SearchDrawer({ onClose, onReady }) {
                         rien — la liste doit se lire, pas se remplir. */}
                                         {row.avatarUrl &&
                                             (row.kind === 'player' ? (
-                                                <FramedAvatar url={row.avatarUrl} frameId={row.frameId} size="xs" />
+                                                <FramedAvatar url={row.avatarUrl} frameId={row.frameId} size="sm" />
                                             ) : (
                                                 <img className="sr__thumb" src={row.avatarUrl} alt="" />
                                             ))}

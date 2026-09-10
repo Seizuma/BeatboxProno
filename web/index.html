@@ -7,6 +7,21 @@
   <title>beatboxpredictions</title>
   <meta name="description" content="Predict the results of beatbox competitions and compare your scores." />
   <meta name="theme-color" content="#0b0b0b" />
+  <!--
+      Les icônes. Trois tailles plutôt qu'une seule grande : le dessin est du
+      pixel art, et un navigateur qui réduit un 512 en 16 ne fait pas le même
+      travail qu'un agrandissement entier — il fabrique des demi-pixels gris,
+      exactement ce que la charte refuse. Chaque taille est donc rendue à son
+      échelle exacte.
+
+      L'icône de préproduction n'est PAS ici : `index.html` est un fichier
+      statique, servi tel quel par nginx dans les deux environnements. C'est
+      Layout.jsx qui bascule les liens quand VITE_APP_ENV vaut « dev ».
+    -->
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!--

@@ -178,12 +178,15 @@
     width: 2.7rem;
   }
 
-  /* Plus de marge à occuper : le tiroir prend l'écran, comme les fenêtres. Le
-     liseré passe en haut, seul bord encore visible. */
+  /* Plus de marge à occuper : la fenêtre prend la largeur de l'écran, sous la
+     ligne de service. Elle garde son liseré sur les quatre côtés — c'est lui
+     qui la distingue de la page, et il n'y a plus rien d'autre pour le faire. */
+  .sr {
+    padding: calc(var(--sr-top, 5.5rem) + 0.6rem) 0.75rem 0.75rem;
+  }
+
   .sr__panel {
     width: 100%;
-    border-left: 0;
-    border-top: var(--border-w) solid var(--y);
   }
 
   .shell {

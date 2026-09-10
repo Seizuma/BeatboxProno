@@ -41,8 +41,31 @@ export default function Layout() {
    */
   const foldSearch = useRef(null);
 
+  /**
+   * La signalisation de la préproduction : le titre de l'onglet, et l'icône.
+   *
+   * L'icône se change ICI plutôt que dans `index.html` parce que ce fichier est
+   * statique — nginx sert le même dans les deux environnements, et Vite n'y
+   * substitue que des variables, pas des lignes entières. Or c'est justement
+   * dans l'onglet qu'on confond les deux sites : le titre s'y tronque à quinze
+   * caractères, l'icône non.
+   *
+   * Le remplacement est sûr à répéter : « favicon-dev-16.png » ne correspond
+   * plus au motif, donc un second passage — StrictMode en fait un — ne produit
+   * pas « favicon-dev-dev-16.png ».
+   */
   useEffect(() => {
-    if (IS_DEV_ENV) document.title = 'DEV — beatboxpredictions';
+    if (!IS_DEV_ENV) return;
+    document.title = 'DEV — beatboxpredictions';
+    for (const link of document.querySelectorAll('link[rel="icon"]')) {
+      const href = link.getAttribute('href');
+      link.setAttribute('href', href.replace(/favicon-(\d+)\.png$/, 'favicon-dev-$1.png'));
+    }
+    const touch = document.querySelector('link[rel="apple-touch-icon"]');
+    if (touch) {
+      const href = touch.getAttribute('href');
+      touch.setAttribute('href', href.replace(/icon\.png$/, 'icon-dev.png'));
+    }
   }, []);
 
   return (
