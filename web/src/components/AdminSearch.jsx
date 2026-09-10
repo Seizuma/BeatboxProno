@@ -15,6 +15,26 @@ const ROUNDS = [
     ['LEGACY', 'Legacy'],
 ];
 
+/**
+ * Les façons de désigner une place, et ce qu'elles valent en bornes.
+ *
+ * ─── Pourquoi ce n'est plus « min » et « max » ──────────────────────────────
+ *
+ * Le serveur raisonne en bornes, et l'écran les recopiait telles quelles. Mais
+ * la question qu'on se pose n'est presque jamais « entre 11 et 11 » : c'est
+ * « qui l'a mis onzième ». Il fallait donc traduire soi-même une question
+ * simple en deux champs, et les remplir avec la même valeur — un geste qui
+ * s'explique par l'implémentation et par rien d'autre.
+ *
+ * Les bornes sont calculées au moment de chercher. Le serveur ne change pas.
+ */
+const RANK_MODES = [
+    ['exact', 'exactement', (a) => ({ rankMin: a, rankMax: a })],
+    ['top', 'dans le top', (a) => ({ rankMax: a })],
+    ['beyond', 'au-delà de', (a) => ({ rankMin: a })],
+    ['between', 'entre', (a, b) => ({ rankMin: a, rankMax: b })],
+];
+
 const EMPTY = {
     event: '',
     categoryId: '',
@@ -23,8 +43,9 @@ const EMPTY = {
     opponent: '',
     player: '',
     round: '',
-    rankMin: '',
-    rankMax: '',
+    rankMode: 'exact',
+    rankA: '',
+    rankB: '',
     winner: false,
     drafts: false,
 };
@@ -95,6 +116,14 @@ export default function AdminSearch() {
             // peut rien trouver, sans que rien ne l'explique.
             if (patch.event !== undefined) return { ...next, categoryId: '', phaseId: '' };
             if (patch.categoryId !== undefined) return { ...next, phaseId: '' };
+            // Effacer l'artiste vide ce qui en dépend. Ces critères ne sont pas
+            // seulement grisés : côté serveur ils ne s'appliquent pas sans lui,
+            // et les laisser renseignés ferait mentir le compte de filtres
+            // actifs — on croirait chercher sur quatre critères alors qu'un seul
+            // opère.
+            if (patch.subject !== undefined && patch.subject.trim() === '') {
+                return { ...next, opponent: '', winner: false, rankA: '', rankB: '' };
+            }
             return next;
         });
 
@@ -104,8 +133,20 @@ export default function AdminSearch() {
         try {
             const params = new URLSearchParams();
             for (const [key, value] of Object.entries(filters)) {
+                // Les trois champs de place sont traduits juste après : envoyés
+                // tels quels, le serveur ne saurait pas quoi en faire.
+                if (['rankMode', 'rankA', 'rankB'].includes(key)) continue;
                 if (value === '' || value === false) continue;
                 params.set(key, value === true ? '1' : String(value));
+            }
+
+            for (const [, , bounds] of RANK_MODES.filter(([id]) => id === filters.rankMode)) {
+                const a = filters.rankA === '' ? null : Number(filters.rankA);
+                const b = filters.rankB === '' ? null : Number(filters.rankB);
+                if (a == null) break;
+                for (const [key, value] of Object.entries(bounds(a, b))) {
+                    if (value != null) params.set(key, String(value));
+                }
             }
             setData(await api.get(`/admin/search/predictions?${params}`));
         } catch (err) {
@@ -115,12 +156,44 @@ export default function AdminSearch() {
         }
     };
 
-    const active = Object.entries(filters).filter(([, v]) => v !== '' && v !== false).length;
+    /**
+     * Toutes les conditions du serveur, sauf le tour, passent par l'artiste.
+     *
+     * `rankMin`/`rankMax` vivent dans une branche gardée par `subjectIds` ;
+     * « face à » compare `subjectIds` à `opponentIds` ; « donné vainqueur » est
+     * explicitement conditionné. Sans artiste, ces trois filtres ne font donc
+     * RIEN — silencieusement, ce qui est le pire des cas : on croit avoir
+     * cherché « les pronostics qui placent quelqu'un onzième » et on obtient
+     * tout l'événement.
+     *
+     * L'écran rend cette dépendance visible plutôt que de la laisser découvrir.
+     */
+    const hasSubject = filters.subject.trim() !== '';
+
+    // `rankMode` a toujours une valeur : le compter comme un filtre actif
+    // afficherait « 1 filtre » sur un formulaire vierge.
+    const active = Object.entries(filters).filter(
+        ([k, v]) => k !== 'rankMode' && v !== '' && v !== false
+    ).length;
+
 
     return (
         <div className="stack">
-            <section className="panel stack" style={{ gap: '0.8rem' }}>
-                <h2>Recherche</h2>
+            {/* Un vrai <form> : on tape un nom d'artiste et on appuie sur Entrée.
+                Le bouton restait le seul moyen de lancer la recherche, ce qui est
+                contre-intuitif dans un formulaire où l'on saisit du texte. */}
+            <form
+                className="panel stack"
+                style={{ gap: '0.8rem' }}
+                onSubmit={(e) => { e.preventDefault(); search(); }}
+            >
+                <div className="spread">
+                    <h2 style={{ margin: 0 }}>Recherche</h2>
+                    {/* Le compte des filtres actifs était calculé sans jamais être
+                        montré. C'est pourtant lui qui explique une recherche qui ne
+                        rend rien : un critère oublié de la fois précédente. */}
+                    {active > 0 && <span className="tag">{active} filtre{active > 1 ? 's' : ''}</span>}
+                </div>
                 <p className="faint" style={{ margin: 0, fontSize: '0.88rem' }}>
                     Tous les filtres sont facultatifs et se cumulent. Laissés vides, ils n'excluent rien.
                 </p>
@@ -166,6 +239,19 @@ export default function AdminSearch() {
                         </select>
                     </div>
 
+                    {/* Le tour est le SEUL critère d'affiche qui vaille seul : le
+                        serveur en fait une condition à part quand ni vainqueur ni
+                        adversaire ne sont demandés. Sa place est donc ici, avec le
+                        périmètre, et non dans le bloc qui dépend d'un artiste. */}
+                    <div className="field">
+                        <label htmlFor="s-round">Tour</label>
+                        <select id="s-round" value={filters.round} onChange={(e) => set({ round: e.target.value })}>
+                            {ROUNDS.map(([id, label]) => (
+                                <option key={id} value={id}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="field">
                         <label htmlFor="s-player">Joueur</label>
                         <input
@@ -177,70 +263,122 @@ export default function AdminSearch() {
                     </div>
                 </div>
 
-                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.6rem' }}>
-                    <div className="field">
-                        <label htmlFor="s-subject">Artiste ou duo</label>
-                        <input
-                            id="s-subject"
-                            value={filters.subject}
-                            placeholder="D-low, UNITEAM…"
-                            onChange={(e) => set({ subject: e.target.value })}
-                        />
-                    </div>
+                {/* ─── Ce qu'on cherche, à propos d'un artiste ───────────────
+                    Le regroupement n'est pas cosmétique : côté serveur, la place,
+                    « face à » et « donné vainqueur » vivent tous dans des branches
+                    gardées par l'artiste. Sans lui, ces trois filtres ne font rien
+                    — silencieusement. Les poser à côté des autres laissait croire
+                    qu'ils s'utilisaient seuls. */}
+                <fieldset
+                    style={{ border: 'var(--frame)', padding: '0.7rem 0.8rem', margin: 0 }}
+                >
+                    <legend className="eyebrow" style={{ padding: '0 0.4rem' }}>
+                        À propos d'un artiste
+                    </legend>
 
-                    <div className="field">
-                        <label htmlFor="s-opponent">Face à</label>
-                        <input
-                            id="s-opponent"
-                            value={filters.opponent}
-                            placeholder="l'autre camp de l'affiche"
-                            onChange={(e) => set({ opponent: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="field">
-                        <label htmlFor="s-round">Tour</label>
-                        <select id="s-round" value={filters.round} onChange={(e) => set({ round: e.target.value })}>
-                            {ROUNDS.map(([id, label]) => (
-                                <option key={id} value={id}>{label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end' }}>
-                        <div className="field" style={{ margin: 0 }}>
-                            <label htmlFor="s-min">Place min.</label>
+                    <div className="stack" style={{ gap: '0.6rem' }}>
+                        <div className="field" style={{ margin: 0, maxWidth: '22rem' }}>
+                            <label htmlFor="s-subject">Artiste ou duo</label>
                             <input
-                                id="s-min"
-                                type="number"
-                                min="1"
-                                value={filters.rankMin}
-                                onChange={(e) => set({ rankMin: e.target.value })}
+                                id="s-subject"
+                                value={filters.subject}
+                                placeholder="D-low, UNITEAM…"
+                                onChange={(e) => set({ subject: e.target.value })}
                             />
                         </div>
-                        <div className="field" style={{ margin: 0 }}>
-                            <label htmlFor="s-max">max.</label>
-                            <input
-                                id="s-max"
-                                type="number"
-                                min="1"
-                                value={filters.rankMax}
-                                onChange={(e) => set({ rankMax: e.target.value })}
-                            />
+
+                        {!hasSubject && (
+                            <p className="faint" style={{ margin: 0, fontSize: '0.85rem' }}>
+                                Renseignez un nom pour activer les critères ci-dessous : ils portent tous
+                                sur cet artiste.
+                            </p>
+                        )}
+
+                        <div
+                            className="row"
+                            style={{
+                                gap: '0.6rem',
+                                alignItems: 'flex-end',
+                                flexWrap: 'wrap',
+                                opacity: hasSubject ? 1 : 0.45,
+                            }}
+                        >
+                            {/* La place, en une seule cellule. Deux champs « min » et
+                                « max » obligeaient à écrire 11 et 11 pour demander
+                                « onzième » — une traduction du vocabulaire du serveur
+                                que l'utilisateur n'a pas à faire. */}
+                            <div className="field" style={{ margin: 0 }}>
+                                <label htmlFor="s-rank-mode">Placé</label>
+                                <select
+                                    id="s-rank-mode"
+                                    disabled={!hasSubject}
+                                    value={filters.rankMode}
+                                    onChange={(e) => set({ rankMode: e.target.value, rankB: '' })}
+                                >
+                                    {RANK_MODES.map(([id, label]) => (
+                                        <option key={id} value={id}>{label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="field" style={{ margin: 0 }}>
+                                <label htmlFor="s-rank-a">
+                                    {filters.rankMode === 'top' ? 'des' : 'place'}
+                                </label>
+                                <input
+                                    id="s-rank-a"
+                                    type="number"
+                                    min="1"
+                                    style={{ width: '5.5rem' }}
+                                    disabled={!hasSubject}
+                                    value={filters.rankA}
+                                    onChange={(e) => set({ rankA: e.target.value })}
+                                />
+                            </div>
+
+                            {filters.rankMode === 'between' && (
+                                <div className="field" style={{ margin: 0 }}>
+                                    <label htmlFor="s-rank-b">et</label>
+                                    <input
+                                        id="s-rank-b"
+                                        type="number"
+                                        min="1"
+                                        style={{ width: '5.5rem' }}
+                                        disabled={!hasSubject}
+                                        value={filters.rankB}
+                                        onChange={(e) => set({ rankB: e.target.value })}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="field" style={{ margin: 0, flex: '1 1 14rem' }}>
+                                <label htmlFor="s-opponent">Face à</label>
+                                <input
+                                    id="s-opponent"
+                                    disabled={!hasSubject}
+                                    value={filters.opponent}
+                                    placeholder="l'autre camp de l'affiche"
+                                    onChange={(e) => set({ opponent: e.target.value })}
+                                />
+                            </div>
+
+                            <label
+                                className="row"
+                                style={{ gap: '0.4rem', alignItems: 'center', paddingBottom: '0.35rem' }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    disabled={!hasSubject}
+                                    checked={filters.winner}
+                                    onChange={(e) => set({ winner: e.target.checked })}
+                                />
+                                Donné vainqueur
+                            </label>
                         </div>
                     </div>
-                </div>
+                </fieldset>
 
                 <div className="row" style={{ gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <label className="row" style={{ gap: '0.4rem', alignItems: 'center' }}>
-                        <input
-                            type="checkbox"
-                            checked={filters.winner}
-                            onChange={(e) => set({ winner: e.target.checked })}
-                        />
-                        Donné vainqueur
-                    </label>
-
                     {/* Décochée par défaut, et le libellé dit pourquoi : un brouillon
               n'est publié nulle part, son auteur ne s'attend pas à ce qu'on le
               lise. */}
@@ -255,16 +393,20 @@ export default function AdminSearch() {
 
                     <span className="row" style={{ gap: '0.5rem', marginLeft: 'auto' }}>
                         {active > 0 && (
-                            <button className="btn btn--ghost" onClick={() => { setFilters(EMPTY); setData(null); }}>
+                            <button
+                                className="btn btn--ghost"
+                                type="button"
+                                onClick={() => { setFilters(EMPTY); setData(null); }}
+                            >
                                 Tout effacer
                             </button>
                         )}
-                        <button className="btn btn--primary" disabled={busy} onClick={search}>
+                        <button className="btn btn--primary" type="submit" disabled={busy}>
                             {busy ? 'Recherche…' : 'Chercher'}
                         </button>
                     </span>
                 </div>
-            </section>
+            </form>
 
             {error && <p className="notice">{error}</p>}
 

@@ -181,11 +181,12 @@ function Appearance({ a }) {
                 <span className="faint"> · {t('artists.voters', { n: c.voters })}</span>
               </p>
               <RankSpread distribution={c.distribution} cut={c.cut} />
-              {c.bestRank != null && (
-                <p className="faint data" style={{ margin: '0.35rem 0 0', fontSize: '0.78rem' }}>
-                  {t('artists.bestWorst', { best: c.bestRank, worst: c.worstRank })}
-                </p>
-              )}
+              <p className="faint data" style={{ margin: '0.15rem 0 0', fontSize: '0.78rem' }}>
+                {c.bestRank != null && (
+                  <>{t('artists.bestWorst', { best: c.bestRank, worst: c.worstRank })} · </>
+                )}
+                {t('artists.spread.hint')}
+              </p>
             </div>
           )}
 
@@ -215,73 +216,197 @@ function Appearance({ a }) {
  */
 function RankSpread({ distribution, cut }) {
   const { t } = useI18n();
+
+  /**
+   * Le rang sous le curseur, ou `null` quand on ne pointe rien.
+   *
+   * ─── Ce que l'infobulle native coûtait ────────────────────────────────────
+   *
+   * Le graphique portait un `<title>` par barre. C'est gratuit à écrire et
+   * mauvais à utiliser : le navigateur attend près d'une seconde avant de
+   * l'afficher, la place où bon lui semble, l'écrit dans SA police — et surtout
+   * ne la déclenche jamais au toucher. Sur téléphone, la moitié de
+   * l'information du graphique était inaccessible.
+   *
+   * Il fallait en plus viser la barre elle-même : pour un rang à deux
+   * pronostics, c'est un rectangle de quatre pixels sur trois.
+   */
+  const [active, setActive] = useState(null);
+
   const W = 640;
-  const H = 90;
+  /**
+   * Une bande réservée EN HAUT du tracé pour la lecture.
+   *
+   * La valeur se lisait sous le graphique, ce qui obligeait l'œil à sortir de
+   * l'image pour savoir ce qu'il regardait. La poser par-dessus les barres
+   * réglerait ça mais la rendrait illisible dès qu'une barre monte haut —
+   * c'est-à-dire précisément là où l'on regarde.
+   *
+   * Une bande qui lui appartient résout les deux : la lecture est DANS le
+   * graphique, et rien ne peut venir dessous.
+   */
+  const READ = 20;
+  const H = 108;
   const PAD = 16;
 
   const maxRank = Math.max(...distribution.map((d) => d.rank));
   const maxN = Math.max(...distribution.map((d) => d.n));
   const innerW = W - PAD * 2;
-  const innerH = H - PAD - 18;
+  const top = READ + 6;
+  const innerH = H - top - 18;
   const step = innerW / maxRank;
   const barW = Math.max(2, step * 0.7);
 
+  const byRank = new Map(distribution.map((d) => [d.rank, d.n]));
+
+  /**
+   * Le rang le plus souvent donné, montré quand on ne pointe rien.
+   *
+   * Un graphique qui n'affiche sa légende qu'au survol demande d'agir avant de
+   * comprendre. Celui-ci dit d'emblée ce qu'il a de plus intéressant à dire, et
+   * le survol ne fait qu'explorer autour.
+   */
+  const mode = distribution.reduce((best, d) => (d.n > (best?.n ?? 0) ? d : best), null);
+  const shown = active != null ? { rank: active, n: byRank.get(active) ?? 0 } : mode;
+
+  /** Le rang sous une abscisse, dans le repère du viewBox. */
+  const rankAt = (clientX, target) => {
+    const box = target.getBoundingClientRect();
+    if (box.width === 0) return null;
+    const x = ((clientX - box.left) / box.width) * W;
+    const rank = Math.ceil((x - PAD) / step);
+    return Math.min(maxRank, Math.max(1, rank));
+  };
+
+  const move = (e) => setActive(rankAt(e.clientX, e.currentTarget));
+
+  const key = (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const from = active ?? mode?.rank ?? 1;
+    const next =
+      e.key === 'Home' ? 1
+        : e.key === 'End' ? maxRank
+          : e.key === 'ArrowLeft' ? from - 1
+            : from + 1;
+    setActive(Math.min(maxRank, Math.max(1, next)));
+  };
+
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      style={{ width: '100%', height: 'auto', display: 'block' }}
-      role="img"
-      aria-label={t('artists.spread.aria')}
-    >
-      <line x1={PAD} y1={PAD + innerH} x2={W - PAD} y2={PAD + innerH} stroke="var(--line)" strokeWidth="1" />
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'pan-y' }}
+        role="img"
+        aria-label={t('artists.spread.aria')}
+        /* `pointer` et non `mouse` : le même gestionnaire couvre la souris, le
+           stylet ET le doigt. `touchAction: pan-y` laisse le défilement
+           vertical passer, sinon on ne peut plus faire défiler la page depuis
+           le graphique. */
+        tabIndex={0}
+        onPointerMove={move}
+        onPointerDown={move}
+        onPointerLeave={() => setActive(null)}
+        onKeyDown={key}
+        onBlur={() => setActive(null)}
+      >
+        <line x1={PAD} y1={top + innerH} x2={W - PAD} y2={top + innerH} stroke="var(--line)" strokeWidth="1" />
 
-      {distribution.map((d) => {
-        const x = PAD + (d.rank - 0.5) * step;
-        const h = (d.n / maxN) * innerH;
-        // Vert dans la coupe, gris dehors : la même convention que partout
-        // ailleurs sur le site pour dire « qualifié ».
-        const inCut = cut ? d.rank <= cut : false;
-        return (
+        {/* La colonne de lecture : toute la hauteur du tracé, pas seulement la
+            barre. C'est ce qui rend le survol utilisable — viser un rectangle
+            de quatre pixels sur trois ne l'était pas. */}
+        {active != null && (
           <rect
-            key={d.rank}
-            x={x - barW / 2}
-            y={PAD + innerH - h}
-            width={barW}
-            height={h}
-            fill={inCut ? 'var(--ok)' : 'var(--ink-faint)'}
+            x={PAD + (active - 1) * step}
+            y={top - 6}
+            width={step}
+            height={innerH + 6}
+            fill="var(--surface-2)"
+          />
+        )}
+
+        {distribution.map((d) => {
+          const x = PAD + (d.rank - 0.5) * step;
+          const h = (d.n / maxN) * innerH;
+          // Vert dans la coupe, gris dehors : la même convention que partout
+          // ailleurs sur le site pour dire « qualifié ».
+          const inCut = cut ? d.rank <= cut : false;
+          const on = d.rank === shown?.rank;
+          return (
+            <rect
+              key={d.rank}
+              x={x - barW / 2}
+              y={top + innerH - h}
+              width={barW}
+              height={h}
+              fill={on ? 'var(--y)' : inCut ? 'var(--ok)' : 'var(--ink-faint)'}
+            />
+          );
+        })}
+
+        {/* Le trait de coupe, s'il y en a une : c'est lui qui donne son sens au
+            reste du graphique. */}
+        {cut && cut < maxRank && (
+          <line
+            x1={PAD + cut * step}
+            y1={top - 4}
+            x2={PAD + cut * step}
+            y2={top + innerH}
+            stroke="var(--y)"
+            strokeWidth="2"
+            strokeDasharray="4 3"
+          />
+        )}
+
+        {/* La lecture SUIT la colonne active, dans sa bande.
+            Elle est calée à l'aplomb de ce qu'on regarde, ce qu'un texte fixe
+            à gauche ne ferait pas, et l'ancrage bascule près des bords pour
+            qu'elle ne sorte jamais du cadre. */}
+        {shown && (
+          <text
+            x={Math.min(W - PAD, Math.max(PAD, PAD + (shown.rank - 0.5) * step))}
+            y={READ - 6}
+            textAnchor={
+              shown.rank <= 2 ? 'start' : shown.rank >= maxRank - 1 ? 'end' : 'middle'
+            }
+            fill={active != null ? 'var(--y)' : 'var(--ink-faint)'}
+            style={{ fontFamily: 'var(--font-data)', fontSize: '12px' }}
           >
-            <title>{`${d.rank}e — ${d.n} pronostic(s)`}</title>
-          </rect>
-        );
-      })}
+            {t(shown.n === 1 ? 'artists.spread.readOne' : 'artists.spread.read', {
+              n: shown.n,
+              rank: shown.rank,
+            })}
+            {cut && shown.rank <= cut ? ` · ${t('artists.spread.cut')}` : ''}
+          </text>
+        )}
 
-      {/* Le trait de coupe, s'il y en a une : c'est lui qui donne son sens au
-          reste du graphique. */}
-      {cut && cut < maxRank && (
-        <line
-          x1={PAD + cut * step}
-          y1={PAD - 4}
-          x2={PAD + cut * step}
-          y2={PAD + innerH}
-          stroke="var(--y)"
-          strokeWidth="2"
-          strokeDasharray="4 3"
-        />
-      )}
+        {[1, Math.ceil(maxRank / 2), maxRank].map((r) => (
+          <text
+            key={r}
+            x={PAD + (r - 0.5) * step}
+            y={H - 4}
+            textAnchor="middle"
+            fill="var(--ink-faint)"
+            style={{ fontFamily: 'var(--font-data)', fontSize: '11px' }}
+          >
+            {r}
+          </text>
+        ))}
+      </svg>
 
-      {[1, Math.ceil(maxRank / 2), maxRank].map((r) => (
-        <text
-          key={r}
-          x={PAD + (r - 0.5) * step}
-          y={H - 4}
-          textAnchor="middle"
-          fill="var(--ink-faint)"
-          style={{ fontFamily: 'var(--font-data)', fontSize: '11px' }}
-        >
-          {r}
-        </text>
-      ))}
-    </svg>
+      {/* La même lecture, invisible, pour les lecteurs d'écran : un `<text>`
+          dans un SVG marqué `role="img"` n'est pas annoncé, et la navigation
+          aux flèches serait muette sans ce relais. */}
+      <p className="visually-hidden" aria-live="polite">
+        {shown
+          ? t(shown.n === 1 ? 'artists.spread.readOne' : 'artists.spread.read', {
+            n: shown.n,
+            rank: shown.rank,
+          })
+          : ''}
+      </p>
+
+    </div>
   );
 }
 
