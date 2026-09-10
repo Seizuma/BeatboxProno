@@ -93,6 +93,159 @@ img {
   padding: 0 1.2rem;
 }
 
+/**
+ * L'écran d'administration, plus large que les pages de lecture.
+ *
+ * 980 px conviennent à une colonne de texte — c'est même la largeur qui la rend
+ * lisible. Mais l'administration n'est pas du texte : c'est un rail, des
+ * tableaux et des grilles, qui gagnent tous à s'étaler. À 980 px il restait
+ * près de mille pixels vides de chaque côté pendant qu'on faisait défiler la
+ * page, ce qui est exactement le mauvais échange.
+ *
+ * 1500 et non « toute la largeur » : au-delà, l'œil perd la ligne en revenant
+ * à gauche, et les tableaux deviennent des étendues où l'on ne suit plus les
+ * rangées.
+ */
+.shell--wide {
+  max-width: 1500px;
+}
+
+/**
+ * Le rail de navigation d'un événement.
+ *
+ * Une liste, pas des boutons : on désigne une page à afficher, on ne déclenche
+ * pas une action. Le liseré à gauche marque la sélection sans remplir le fond,
+ * ce qui reste lisible sur tous les thèmes — un aplat de couleur oblige à
+ * choisir une encre qui contraste avec lui, et il n'y en a pas qui marche
+ * partout.
+ */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rail__group {
+  margin: 0 0 0.3rem 0.8rem;
+}
+
+.rail__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.34rem 0.8rem;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail__item:hover {
+  background: var(--surface-2);
+}
+
+.rail__item[aria-current='true'] {
+  border-left-color: var(--y);
+  color: var(--y);
+  background: var(--surface-2);
+}
+
+.rail__count {
+  color: var(--ink-faint);
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+}
+
+/**
+ * La disposition « index et page ».
+ *
+ * En grille et non en flottants : la colonne de droite doit pouvoir contenir un
+ * tableau large sans pousser le rail, et `minmax(0, 1fr)` est ce qui l'y
+ * oblige — sans lui, une grille CSS prend la largeur de son contenu le plus
+ * large et déborde.
+ */
+.railed {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+}
+
+.railed__nav {
+  border-right: var(--frame);
+  padding: 0.6rem 0;
+}
+
+.railed__panel {
+  padding: 0.9rem 1.1rem;
+  min-width: 0;
+}
+
+/* Sous 900 px, le rail passe au-dessus : deux colonnes de 210 px et le reste
+   ne laisseraient plus de place pour travailler. */
+@media (max-width: 900px) {
+  .railed {
+    grid-template-columns: 1fr;
+  }
+
+  .railed__nav {
+    border-right: 0;
+    border-bottom: var(--frame);
+  }
+}
+
+/**
+ * Les participants en colonnes.
+ *
+ * Vingt participants faisaient vingt lignes ; sur quatre catégories, c'était un
+ * écran entier de défilement pour une information qui tient sur cinq lignes.
+ *
+ * `auto-fill` et non `auto-fit` : à trois participants, on veut trois cases de
+ * largeur normale, pas trois cases étirées sur toute la ligne. Le filet est
+ * obtenu par un fond de grille et un espace d'un pixel, ce qui évite les
+ * bordures doublées entre cases voisines.
+ */
+.seedgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: var(--frame);
+}
+
+.seedgrid__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.3rem 0.35rem 0.3rem 0.5rem;
+  background: var(--surface);
+  font-size: 0.9rem;
+  min-width: 0;
+}
+
+.seedgrid__seed {
+  font-family: var(--font-data);
+  color: var(--g);
+  min-width: 1.7rem;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+.seedgrid__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seedgrid__actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .stack {
   display: flex;
   flex-direction: column;

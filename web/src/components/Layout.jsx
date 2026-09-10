@@ -101,7 +101,15 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="shell">
+      {/* L'administration s'élargit, les pages de lecture non.
+
+          980 px conviennent à une colonne de texte — c'est même ce qui la rend
+          lisible. L'administration n'est pas du texte : c'est un rail, des
+          tableaux et des grilles, qui gagnent tous à s'étaler. Le choix se fait
+          sur le CHEMIN plutôt que par une prop remontée depuis la page : la
+          largeur est une propriété de la mise en page, et la faire décider par
+          le contenu obligerait chaque page à en avoir conscience. */}
+      <main className={`shell${pathname.startsWith('/admin') ? ' shell--wide' : ''}`}>
         <Outlet />
       </main>
 
