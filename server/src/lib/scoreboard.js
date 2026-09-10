@@ -259,6 +259,32 @@ export async function buildScoreboard({
                 select: { phaseId: true, contenderId: true, rank: true },
             })
             : [],
+
+        /**
+         * Les totaux du PÉRIMÈTRE ENTIER, hors plafond d'affichage.
+         *
+         * `grouped` est borné par `take` — deux cents lignes sur la page de
+         * classement. Les quatre chiffres de l'en-tête étaient calculés en
+         * additionnant ces lignes-là, donc ils décrivaient le top 200 et non le
+         * site : « 692 pronostics déposés » quand il y en avait 742.
+         *
+         * ⚠ CETTE FONCTION CONTIENT DEUX `Promise.all`. Celui-ci alimente le
+         * calcul et sa déstructuration est en tête ; le second, plus bas, ne
+         * met en forme que les lectures de la foule. Une requête ajoutée au
+         * mauvais tableau ne casse RIEN à la lecture du fichier : le code reste
+         * syntaxiquement valide, la construction passe, et la variable attendue
+         * en haut vaut simplement `undefined`. La page tombe alors à la
+         * première lecture, en production. C'est exactement ce qui est arrivé.
+         *
+         * Un `aggregate` plutôt qu'un `groupBy` sans limite : on ne rapatrie pas
+         * une ligne par joueur pour en faire une somme que Postgres calcule
+         * mieux.
+         */
+        prisma.prediction.aggregate({
+            where: predictionWhere,
+            _count: { _all: true },
+            _sum: { points: true },
+        }),
     ]);
 
     const maxByCategory = new Map(categories.map((c) => [c.id, maxOnResolved(c)]));
@@ -340,13 +366,17 @@ export async function buildScoreboard({
      * requête de plus.
      */
     const everyone = [...new Set(submissions.map((s) => s.userId))];
-    const scopePoints = overall._sum.points ?? 0;
+    // La lecture est défensive à dessein. Une erreur de câblage sur le
+    // Promise.all ci-dessus rendrait `overall` indéfini, et le classement
+    // entier tomberait pour un chiffre d'en-tête — un total faux vaut mieux
+    // qu'une page morte.
+    const scopePoints = overall?._sum?.points ?? 0;
     let scopePossible = 0;
     for (const id of everyone) scopePossible += possibleFor(id);
 
     const totals = {
         players: everyone.length,
-        submitted: overall._count._all,
+        submitted: overall?._count?._all ?? 0,
         points: scopePoints,
         possible: scopePossible,
         precision: scopePossible ? Math.round((scopePoints / scopePossible) * 100) : null,
@@ -479,29 +509,6 @@ export async function buildScoreboard({
             )
             : Promise.resolve([]),
 
-        /**
-         * Les totaux du PÉRIMÈTRE ENTIER, hors plafond d'affichage.
-         *
-         * `grouped` est borné par `take` — deux cents lignes sur la page de
-         * classement. Les quatre chiffres de l'en-tête étaient calculés en
-         * additionnant ces lignes-là, donc ils ne décrivaient pas le site mais
-         * son top 200 : « 692 pronostics déposés » quand il y en avait 742, et
-         * « 200 joueurs » qui n'était rien d'autre que le plafond relu.
-         *
-         * L'écart passe inaperçu tant que le site tient sous deux cents
-         * joueurs, puis grandit sans que rien ne le signale — et le compteur de
-         * l'accueil, lui, comptait juste. Deux nombres pour la même chose, dont
-         * un faux.
-         *
-         * Un `aggregate` séparé plutôt qu'un `groupBy` sans limite : on ne veut
-         * pas rapatrier une ligne par joueur pour en faire une somme que
-         * Postgres calcule mieux.
-         */
-        prisma.prediction.aggregate({
-            where: predictionWhere,
-            _count: { _all: true },
-            _sum: { points: true },
-        }),
     ]);
 
     return {
