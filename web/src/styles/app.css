@@ -118,18 +118,30 @@ img {
  * ce qui reste lisible sur tous les thèmes — un aplat de couleur oblige à
  * choisir une encre qui contraste avec lui, et il n'y en a pas qui marche
  * partout.
+ *
+ * ─── Pourquoi `railed__` et pas `rail__` ────────────────────────────────────
+ *
+ * Parce que `.rail` EXISTE DÉJÀ, plus bas dans ce fichier : c'est la rangée de
+ * la liste d'événements, une grille de trois colonnes avec ses `.rail__year`,
+ * `.rail__title` et `.rail--draft`. Deux composants sans rapport sous le même
+ * nom, et c'est le second déclaré qui gagne — le rail de navigation héritait
+ * donc d'une grille à trois colonnes et ses entrées se chevauchaient.
+ *
+ * Tout est regroupé sous `railed`, le nom de la disposition qui les contient.
+ * Le CSS n'a pas de portée : le seul garde-fou est de vérifier qu'un nom est
+ * libre avant de le prendre.
  */
-.rail {
+.railed__list {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 
-.rail__group {
+.railed__group {
   margin: 0 0 0.3rem 0.8rem;
 }
 
-.rail__item {
+.railed__item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -146,30 +158,22 @@ img {
   cursor: pointer;
 }
 
-.rail__item:hover {
+.railed__item:hover {
   background: var(--surface-2);
 }
 
-.rail__item[aria-current='true'] {
+.railed__item[aria-current='true'] {
   border-left-color: var(--y);
   color: var(--y);
   background: var(--surface-2);
 }
 
-.rail__count {
+.railed__count {
   color: var(--ink-faint);
   font-family: var(--font-data);
   font-size: 0.78rem;
 }
 
-/**
- * La disposition « index et page ».
- *
- * En grille et non en flottants : la colonne de droite doit pouvoir contenir un
- * tableau large sans pousser le rail, et `minmax(0, 1fr)` est ce qui l'y
- * oblige — sans lui, une grille CSS prend la largeur de son contenu le plus
- * large et déborde.
- */
 .railed {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);

@@ -484,12 +484,12 @@ function EventStructure({ event, onDone, run, askDelete }) {
     <button
       key={id}
       type="button"
-      className="rail__item"
+      className="railed__item"
       aria-current={current === id}
       onClick={() => setPage(id)}
     >
       <span>{label}</span>
-      {count != null && <span className="rail__count">{count}</span>}
+      {count != null && <span className="railed__count">{count}</span>}
     </button>
   );
 
@@ -506,13 +506,13 @@ function EventStructure({ event, onDone, run, askDelete }) {
       </div>
 
       <div className="panel railed" style={{ padding: 0 }}>
-        <nav className="railed__nav rail" aria-label="Sections de l'événement">
-          <p className="eyebrow rail__group">Événement</p>
+        <nav className="railed__nav railed__list" aria-label="Sections de l'événement">
+          <p className="eyebrow railed__group">Événement</p>
           {item('settings', 'Réglages')}
           {item('access', 'Accès')}
           {item('settlement', 'Clôture')}
 
-          <p className="eyebrow rail__group" style={{ marginTop: '1rem' }}>Catégories</p>
+          <p className="eyebrow railed__group" style={{ marginTop: '1rem' }}>Catégories</p>
           {event.categories.length === 0 ? (
             <p className="faint" style={{ margin: '0 0.8rem', fontSize: '0.85rem' }}>
               Aucune.
