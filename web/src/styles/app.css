@@ -693,6 +693,66 @@ img {
   color: var(--y);
 }
 
+/* ---------------------------------------------------------------------------
+   LE JURY D'UNE CATÉGORIE
+
+   Une ligne grise en petites capitales, sans cadre, posée entre deux sections :
+   à l'œil, ça se lisait comme une légende, et les joueurs disaient ne pas la
+   trouver. Savoir qui juge n'est pas une note de bas de page — ça change la
+   façon dont on pronostique une battle.
+
+   Trois choses lui manquaient, et ce sont les trois qu'on corrige : un cadre,
+   pour qu'elle devienne un objet plutôt qu'une ligne perdue ; un point
+   d'entrée coloré, pour que l'œil sache où se poser ; et l'encre du contenu au
+   lieu de celle des légendes.
+   --------------------------------------------------------------------------- */
+
+.jury {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  border: var(--frame);
+  padding: 0.45rem 0.6rem;
+}
+
+/* Bleu sur jaune : l'idiome des bandeaux du site — en-tête de fenêtre, titre de
+   tour dans un tableau. Aucune couleur nouvelle, et le lecteur reconnaît la
+   forme avant d'avoir lu le mot. */
+.jury__label {
+  flex: 0 0 auto;
+  background: var(--b);
+  color: var(--y);
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0.1rem 0.45rem;
+}
+
+.jury__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Une pastille par nom, et non une file séparée par des points médians : à
+   cinq juges la file devient une phrase qu'il faut lire, alors que des pastilles
+   se comptent d'un coup d'œil. Elles se replient aussi proprement sur
+   téléphone, là où la file coupait un nom en deux. */
+.jury__name {
+  font-family: var(--font-data);
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 0.05rem 0.45rem;
+}
+
 .notice {
   border: var(--border-w) solid var(--r);
   color: var(--r);
