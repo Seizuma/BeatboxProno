@@ -278,8 +278,26 @@ publicRouter.get('/predictions/:predictionId', guard(async (req, res) => {
 
   if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
 
+  /**
+   * Les brouillons : privés, sauf pour leur auteur et pour l'organisation.
+   *
+   * ─── Pourquoi l'organisation y a droit ──────────────────────────────────────
+   *
+   * La recherche d'administration sait DÉJÀ lister les brouillons — la case
+   * « inclure les brouillons » existe et fonctionne. Mais « Ouvrir » butait
+   * ici : on pouvait voir qu'un brouillon existait sans jamais l'ouvrir, ce qui
+   * est le pire des deux mondes. Une modération qui ne peut pas regarder ce
+   * qu'elle modère ne sert à rien, et la suppression d'un pronostic — qui,
+   * elle, était déjà permise — est un geste autrement plus lourd que sa
+   * lecture.
+   *
+   * ─── Ce que ça ne change pas ────────────────────────────────────────────────
+   *
+   * Rien pour les joueurs entre eux : `isStaff` ne recouvre que ADMIN et OWNER.
+   * On ne lit toujours pas les hésitations de son voisin.
+   */
   const mine = req.user?.id === prediction.userId;
-  if (!mine && !prediction.submitted) {
+  if (!mine && !prediction.submitted && !isStaff(req.user)) {
     return res.status(403).json({ error: "Ce brouillon n'est pas public." });
   }
   if (prediction.event.status === 'DRAFT' && !['ADMIN', 'OWNER'].includes(req.user?.role)) {
