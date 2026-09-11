@@ -150,6 +150,83 @@ export function scoreFinalFour(predicted, official) {
   return { total, lines };
 }
 
+/* ---------------------------------------------------------------------------
+   LES QUALIFIÉS HORS-RADAR
+
+   Le championnat de France accepte les vidéos de qualification en « non
+   répertoriée » sur YouTube. Des candidats passent donc la sélection sans que
+   personne, hors du jury, ait su qu'ils concouraient : ils ne figurent dans le
+   top d'AUCUN joueur, et pas par erreur de pronostic — leur existence n'était
+   pas connaissable.
+
+   Les trois fonctions ci-dessous sont la seule façon de lire un classement
+   officiel. `scoring.js`, `maxscore.js` et `scoreboard.js` passent toutes par
+   elles : ces trois fichiers doivent s'accorder au point près, sinon la
+   précision affichée au classement dérape — c'est le défaut qu'on a déjà mis
+   deux jours à trouver sur le Crew.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Le classement tel que les joueurs pouvaient le connaître.
+ *
+ * Les lignes hors-radar sortent, et les rangs restants se RESSERRENT sur 1..n.
+ *
+ * ─── Pourquoi le resserrement est le cœur du correctif ──────────────────────
+ *
+ * Retirer les lignes ne suffit pas. Si le troisième d'une sélection est
+ * hors-radar, les suivants restent officiellement 4e, 5e, 6e alors que les
+ * joueurs les ont classés 3e, 4e, 5e : chacun perd un point de placement sur
+ * toute la queue du classement, en cascade, pour quelqu'un dont il ignorait
+ * l'existence. Le décalage coûtait plus cher que la place manquée.
+ *
+ * Après resserrement, la compète se score exactement comme si ces candidats
+ * n'avaient pas concouru.
+ *
+ * ─── Le cas de celui qui l'aurait quand même deviné ─────────────────────────
+ *
+ * Il ne marque rien : sa ligne n'existe plus dans le rapport. C'est voulu. « Ne
+ * pas influer sur les points » va dans les deux sens, et récompenser un
+ * pronostic que le site lui-même juge impossible ouvrirait la porte à
+ * l'information d'initié.
+ */
+export function onRadar(entries) {
+  const kept = (entries ?? []).filter((e) => !e.offRadar);
+
+  const tightened = new Map(
+    kept
+      .filter((e) => e.rank != null)
+      .sort((a, b) => a.rank - b.rank)
+      .map((e, index) => [e.contenderId, index + 1])
+  );
+
+  return kept.map((e) => (e.rank == null ? e : { ...e, rank: tightened.get(e.contenderId) }));
+}
+
+/**
+ * Le nombre de classés que les joueurs pouvaient connaître.
+ *
+ * Séparé de `onRadar` parce que deux des trois appelants ne veulent QUE ce
+ * compte : les faire construire un tableau complet pour en mesurer la longueur
+ * serait du travail pour rien, et surtout ils ne disposent pas toujours de
+ * `contenderId` dans leur requête.
+ */
+export function onRadarRanked(entries) {
+  return (entries ?? []).filter((e) => !e.offRadar && e.rank != null).length;
+}
+
+/**
+ * La coupe, diminuée des places prises hors-radar.
+ *
+ * Une sélection à seize places dont deux reviennent à des candidats invisibles
+ * n'en offrait réellement que quatorze aux pronostiqueurs. Laisser la coupe à
+ * seize ferait chercher deux bonnes réponses de plus qu'il n'en existait.
+ */
+export function onRadarCut(entries, qualifierCount) {
+  if (!Number.isInteger(qualifierCount)) return 0;
+  const hidden = (entries ?? []).filter((e) => e.offRadar && e.qualified).length;
+  return Math.max(0, qualifierCount - hidden);
+}
+
 /** Écart 0 → 5 pts, 1 → 4, 2 → 3, 3 → 2, 4 → 1, ≥5 → 0. */
 export function gapPoints(predictedRank, officialRank) {
   if (!Number.isInteger(predictedRank) || !Number.isInteger(officialRank)) return 0;
@@ -174,7 +251,11 @@ export function scoreRankingPhase(type, predicted, official, qualifierCount = nu
   const lines = [];
   let total = 0;
 
-  const officialById = new Map(official.map((e) => [e.contenderId, e]));
+  // Le classement passe par le filtre hors-radar AVANT toute comparaison. Le
+  // faire ici plutôt que chez les appelants garantit qu'aucun chemin de calcul
+  // ne l'oublie — y compris ceux qu'on écrira plus tard.
+  const visible = onRadar(official);
+  const officialById = new Map(visible.map((e) => [e.contenderId, e]));
 
   /**
    * Le point de qualification ne récompense que ce qui pouvait être manqué.
@@ -193,13 +274,13 @@ export function scoreRankingPhase(type, predicted, official, qualifierCount = nu
    * Le nombre de classés, et non celui des inscrits : un participant sans rang
    * officiel n'a pas été départagé, il ne compte d'aucun côté du rapport.
    */
-  const ranked = official.filter((e) => e.rank != null).length;
+  const ranked = onRadarRanked(official);
   // La coupe vient du réglage de la phase, et de lui seul. Elle se déduisait
   // auparavant du nombre de contenders marqués qualifiés quand le réglage était
   // vide — mais les deux calculs de maximum, eux, lisent `qualifierCount ?? 0`.
   // Une phase sans coupe renseignée distribuait donc des points que le maximum
   // ne prévoyait pas : le même dépassement, par une autre porte.
-  const cut = Number.isInteger(qualifierCount) ? qualifierCount : 0;
+  const cut = onRadarCut(official, qualifierCount);
   const countsQualification =
     (type === 'WILDCARD' || type === 'ELIMINATION') && cut > 0 && cut < ranked;
 
@@ -330,6 +411,20 @@ function isSameScore(pick, match) {
  * @param {object} category    phases[] (avec entries[] et battles[])
  */
 export function scorePrediction(prediction, category) {
+  /**
+   * Une catégorie hors barème ne rapporte rien, et ne produit aucune section.
+   *
+   * Le test est ici plutôt que chez l'appelant parce que c'est la SEULE porte
+   * d'entrée du calcul de points : le recalcul de catégorie, celui d'événement
+   * et l'inspection d'un pronostic y passent tous. Un garde posé dans une
+   * route, c'est deux autres routes à retrouver le jour où l'on en ajoute une.
+   *
+   * Aucune section plutôt que des sections à zéro : une liste de lignes qui
+   * valent toutes zéro invite à chercher pourquoi, alors que l'absence, elle,
+   * appelle la phrase d'explication que la page affiche à la place.
+   */
+  if (category.noPoints) return { total: 0, sections: [] };
+
   // Une compétition de wildcards n'a qu'une phase, et c'est une phase de
   // classement. La règle se lit dans la structure, pas dans un drapeau qu'on
   // aurait pu oublier de mettre à jour après une retouche de format.

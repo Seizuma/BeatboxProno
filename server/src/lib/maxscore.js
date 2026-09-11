@@ -7,6 +7,7 @@ import {
     QUALIFIED_POINT,
     FINAL_FOUR_POINTS,
     WILDCARD_HIT,
+    onRadarCut,
 } from './scoring.js';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
@@ -27,6 +28,24 @@ export function maxScoreForCategory(category) {
     const lines = [];
     let total = 0;
 
+    // Hors barème : le maximum est zéro, et le panneau doit le DIRE. Renvoyer
+    // une liste vide laisserait croire à une catégorie mal montée, ce qui est
+    // exactement le diagnostic que cet écran sert à porter.
+    if (category.noPoints) {
+        return {
+            category: category.name,
+            categoryId: category.id,
+            total: 0,
+            lines: [{
+                phaseId: `${category.id}-hors-bareme`,
+                phase: category.name,
+                type: 'NO_POINTS',
+                detail: 'Catégorie hors barème : aucun point, ni placement ni qualification.',
+                points: 0,
+            }],
+        };
+    }
+
     // Dans une compétition de wildcards, la qualification vaut trois points au
     // lieu d'un. Le maximum doit le savoir, sinon la précision d'un pronostic
     // parfait dépasse cent pour cent — c'est exactement le défaut qu'on a mis
@@ -35,7 +54,20 @@ export function maxScoreForCategory(category) {
 
     for (const phase of category.phases ?? []) {
         if (RANKING_TYPES.includes(phase.type)) {
-            const runners = category.contenders?.length ?? 0;
+            /**
+             * Les qualifiés hors-radar ne comptent d'aucun côté du rapport.
+             *
+             * Ils figurent bien parmi les participants — il a fallu les créer
+             * pour composer le tableau —, mais le moteur de score les retire du
+             * classement. Les laisser ici annoncerait un maximum que personne
+             * ne peut atteindre, et la précision de tout le monde plafonnerait
+             * sous les cent pour cent sans raison visible.
+             *
+             * Zéro tant que les résultats ne sont pas saisis : la phase n'a
+             * alors aucune ligne, et le maximum reste celui de la structure.
+             */
+            const offRadar = (phase.entries ?? []).filter((e) => e.offRadar).length;
+            const runners = Math.max(0, (category.contenders?.length ?? 0) - offRadar);
 
             // Écart nul sur chaque participant : le maximum du barème de placement.
             const gap = runners * GAP_MAX_BONUS;
@@ -48,7 +80,10 @@ export function maxScoreForCategory(category) {
             // points aux types WILDCARD et ELIMINATION, et une phase sans coupe, ou
             // dont la coupe couvre tout le plateau, n'élimine personne.
             const countsQualification = phase.type === 'WILDCARD' || phase.type === 'ELIMINATION';
-            const cut = phase.qualifierCount ?? 0;
+            // La même coupe que le moteur de score : diminuée des places parties
+            // hors-radar. Les deux lectures doivent donner le même nombre, sinon
+            // un pronostic parfait ne tombe pas sur cent pour cent.
+            const cut = onRadarCut(phase.entries, phase.qualifierCount) || (phase.qualifierCount ?? 0);
             const qualifies = countsQualification && cut > 0 && cut < runners ? cut : 0;
             const qualification = qualifies * hitValue;
 

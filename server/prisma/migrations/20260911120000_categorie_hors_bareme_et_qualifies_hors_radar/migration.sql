@@ -1,0 +1,51 @@
+-- Deux réglages qui répondent à deux problèmes de barème, et rien d'autre.
+--
+-- ───────────────────────────────────────────────────────────────────────────
+-- 1. UNE CATÉGORIE HORS BARÈME
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- Le championnat de France ouvre une sélection féminine dont toutes les
+-- inscrites sont qualifiées d'avance. Il n'y a rien à deviner, et le classement
+-- demandé aux joueurs ne mesure rien.
+--
+-- Le barème savait déjà ne pas distribuer de point de QUALIFICATION quand la
+-- coupe couvre tout le plateau — c'est la condition `cut < ranked` de
+-- scoring.js. Mais les points de PLACEMENT tombaient quand même, cinq par
+-- participante, au hasard de l'ordre saisi : une catégorie sans enjeu
+-- distribuait plus de points qu'une finale de tableau.
+--
+-- Pourquoi une colonne plutôt qu'une déduction : « coupe ≥ inscrits » ne couvre
+-- pas tous les cas. Une catégorie peut être hors barème pour des raisons
+-- invisibles dans la structure — un format démonstratif, une catégorie ouverte
+-- trop tard pour que quiconque ait pu la pronostiquer. C'est une décision de
+-- l'organisation, elle s'écrit.
+ALTER TABLE "Category" ADD COLUMN "noPoints" BOOLEAN NOT NULL DEFAULT false;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 2. UN QUALIFIÉ HORS-RADAR
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- Le même championnat accepte les vidéos de qualification en « non répertoriée »
+-- sur YouTube. Des candidats passent donc la sélection sans que personne, hors
+-- du jury, ait su qu'ils concouraient. Ils ne figurent dans le top d'AUCUN
+-- joueur — non par erreur de pronostic, mais parce que leur existence n'était
+-- pas connaissable.
+--
+-- Sans ce drapeau, chacun de ces qualifiés coûtait à tout le monde deux fois :
+-- une place de qualification impossible à deviner, et surtout un décalage de
+-- tout le classement officiel qui rabotait les points de placement en cascade.
+-- Le barème sanctionnait une information que le jeu n'avait pas distribuée.
+--
+-- La ligne reste en base avec son vrai rang et sa vraie qualification : c'est
+-- elle qui compose le tableau et qui s'affiche sur la page événement. Le moteur
+-- de score l'écarte du calcul, il ne la cache pas.
+ALTER TABLE "PhaseEntry" ADD COLUMN "offRadar" BOOLEAN NOT NULL DEFAULT false;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- POURQUOI `false` DES DEUX CÔTÉS
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- C'est le comportement de tout ce qui est déjà en base. Un défaut à `true`
+-- reviendrait à décider rétroactivement qu'aucune catégorie passée ne comptait,
+-- et effacerait des points déjà acquis au classement général. On coche pour les
+-- cas particuliers ; on ne décoche pas pour tous les autres.

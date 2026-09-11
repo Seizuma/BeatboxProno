@@ -589,6 +589,8 @@ function EventSettings({ event, onDone, run }) {
 
   const [judges, setJudges] = useState(event.judgeCount ?? 3);
   const [closeAt, setCloseAt] = useState(toLocal(event.predictionsCloseAt));
+  const [name, setName] = useState(event.name);
+  const [year, setYear] = useState(event.year);
 
   const save = (patch) =>
     run(async () => {
@@ -596,8 +598,58 @@ function EventSettings({ event, onDone, run }) {
       await onDone();
     }, 'Réglages enregistrés.');
 
+  const renamed = name.trim() !== event.name || Number(year) !== event.year;
+
   return (
     <div className="stack" style={{ gap: '0.7rem' }}>
+      {/* L'identité de la compète, en tête : c'est ce qu'on vient corriger
+          quand on arrive ici avec une faute de frappe dans le nom.
+
+          L'ADRESSE NE SUIT PAS. Le slug est fixé à la création et le serveur
+          n'y touche pas : renommer « Grand Beatbox Batle » en « Grand Beatbox
+          Battle » laisse l'adresse en l'état. C'est délibéré — cette adresse a
+          déjà circulé sur Discord, elle est en favori chez des gens, et la
+          déplacer casserait tous ces liens pour corriger une lettre que
+          personne ne lit dans une barre d'adresse. */}
+      <div className="row" style={{ alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
+        <div className="field" style={{ flex: '1 1 18rem' }}>
+          <label htmlFor={`name-${event.id}`}>Nom de l'événement</label>
+          <input
+            id={`name-${event.id}`}
+            value={name}
+            maxLength={120}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor={`year-${event.id}`}>Année</label>
+          <input
+            id={`year-${event.id}`}
+            type="number"
+            style={{ width: '6rem' }}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+        </div>
+
+        <button
+          className="btn btn--small btn--primary"
+          disabled={!renamed || !name.trim()}
+          onClick={() => save({ name: name.trim(), year: Number(year) })}
+        >
+          Renommer
+        </button>
+
+        <button
+          className="btn btn--small btn--ghost"
+          disabled={!renamed}
+          onClick={() => { setName(event.name); setYear(event.year); }}
+        >
+          Annuler
+        </button>
+      </div>
+
       <div className="row" style={{ alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
         <div className="field">
           <label htmlFor={`judges-${event.id}`}>Nombre de juges</label>
@@ -692,6 +744,11 @@ function EventSettings({ event, onDone, run }) {
               ? "Passé la date butoir, plus aucun pronostic n'est enregistrable sur l'événement."
               : "Aucune date butoir : les pronostics restent ouverts tant que les phases ne sont pas verrouillées. C'est le réglage à garder tant que la date de la compète n'est pas connue."}
             {' '}Les {judges} juges déterminent les scores proposés aux pronostiqueurs.
+          </p>
+          <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+            Renommer ne change PAS l'adresse de la page — elle reste
+            <span className="data"> /events/{event.slug}</span>. Les liens déjà partagés continuent
+            donc de fonctionner.
           </p>
           <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
             Badges et crédit sont indépendants : une compète peut rapporter des points de boutique
@@ -804,6 +861,43 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
           />
         </div>
       </div>
+
+      {/* Hors barème.
+
+          Posé ici, au-dessus des onglets, et non dans l'un d'eux : le réglage
+          ne concerne aucun des quatre métiers en particulier — il les annule
+          tous les quatre. Le voir en permanence évite aussi d'oublier qu'une
+          catégorie est neutralisée pendant qu'on en compose la liste. */}
+      <label
+        className="row"
+        style={{ gap: '0.5rem', alignItems: 'flex-start', cursor: 'pointer' }}
+      >
+        <input
+          type="checkbox"
+          checked={category.noPoints === true}
+          style={{ marginTop: '0.25rem' }}
+          onChange={(e) =>
+            run(async () => {
+              const on = e.target.checked;
+              const { rescored } = await api.patch(`/admin/categories/${category.id}`, {
+                noPoints: on,
+              });
+              await onDone();
+              return on
+                ? `${category.name} est hors barème. ${rescored ?? 0} pronostic(s) remis à zéro sur cette catégorie.`
+                : `${category.name} rapporte de nouveau des points. ${rescored ?? 0} pronostic(s) recalculé(s).`;
+            })
+          }
+        />
+        <span>
+          Catégorie hors barème — ne rapporte aucun point
+          <span className="faint" style={{ display: 'block', fontSize: '0.85rem' }}>
+            À cocher quand il n'y a rien à deviner : une sélection où tout le monde passe, une
+            catégorie ouverte trop tard pour être pronostiquée. Ni placement ni qualification. Les
+            pronostics déposés sont recalculés sur-le-champ.
+          </span>
+        </span>
+      </label>
 
       {/* Les phases, en lecture seule : c'est le repère qui dit dans quelle
           forme on travaille, et il doit rester visible quel que soit l'onglet. */}
@@ -2056,6 +2150,30 @@ function RankingResults({ phase, category, contenders, onDone, run }) {
   const [cut, setCut] = useState(phase.qualifierCount ?? null);
   const [dirty, setDirty] = useState(false);
 
+  /**
+   * Les qualifiés que personne ne pouvait connaître.
+   *
+   * Un ensemble d'identifiants plutôt qu'un drapeau porté par chaque ligne de
+   * `order` : `order` ne contient QUE des identifiants, et y greffer un objet
+   * obligerait à toucher au glisser-déposer du classement, qui marche.
+   */
+  const [offRadar, setOffRadar] = useState(
+    () => new Set((phase.entries ?? []).filter((e) => e.offRadar).map((e) => e.contenderId))
+  );
+
+  const toggleOffRadar = (contenderId) => {
+    setOffRadar((prev) => {
+      const next = new Set(prev);
+      if (next.has(contenderId)) next.delete(contenderId);
+      else next.add(contenderId);
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const nameOf = (contenderId) =>
+    contenders.find((c) => c.id === contenderId)?.name ?? contenderId;
+
   const change = (next) => {
     setOrder(next);
     setDirty(true);
@@ -2074,6 +2192,7 @@ function RankingResults({ phase, category, contenders, onDone, run }) {
           contenderId,
           rank: i + 1,
           qualified: cut ? i < cut : false,
+          offRadar: offRadar.has(contenderId),
         })),
       });
       setDirty(false);
@@ -2180,7 +2299,100 @@ function RankingResults({ phase, category, contenders, onDone, run }) {
         onChange={change}
         locked={false}
       />
+
+      <OffRadarPanel
+        cut={cut}
+        order={order}
+        offRadar={offRadar}
+        nameOf={nameOf}
+        onToggle={toggleOffRadar}
+      />
     </div>
+  );
+}
+
+/**
+ * Les qualifiés hors-radar.
+ *
+ * ─── Le problème ────────────────────────────────────────────────────────────
+ *
+ * Le championnat de France accepte les vidéos de qualification en « non
+ * répertoriée » sur YouTube. Des candidats passent donc la sélection sans que
+ * personne, hors du jury, ait su qu'ils concouraient. Ils ne figurent dans le
+ * top d'aucun joueur — non par erreur de pronostic, mais parce que leur
+ * existence n'était pas connaissable.
+ *
+ * Chacun d'eux coûtait à TOUT LE MONDE, et deux fois : une place de
+ * qualification impossible à deviner, et surtout un décalage de tout le
+ * classement officiel qui rabotait les points de placement en cascade.
+ *
+ * ─── Pourquoi seulement les qualifiés ───────────────────────────────────────
+ *
+ * Un candidat invisible qui ne passe pas la coupe ne fait de tort à personne :
+ * il ne prend aucune place, et son rang n'est comparé à rien puisque nul ne
+ * l'avait classé. Proposer la case sur les quarante inscrits noierait les deux
+ * lignes qui comptent.
+ *
+ * ─── Pourquoi pas dans le tableau de classement ─────────────────────────────
+ *
+ * `RankingBoard` sert aussi au joueur qui compose son top. Y ajouter une
+ * colonne d'administration obligerait à la masquer côté public, c'est-à-dire à
+ * faire dépendre un composant partagé de qui le regarde. Un panneau à part ne
+ * coûte que d'être à côté.
+ */
+function OffRadarPanel({ cut, order, offRadar, nameOf, onToggle }) {
+  if (!cut) {
+    return (
+      <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+        Réglez une coupe pour pouvoir signaler des qualifiés hors-radar.
+      </p>
+    );
+  }
+
+  const qualified = order.slice(0, cut);
+  const flagged = qualified.filter((id) => offRadar.has(id)).length;
+
+  return (
+    <section className="panel stack" style={{ gap: '0.6rem' }}>
+      <div className="spread">
+        <div>
+          <p className="eyebrow" style={{ margin: 0 }}>Qualifiés hors-radar</p>
+          <p className="faint" style={{ fontSize: '0.85rem', margin: '0.2rem 0 0' }}>
+            Cochez ceux que personne ne pouvait connaître — une vidéo de qualification en « non
+            répertoriée », par exemple. Ils restent qualifiés et entrent au tableau, mais sortent
+            du calcul : les rangs des autres se resserrent comme s'ils n'avaient pas concouru.
+          </p>
+        </div>
+        <span className={`tag${flagged ? ' tag--now' : ''}`}>
+          {flagged} sur {qualified.length}
+        </span>
+      </div>
+
+      <div className="stack" style={{ gap: '0.15rem' }}>
+        {qualified.map((contenderId, i) => (
+          <label
+            key={contenderId}
+            className="row"
+            style={{ gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}
+          >
+            <input
+              type="checkbox"
+              checked={offRadar.has(contenderId)}
+              onChange={() => onToggle(contenderId)}
+            />
+            <span className="silkscreen" style={{ minWidth: '2rem' }}>#{i + 1}</span>
+            <span>{nameOf(contenderId)}</span>
+          </label>
+        ))}
+      </div>
+
+      {flagged > 0 && (
+        <p className="notice" style={{ margin: 0 }}>
+          La coupe effective passe à {Math.max(0, cut - flagged)} place(s) pour le calcul des
+          points. Enregistrez ou publiez pour appliquer.
+        </p>
+      )}
+    </section>
   );
 }
 

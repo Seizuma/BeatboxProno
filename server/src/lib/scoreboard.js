@@ -8,6 +8,8 @@ import {
     FINAL_FOUR_POINTS,
     WILDCARD_HIT,
     finalFour,
+    onRadarCut,
+    onRadarRanked,
 } from './scoring.js';
 import { isWildcardCategory } from './wildcard.js';
 import { contenderName } from './naming.js';
@@ -77,6 +79,12 @@ export async function resolveScope({ event, kind } = {}) {
  * Ici, dépublier une phase la retire des deux côtés du rapport à la fois.
  */
 function maxOnResolved(category) {
+    // Hors barème : ni au numérateur — `scorePrediction` ne rend aucun point —
+    // ni au dénominateur. L'oublier ici ferait chuter la précision de tous ceux
+    // qui ont pronostiqué la catégorie, pour des points que personne ne pouvait
+    // marquer.
+    if (category.noPoints) return 0;
+
     // Le même barème que le calcul du score et que le maximum annoncé. Les
     // trois doivent s'accorder au point près, sinon la précision dérape.
     const hitValue = isWildcardCategory(category) ? WILDCARD_HIT : QUALIFIED_POINT;
@@ -90,12 +98,14 @@ function maxOnResolved(category) {
         if (RANKING_TYPES.includes(phase.type)) {
             // Les participants RÉELLEMENT classés, pas les inscrits : une phase
             // publiée avec dix résultats sur vingt ne vaut que dix placements.
-            const ranked = (phase.entries ?? []).filter((e) => e.rank != null).length;
+            // Et jamais les qualifiés hors-radar, que le moteur de score retire
+            // du classement avant de comparer.
+            const ranked = onRadarRanked(phase.entries);
 
             // Le point de qualification n'existe que sur les phases qui éliminent, et
             // seulement si la coupe laisse quelqu'un dehors.
             const countsQualification = phase.type === 'WILDCARD' || phase.type === 'ELIMINATION';
-            const cut = phase.qualifierCount ?? 0;
+            const cut = onRadarCut(phase.entries, phase.qualifierCount);
             const qualifies = countsQualification && cut > 0 && cut < ranked ? cut : 0;
 
             total += ranked * GAP_MAX_BONUS + qualifies * hitValue;
@@ -207,13 +217,21 @@ export async function buildScoreboard({
             where: Object.keys(categoryScope).length ? categoryScope : {},
             select: {
                 id: true,
+                // Le drapeau hors barème décide à lui seul du dénominateur de la
+                // catégorie : sans cette colonne, `maxOnResolved` le lit
+                // `undefined` et compte les points d'une catégorie qui n'en
+                // donne aucun.
+                noPoints: true,
                 phases: {
                     where: { resolved: true },
                     select: {
                         type: true,
                         resolved: true,
                         qualifierCount: true,
-                        entries: { select: { rank: true } },
+                        // `qualified` et `offRadar` en plus du rang : la coupe
+                        // effective se calcule en retranchant les places parties
+                        // à des candidats que personne ne pouvait connaître.
+                        entries: { select: { rank: true, qualified: true, offRadar: true } },
                         // `round` et `winnerId` en plus : le barème du top 4 lit
                         // les deux dernières affiches pour savoir qui finit où.
                         // Sans ces colonnes, `finalFour` ne voyait que des tours

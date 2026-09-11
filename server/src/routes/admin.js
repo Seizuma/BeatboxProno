@@ -1406,13 +1406,36 @@ adminRouter.patch('/categories/:id', async (req, res) => {
      * n'existe pas, et sans limite le champ devient un presse-papier.
      */
     judges: z.array(z.string().trim().min(1).max(60)).max(16).optional(),
+    /**
+     * La catégorie est-elle hors barème ?
+     *
+     * Le cas réel : une sélection de wildcards où toutes les inscrites sont
+     * qualifiées d'avance. Il n'y a rien à deviner, et le classement demandé
+     * aux joueurs ne mesure rien — mais les points de placement tombaient
+     * quand même, cinq par participante, au hasard de l'ordre saisi.
+     */
+    noPoints: z.boolean().optional(),
   });
   const data = schema.parse(req.body);
   const category = await prisma.category.update({
     where: { id: req.params.id },
     data: { ...data, ...(data.name ? { slug: slugify(data.name) } : {}) },
   });
-  res.json({ category });
+
+  /**
+   * Basculer le drapeau recalcule les pronostics déjà déposés.
+   *
+   * Sans ce recalcul, cocher la case laisserait en base les points déjà
+   * attribués : la catégorie serait annoncée « hors barème » à l'écran tout en
+   * continuant de peser au classement général. Et décocher ne rendrait rien.
+   *
+   * `undefined` ne déclenche rien : renommer une catégorie ou saisir son jury
+   * n'a aucune raison de relancer un calcul sur tous les pronostics.
+   */
+  let rescored = null;
+  if (data.noPoints !== undefined) rescored = await rescoreCategory(category.id);
+
+  res.json({ category, rescored });
 });
 
 adminRouter.delete('/categories/:id', onlyAdmin, async (req, res) => {
@@ -1456,11 +1479,17 @@ adminRouter.get('/events/:eventId/max-score', async (req, res) => {
           contenders: { select: { id: true } },
           phases: {
             orderBy: { position: 'asc' },
+            // Les lignes de classement en plus des affiches : un qualifié
+            // hors-radar sort du barème, et le maximum annoncé doit le savoir
+            // sinon il promet des points que personne ne peut prendre.
             // `round` en plus de l'identifiant : le barème du top 4 dépend de la
             // PRÉSENCE d'une finale et d'une petite finale, pas du nombre
             // d'affiches. Sans cette colonne, maxScoreForCategory ne voyait que
             // des tours `undefined` et n'annonçait jamais ces points.
-            include: { battles: { select: { id: true, round: true } } },
+            include: {
+              battles: { select: { id: true, round: true } },
+              entries: { select: { qualified: true, offRadar: true } },
+            },
           },
         },
       },
@@ -1614,6 +1643,19 @@ adminRouter.put('/phases/:phaseId/results', async (req, res) => {
         contenderId: z.string(),
         rank: z.number().int().min(1),
         qualified: z.boolean().default(false),
+        /**
+         * Ce qualifié était-il invisible au moment des pronostics ?
+         *
+         * Le championnat de France accepte les vidéos de qualification en « non
+         * répertoriée » : des candidats passent la sélection sans que personne
+         * ait su qu'ils concouraient. Le moteur de score retire ces lignes du
+         * classement et resserre les rangs restants, pour que la compète se
+         * score comme s'ils n'avaient pas concouru.
+         *
+         * La ligne est bien ENREGISTRÉE avec son vrai rang : c'est elle qui
+         * compose le tableau et qui s'affiche sur la page événement.
+         */
+        offRadar: z.boolean().default(false),
       })
     ),
   });

@@ -809,6 +809,21 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked, o
         </p>
       )}
 
+      {/* Hors barème.
+
+          En tête de catégorie et non sur chaque phase : le réglage vaut pour
+          la catégorie entière, et le répéter sous chaque tableau le
+          transformerait en bruit — c'est la même raison qui met le jury ici.
+
+          Et surtout : cet avis se lit AVANT de composer, pas après. Quelqu'un
+          qui passe vingt minutes à classer pour découvrir ensuite que rien ne
+          comptait a de bonnes raisons de le prendre mal. */}
+      {category.noPoints && (
+        <p className="notice" style={{ margin: 0 }}>
+          {t('event.noPoints')}
+        </p>
+      )}
+
       {category.phases.map((phase) => {
         const isLocked = locked || phaseLocked(phase);
 
@@ -836,6 +851,19 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked, o
                 )}
               </div>
             </div>
+
+            {/* Les qualifiés hors-radar.
+
+                Annoncés PUBLIQUEMENT, et c'est le point. Le premier réflexe,
+                face à un nom qu'on n'a jamais vu dans la liste des inscrits,
+                est de croire à une erreur de saisie — ou à un passe-droit. Dire
+                qui est concerné et pourquoi coupe court, et dire que ça ne
+                coûte rien évite la deuxième question.
+
+                Seulement une fois la phase publiée : avant, le classement
+                officiel n'est pas censé être lisible, et la censure serveur le
+                vide de toute façon. */}
+            {phase.resolved && <OffRadarNotice phase={phase} contenders={contenders} />}
 
             {/* Une sélection n'a pas de plateau donné d'avance : le joueur
                 pioche lui-même dans le référentiel des artistes. Partout
@@ -925,6 +953,49 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked, o
  * version ouverte par défaut — la déposée s'il y en a une, sinon la plus
  * récemment modifiée.
  */
+/**
+ * L'encart des qualifiés hors-radar.
+ *
+ * ─── Pourquoi il existe ─────────────────────────────────────────────────────
+ *
+ * Le championnat de France accepte les vidéos de qualification en « non
+ * répertoriée » sur YouTube. Des candidats passent donc la sélection sans que
+ * personne, hors du jury, ait su qu'ils concouraient — ils n'étaient dans le
+ * top de personne, et pas par erreur de pronostic.
+ *
+ * Le moteur de score les retire du calcul et resserre les rangs des autres.
+ * Reste à le DIRE : un nom inconnu au milieu des qualifiés passe pour une
+ * erreur de saisie tant qu'on n'explique pas d'où il sort.
+ *
+ * ─── Pourquoi la phrase insiste sur l'absence de conséquence ────────────────
+ *
+ * La deuxième question, après « qui est-ce ? », est toujours « et ça me coûte
+ * combien ? ». Y répondre dans le même encart évite le message de contact qui
+ * suivrait.
+ */
+function OffRadarNotice({ phase, contenders }) {
+  const { t } = useI18n();
+
+  const flagged = (phase.entries ?? [])
+    .filter((e) => e.offRadar)
+    .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+
+  if (flagged.length === 0) return null;
+
+  const names = flagged
+    .map((e) => contenders.find((c) => c.id === e.contenderId)?.name)
+    .filter(Boolean);
+
+  return (
+    <div className="notice" style={{ margin: 0 }}>
+      <p style={{ margin: 0 }}>
+        <span className="data">{names.join(' · ')}</span>
+      </p>
+      <p style={{ margin: '0.35rem 0 0' }}>{t('event.offRadar')}</p>
+    </div>
+  );
+}
+
 function readVersion(saved) {
   const orders = {};
   const picks = {};
