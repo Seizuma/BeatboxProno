@@ -147,7 +147,13 @@ publicRouter.get('/events', guard(async (req, res) => {
     where: visible(req.user),
     orderBy: [{ startsAt: 'desc' }, { year: 'desc' }],
     include: {
-      categories: { orderBy: { position: 'asc' }, select: { id: true, name: true, slug: true, kind: true } },
+      categories: {
+        orderBy: { position: 'asc' },
+        // `nameEn` voyage avec le nom : les pastilles de l'accueil affichent des
+        // noms de catégorie, et sans cette colonne elles resteraient en
+        // français sur un site basculé en anglais.
+        select: { id: true, name: true, nameEn: true, slug: true, kind: true },
+      },
       // Uniquement les pronostics déposés : les brouillons sont privés, et les
       // compter gonflait le compteur public de l'accueil.
       _count: { select: { predictions: { where: { submitted: true } } } },

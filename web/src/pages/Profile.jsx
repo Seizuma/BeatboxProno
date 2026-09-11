@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
+import { localName } from '../lib/localName.js';
 import DiscordButton from '../components/DiscordButton.jsx';
 import PredictionView from '../components/PredictionView.jsx';
 import DeleteAccount from '../components/DeleteAccount.jsx';
@@ -246,7 +247,7 @@ export default function Profile({ preview = null }) {
                             </span>
                           )}
                         </td>
-                        <td className="muted">{p.category.name}</td>
+                        <td className="muted">{localName(p.category, lang)}</td>
                         {titleKey === 'profile.bucket.done' && (
                           <td className="num">{p.scoredAt ? p.points : '—'}</td>
                         )}

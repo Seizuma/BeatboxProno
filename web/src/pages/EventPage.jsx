@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
+import { localName } from '../lib/localName.js';
 import RankingBoard from '../components/RankingBoard.jsx';
 import Toast from '../components/Toast.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
@@ -70,7 +71,7 @@ const key = (round, slot) => `${round}:${slot}`;
 export default function EventPage() {
   const { slug } = useParams();
   const { user } = useSession();
-  const { t, date } = useI18n();
+  const { t, date, lang } = useI18n();
 
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -494,7 +495,7 @@ export default function EventPage() {
               onClick={() => setActiveId(c.id)}
               title={filed ? t('draft.submitted') : undefined}
             >
-              {c.name}
+              {localName(c, lang)}
               {filed && <span aria-hidden="true"> ★</span>}
               {filed && <span className="visually-hidden"> — {t('draft.submitted')}</span>}
             </button>
@@ -704,7 +705,7 @@ export default function EventPage() {
 }
 
 function CategoryEditor({ category, event, state, update, phaseLocked, locked, onContender }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   // La phase dont on regarde le résultat, ou null. L'état vit ICI et non dans
   // EventPage : la comparaison a besoin des participants, du classement et des
   // affiches de la catégorie ouverte, c'est-à-dire de tout ce que ce composant
@@ -831,11 +832,15 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked, o
           <section className="panel stack" key={phase.id}>
             <div className="spread">
               <div>
-                <p className="eyebrow">{category.name}</p>
-                <h2>{phase.name}</h2>
+                <p className="eyebrow">{localName(category, lang)}</p>
+                <h2>{localName(phase, lang)}</h2>
               </div>
               <div className="row" style={{ gap: '0.35rem' }}>
-                <span className="tag">{t(`rule.${phase.type}`)}</span>
+                {/* Le barème de la phase — masqué sur une catégorie hors
+                    barème. L'annoncer sous l'avis « rien n'y rapporte de
+                    points » se contredisait à deux lignes d'intervalle, et
+                    c'est l'avis qui perdait. */}
+                {!category.noPoints && <span className="tag">{t(`rule.${phase.type}`)}</span>}
                 {phase.resolved && <span className="tag tag--done">{t('event.phase.resolved')}</span>}
                 {isLocked && !phase.resolved && <span className="tag">{t('event.phase.closed')}</span>}
                 {/* Le résultat s'ouvre, il ne s'impose pas. Déplié sous le
@@ -922,7 +927,7 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked, o
       {resultFor && (
         <Modal
           wide
-          subtitle={`${category.name} — ${resultFor.name}`}
+          subtitle={`${localName(category, lang)} — ${localName(resultFor, lang)}`}
           title={t('result.title')}
           onClose={() => setResultFor(null)}
           footer={

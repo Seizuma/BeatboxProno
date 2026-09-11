@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
+import { localName } from '../lib/localName.js';
 import { useSession } from '../lib/context.jsx';
 import MenuButton from '../components/MenuButton.jsx';
 import Modal from '../components/Modal.jsx';
@@ -353,7 +354,7 @@ export default function GroupPage() {
                       ligne et la mosaïque paraissait dépareillée. */}
                                     <p className="mosaic__line">{p.event.name} {p.event.year}</p>
                                     <p className="mosaic__line">
-                                        {p.category.name}
+                                        {localName(p.category, lang)}
                                         {' · '}
                                         {p.scoredAt ? (
                                             <span className="mosaic__pts">{number(p.points)} {t('common.points')}</span>

@@ -389,7 +389,7 @@ groupRouter.get('/:slug/predictions', loadGroup, guard(async (req, res) => {
                 },
             },
             event: { select: { slug: true, name: true, year: true, status: true } },
-            category: { select: { name: true, kind: true } },
+            category: { select: { name: true, nameEn: true, kind: true } },
         },
     });
 

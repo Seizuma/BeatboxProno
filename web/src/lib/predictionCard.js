@@ -1,3 +1,4 @@
+import { localName } from './localName.js';
 /**
  * L'affiche d'un pronostic en image.
  *
@@ -283,12 +284,12 @@ export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {
             annex = null;
         }
 
-        if (rounds.length) sections.push({ kind: 'bracket', label: phase.name, rounds, annex });
+        if (rounds.length) sections.push({ kind: 'bracket', label: localName(phase, lang), rounds, annex });
     }
 
     return {
         title: `${prediction.event.name} ${prediction.event.year}`,
-        subtitle: prediction.category.name,
+        subtitle: localName(prediction.category, lang),
         author: prediction.user?.globalName ?? prediction.user?.username ?? '',
         // Les points ne s'affichent qu'une fois le pronostic scoré : une carte
         // annonçant « 0 point » avant la compète se lirait comme un échec.
