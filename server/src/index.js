@@ -19,6 +19,7 @@ import { missingWebhooks } from './lib/discord.js';
 import { touch } from './lib/presence.js';
 import { scheduleDailyReport } from './jobs/daily-report.js';
 import { scheduleShopTrend } from './jobs/shop-trend.js';
+import { scheduleClosingReminder } from './jobs/closing-reminder.js';
 import { PHOTO_DIR, UPLOAD_DIR } from './lib/photos.js';
 
 /**
@@ -145,4 +146,9 @@ app.listen(port, '0.0.0.0', () => {
 // La vitrine se réordonne toute seule : popularité tous les deux jours,
 // promotions toutes les semaines. L'horloge est en base, pas dans le cron.
 scheduleShopTrend();
+
+// Le rappel de fermeture : toutes les heures, il cherche les compètes dont la
+// butoir tombe dans les vingt-quatre prochaines heures. L'unicité est portée
+// par la notification elle-même, donc un redémarrage ne renvoie rien.
+scheduleClosingReminder();
 });

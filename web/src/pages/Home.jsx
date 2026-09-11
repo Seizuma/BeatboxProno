@@ -17,6 +17,69 @@ const STATUS_CLASS = {
   FINISHED: 'tag--done',
 };
 
+/** Ce qu'on montre avant de replier. Voir `VISIBLE` plus bas. */
+const VISIBLE = 4;
+
+/**
+ * Au-dessous de trois compètes ouvertes, pas de vedettes.
+ *
+ * Mettre deux compètes en avant sur deux, c'est les afficher deux fois. La
+ * section ne dit quelque chose que lorsqu'elle CHOISIT, donc à partir du moment
+ * où il y a plus de deux candidates.
+ */
+const FEATURE_FROM = 3;
+
+/**
+ * Dans combien de temps ferme cette compète ?
+ *
+ * ─── Pourquoi rien au-delà de 72 h ──────────────────────────────────────────
+ *
+ * « Ferme dans trois semaines » n'apprend rien et dilue les pastilles qui, elles,
+ * veulent dire quelque chose. Une information d'urgence qui s'affiche tout le
+ * temps cesse d'être une information d'urgence.
+ *
+ * ─── Pourquoi trois unités ──────────────────────────────────────────────────
+ *
+ * « Ferme dans 0 h » est ce que donnerait un calcul en heures dans la dernière
+ * heure, et c'est précisément le moment où la phrase compte le plus. « Ferme
+ * dans 47 h » se lit moins vite que « dans 2 j ».
+ *
+ * @returns {{label:string, urgent:boolean}|null}
+ */
+function closesIn(iso, now, t) {
+  if (!iso) return null;
+
+  const ms = new Date(iso).getTime() - now;
+  // Déjà passé : c'est au statut de le dire, pas à un compte à rebours négatif.
+  if (ms <= 0) return null;
+
+  const minutes = Math.floor(ms / 60000);
+  if (minutes >= 72 * 60) return null;
+
+  if (minutes < 60) return { label: t('home.closes.minutes', { n: minutes }), urgent: true };
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return { label: t('home.closes.hours', { n: hours }), urgent: true };
+
+  // Arrondi au SUPÉRIEUR : à 25 h il reste bien deux jours à tenir, pas un.
+  return { label: t('home.closes.days', { n: Math.ceil(hours / 24) }), urgent: false };
+}
+
+/**
+ * Les trois tris proposés, et ce que chacun répond.
+ *
+ * `soon` par défaut : c'est la seule question qui a une réponse urgente — les
+ * autres compètes seront encore là demain. Une compète sans date butoir passe
+ * en dernier plutôt qu'en premier : ne rien savoir n'est pas une urgence.
+ */
+const SORTS = {
+  soon: (a, b) =>
+    (a.predictionsCloseAt ? new Date(a.predictionsCloseAt).getTime() : Infinity) -
+    (b.predictionsCloseAt ? new Date(b.predictionsCloseAt).getTime() : Infinity),
+  hot: (a, b) => b._count.predictions - a._count.predictions,
+  fresh: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+};
+
 /**
  * La page « Événements ». Ce qu'on vient y chercher, c'est où pronostiquer :
  * les événements ouverts passent donc avant tout le reste, et l'accroche se
@@ -25,6 +88,16 @@ const STATUS_CLASS = {
  */
 export default function Home() {
   const [events, setEvents] = useState(null);
+  const [sort, setSort] = useState('soon');
+  const [expanded, setExpanded] = useState(false);
+  /**
+   * L'heure, rafraîchie chaque minute.
+   *
+   * Les comptes à rebours seraient sinon figés à l'ouverture de la page : un
+   * onglet laissé ouvert toute la soirée afficherait encore « ferme dans 3 h »
+   * après la fermeture. Une minute suffit — la plus petite unité affichée.
+   */
+  const [now, setNow] = useState(() => Date.now());
   const [helpOpen, setHelpOpen] = useState(false);
   const [postboxOpen, setPostboxOpen] = useState(false);
   const [error, setError] = useState(null);
@@ -36,9 +109,59 @@ export default function Home() {
     api.get('/events').then(({ events }) => setEvents(events)).catch((e) => setError(e.message));
   }, []);
 
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const open = events?.filter((e) => ['OPEN', 'LIVE'].includes(e.status)) ?? [];
   const rest = events?.filter((e) => !['OPEN', 'LIVE'].includes(e.status)) ?? [];
   const total = events?.reduce((n, e) => n + e._count.predictions, 0) ?? 0;
+
+  /**
+   * Les candidates aux vedettes : celles où l'on peut ENCORE déposer.
+   *
+   * `LIVE` est écarté — la compétition a commencé, les pronostics sont fermés,
+   * et mettre en avant une porte close serait une promesse en l'air. La date
+   * butoir dépassée l'est aussi, pour la même raison : le statut peut n'avoir
+   * pas encore été basculé à la main.
+   */
+  const playable = open.filter(
+    (e) =>
+      e.status === 'OPEN' &&
+      (!e.predictionsCloseAt || new Date(e.predictionsCloseAt).getTime() > now)
+  );
+
+  const hot = playable.length >= FEATURE_FROM
+    ? [...playable].sort(SORTS.hot)[0]
+    : null;
+  const fresh = playable.length >= FEATURE_FROM
+    ? [...playable].sort(SORTS.fresh)[0]
+    : null;
+
+  /**
+   * Une carte par compète, pas une par titre.
+   *
+   * La plus jouée EST souvent la dernière ouverte — c'est le cas de toute
+   * compète qui ouvre en fanfare. Deux cartes identiques côte à côte se
+   * liraient comme un défaut ; une seule carte portant ses deux pastilles dit
+   * la même chose et se comprend.
+   */
+  const featured = [];
+  if (hot) featured.push({ event: hot, flags: hot.id === fresh?.id ? ['hot', 'new'] : ['hot'] });
+  if (fresh && fresh.id !== hot?.id) featured.push({ event: fresh, flags: ['new'] });
+
+  /**
+   * La liste reste COMPLÈTE, vedettes comprises.
+   *
+   * On aurait pu les en retirer. À dix compètes c'est sans conséquence, mais à
+   * trois la section « Ouvert maintenant » n'aurait plus qu'une ligne et
+   * ressemblerait à une erreur. « À la une » est un raccourci, pas un tiroir
+   * dans lequel on range : la liste en dessous doit rester l'inventaire.
+   */
+  const sorted = [...open].sort(SORTS[sort] ?? SORTS.soon);
+  const shown = expanded ? sorted : sorted.slice(0, VISIBLE);
+  const hidden = sorted.length - shown.length;
 
   return (
     <>
@@ -85,12 +208,79 @@ export default function Home() {
       {error && <p className="notice">{error}</p>}
       {!events && !error && <p className="silkscreen">{t('common.loading')}</p>}
 
+      {/* À la une.
+
+          La page listait toutes les compètes ouvertes les unes sous les
+          autres. À quatre c'était lisible ; à dix ce serait un mur où rien ne
+          ressort, et la question qu'on vient poser — « où puis-je jouer
+          maintenant ? » — n'aurait plus de réponse immédiate.
+
+          Deux réponses, donc : celle où le monde est déjà, et celle qui vient
+          d'arriver. */}
+      {featured.length > 0 && (
+        <section>
+          <div className="spread" style={{ marginBottom: '0.9rem' }}>
+            <h2>{t('home.featured')}</h2>
+          </div>
+
+          <div className="feature-grid">
+            {featured.map(({ event: ev, flags }) => {
+              const closing = closesIn(ev.predictionsCloseAt, now, t);
+              return (
+                <Link className={`feature feature--${flags[0] === 'hot' ? 'hot' : 'new'}`} to={`/events/${ev.slug}`} key={ev.id}>
+                  <span className="feature__flags">
+                    {flags.map((f) => (
+                      <span className="feature__flag" key={f}>{t(`home.flag.${f}`)}</span>
+                    ))}
+                  </span>
+
+                  <h3 className="feature__title">{ev.name} {ev.year}</h3>
+
+                  <p className="feature__meta">
+                    {[ev.location ?? t('home.venue.tbc'), ...ev.categories.map((c) => localName(c, lang))].join(' · ')}
+                  </p>
+
+                  <span className="rail__meta">
+                    <span className={`tag ${STATUS_CLASS[ev.status] ?? ''}`}>{t(`status.${ev.status}`)}</span>
+                    {closing && (
+                      <span className={`tag ${closing.urgent ? 'tag--urgent' : 'tag--now'}`}>{closing.label}</span>
+                    )}
+                  </span>
+
+                  <span className="feature__foot">
+                    <span className="readout">
+                      <span className="readout__value">{ev._count.predictions}</span>
+                      <span className="readout__unit">{t('home.predictions.short')}</span>
+                    </span>
+                    <span className="btn btn--primary btn--small">{t('home.cta.predict.short')}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Ce sur quoi on peut parier maintenant. */}
       {events && (
         <section style={{ marginBottom: '2.5rem' }}>
           <div className="spread" style={{ marginBottom: '0.9rem' }}>
             <h2>{t('home.open')}</h2>
-            {open.length > 0 && <span className="silkscreen">{open.length}</span>}
+            {/* Le tri n'apparaît que lorsqu'il a quelque chose à trier : sur
+                deux compètes, un sélecteur à trois options est un contrôle qui
+                demande une décision sans en offrir l'enjeu. */}
+            {open.length > VISIBLE ? (
+              <span className="sorter">
+                <label htmlFor="home-sort">{t('home.sort')}</label>
+                <select id="home-sort" value={sort} onChange={(e) => setSort(e.target.value)}>
+                  <option value="soon">{t('home.sort.soon')}</option>
+                  <option value="hot">{t('home.sort.hot')}</option>
+                  <option value="fresh">{t('home.sort.fresh')}</option>
+                </select>
+              </span>
+            ) : (
+              open.length > 0 && <span className="silkscreen">{open.length}</span>
+            )}
           </div>
 
           {open.length === 0 ? (
@@ -99,13 +289,21 @@ export default function Home() {
               <p style={{ margin: '0.3rem 0 0' }}>{t('home.open.none.lede')}</p>
             </div>
           ) : (
-            open.map((ev) => (
+            shown.map((ev) => {
+              const closing = closesIn(ev.predictionsCloseAt, now, t);
+              return (
               <Link className="rail rail--open" to={`/events/${ev.slug}`} key={ev.id}>
                 <span className="rail__year">{ev.year}</span>
                 <span>
                   <h3 className="rail__title">{ev.name}</h3>
                   <span className="rail__meta">
                     <span className={`tag ${STATUS_CLASS[ev.status] ?? ''}`}>{t(`status.${ev.status}`)}</span>
+                    {/* Le compte à rebours passe AVANT les catégories : il
+                        décide si l'on clique aujourd'hui, elles disent
+                        seulement ce qu'on y trouvera. */}
+                    {closing && (
+                      <span className={`tag ${closing.urgent ? 'tag--urgent' : 'tag--now'}`}>{closing.label}</span>
+                    )}
                     {ev.categories.map((c) => (
                       <span className="tag" key={c.id}>{localName(c, lang)}</span>
                     ))}
@@ -129,7 +327,16 @@ export default function Home() {
                   </p>
                 </span>
               </Link>
-            ))
+              );
+            })
+          )}
+
+          {/* Le dépli. Une seule fois, sans repli : personne n'a jamais voulu
+              refermer une liste qu'il venait d'ouvrir. */}
+          {hidden > 0 && (
+            <button className="btn btn--ghost more" onClick={() => setExpanded(true)}>
+              {t('home.more', { n: hidden })}
+            </button>
           )}
         </section>
       )}
