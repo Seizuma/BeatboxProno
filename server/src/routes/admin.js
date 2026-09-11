@@ -1990,7 +1990,15 @@ adminRouter.get('/search/predictions', async (req, res, next) => {
       prisma.prediction.count({ where }),
       prisma.prediction.findMany({
         where,
-        orderBy: [{ submitted: 'desc' }, { updatedAt: 'desc' }],
+        /**
+         * Par date de CRÉATION, et non de dernière modification.
+         *
+         * `updatedAt` bouge à chaque recalcul de points : un settlement
+         * d'événement remonte d'un coup mille pronostics vieux de six mois en
+         * tête de liste. La colonne affichée à l'écran serait alors dans un
+         * ordre que personne ne comprendrait.
+         */
+        orderBy: [{ submitted: 'desc' }, { createdAt: 'desc' }],
         take: TAKE,
         select: {
           id: true,
@@ -1998,6 +2006,7 @@ adminRouter.get('/search/predictions', async (req, res, next) => {
           submitted: true,
           points: true,
           scoredAt: true,
+          createdAt: true,
           updatedAt: true,
           user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
           event: { select: { slug: true, name: true, year: true } },
@@ -2064,12 +2073,26 @@ adminRouter.get('/search/predictions', async (req, res, next) => {
     res.json({
       total,
       capped: total > predictions.length,
+      /**
+       * La colonne « ce qui correspond » a-t-elle quelque chose à dire ?
+       *
+       * Elle ne se remplit que lorsqu'un nom d'artiste a été saisi : c'est la
+       * seule recherche dont le résultat mérite d'être justifié ligne à ligne.
+       * Filtrer par compétition ou par joueur n'a rien à expliquer — le titre
+       * du filtre suffit.
+       *
+       * Le drapeau vient du SERVEUR parce que c'est lui qui décide de peupler
+       * `ranks` et `battles`. Le laisser deviner au client, c'est deux règles à
+       * tenir d'accord pour la même question.
+       */
+      explains: Boolean(subjectIds),
       rows: predictions.map((p) => ({
         id: p.id,
         label: p.label,
         submitted: p.submitted,
         points: p.points,
         scored: Boolean(p.scoredAt),
+        createdAt: p.createdAt,
         updatedAt: p.updatedAt,
         user: p.user,
         event: p.event,

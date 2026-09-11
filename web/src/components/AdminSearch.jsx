@@ -4,6 +4,32 @@ import PredictionView from './PredictionView.jsx';
 import MenuButton from './MenuButton.jsx';
 import ConfirmDelete from './ConfirmDelete.jsx';
 
+/**
+ * La date d'un pronostic, à la minute.
+ *
+ * ─── Pourquoi `createdAt` et pas `updatedAt` ────────────────────────────────
+ *
+ * `updatedAt` bouge à chaque recalcul de points : un settlement d'événement
+ * réécrit mille lignes d'un coup, et la colonne afficherait la date du
+ * settlement pour des pronostics déposés six mois plus tôt. C'est la question
+ * « quand ce pronostic a-t-il été fait ? » qu'on vient poser ici.
+ *
+ * ─── Pourquoi pas la seconde ────────────────────────────────────────────────
+ *
+ * On cherche à situer un dépôt par rapport à une date butoir ou à un incident,
+ * pas à départager deux clics. La seconde ne ferait qu'allonger la colonne.
+ */
+function stamp(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
 const ROUNDS = [
     ['', 'Tous les tours'],
     ['ROUND_OF_32', 'Seizièmes'],
@@ -432,7 +458,15 @@ export default function AdminSearch() {
                                     <tr>
                                         <th>Joueur</th>
                                         <th>Compétition</th>
-                                        <th>Ce qui correspond</th>
+                                        <th>Date</th>
+                                        {/* La justification n'apparaît que
+                                            lorsqu'elle a quelque chose à dire :
+                                            elle ne se remplit que sur une
+                                            recherche par artiste. Une colonne
+                                            vide en permanence, c'est une
+                                            colonne qu'on finit par croire
+                                            cassée. */}
+                                        {data.explains && <th>Ce qui correspond</th>}
                                         <th className="num">Points</th>
                                         <th></th>
                                     </tr>
@@ -459,27 +493,33 @@ export default function AdminSearch() {
                                                 <span style={{ display: 'block' }}>{r.category.name}</span>
                                             </td>
 
+                                            <td className="muted data" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                                {stamp(r.createdAt)}
+                                            </td>
+
                                             {/* La justification de chaque ligne. Sans elle, il
                           faudrait ouvrir chaque fiche pour comprendre pourquoi
                           elle est là. */}
-                                            <td className="data" style={{ fontSize: '0.8rem' }}>
-                                                {r.ranks.map((k, i) => (
-                                                    <span key={`r${i}`} style={{ display: 'block' }}>
-                                                        <span style={{ color: 'var(--y)' }}>{k.rank}</span> {k.name}
-                                                        {k.phase && <span className="faint"> · {k.phase}</span>}
-                                                    </span>
-                                                ))}
-                                                {r.battles.map((b, i) => (
-                                                    <span key={`b${i}`} style={{ display: 'block' }}>
-                                                        {b.a} vs {b.b}
-                                                        {b.winner && <span style={{ color: 'var(--ok)' }}> ▸ {b.winner}</span>}
-                                                        {b.score && <span className="faint"> {b.score}</span>}
-                                                    </span>
-                                                ))}
-                                                {r.ranks.length === 0 && r.battles.length === 0 && (
-                                                    <span className="faint">—</span>
-                                                )}
-                                            </td>
+                                            {data.explains && (
+                                                <td className="data" style={{ fontSize: '0.8rem' }}>
+                                                    {r.ranks.map((k, i) => (
+                                                        <span key={`r${i}`} style={{ display: 'block' }}>
+                                                            <span style={{ color: 'var(--y)' }}>{k.rank}</span> {k.name}
+                                                            {k.phase && <span className="faint"> · {k.phase}</span>}
+                                                        </span>
+                                                    ))}
+                                                    {r.battles.map((b, i) => (
+                                                        <span key={`b${i}`} style={{ display: 'block' }}>
+                                                            {b.a} vs {b.b}
+                                                            {b.winner && <span style={{ color: 'var(--ok)' }}> ▸ {b.winner}</span>}
+                                                            {b.score && <span className="faint"> {b.score}</span>}
+                                                        </span>
+                                                    ))}
+                                                    {r.ranks.length === 0 && r.battles.length === 0 && (
+                                                        <span className="faint">—</span>
+                                                    )}
+                                                </td>
+                                            )}
 
                                             <td className="num">{r.scored ? r.points : <span className="faint">—</span>}</td>
 
