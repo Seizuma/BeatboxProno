@@ -302,8 +302,19 @@ img {
   color: var(--w);
 }
 
+/**
+ * Le survol du titre.
+ *
+ * `background: none` annulait l'inversion vidéo de `a:hover` mais laissait son
+ * `color: #000` : « BEATBOX » virait au noir sur le noir du tube et
+ * disparaissait, tandis que « PREDICTIONS » restait jaune — il porte sa propre
+ * couleur sur le `em`. La moitié du logo s'effaçait au passage de la souris.
+ *
+ * Cyan, comme les rails de l'accueil et comme tout ce qui mène ailleurs.
+ */
 .wordmark:hover {
   background: none;
+  color: var(--c);
 }
 
 .wordmark__mark {
@@ -733,8 +744,32 @@ img {
   border-color: var(--c);
 }
 
+/**
+ * Le survol.
+ *
+ * ─── Pourquoi `color` est OBLIGATOIRE ici ───────────────────────────────────
+ *
+ * La règle globale `a:hover` fait de l'inversion vidéo : fond cyan, encre
+ * noire. C'est le bon geste sur un lien dans une phrase, et le mauvais sur une
+ * carte entière — on ne retourne pas un pavé de deux cents pixels de haut.
+ *
+ * Écraser seulement le `background` ne suffit PAS : `color: #000` reste
+ * appliqué, et le titre disparaît sur le fond noir de la carte. C'est
+ * exactement ce qui arrivait. Il faut reprendre les DEUX propriétés.
+ *
+ * ─── Pourquoi le cyan ───────────────────────────────────────────────────────
+ *
+ * C'est déjà ce que font les rails de la même page (`.rail:hover
+ * .rail__title`), et la charte donne le cyan à la navigation. Deux façons de
+ * répondre au survol sur une même page se remarqueraient.
+ */
 .feature:hover {
-  background: #101010;
+  background: var(--surface-2);
+  color: var(--w);
+}
+
+.feature:hover .feature__title {
+  color: var(--c);
 }
 
 .feature__flag {
