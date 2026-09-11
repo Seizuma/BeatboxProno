@@ -804,10 +804,34 @@ function CategoryEditor({ category, event, state, update, phaseLocked, locked, o
       {/* Le jury, une fois pour la catégorie et non sur chaque phase : c'est le
           même panel du début à la fin, et le répéter à quatre reprises le
           transformerait en bruit. */}
+      {/* Le jury.
+
+          ─── Pourquoi il a changé de forme ──────────────────────────────────
+
+          C'était une ligne grise en petites capitales, posée entre deux
+          sections sans rien autour : à l'œil, ça ne se distinguait pas d'une
+          légende, et les joueurs disaient ne pas la trouver. Ce n'est pourtant
+          pas une note de bas de page — savoir QUI juge change la façon dont on
+          pronostique une battle, c'est une donnée de travail.
+
+          Elle devient donc un objet encadré : un bloc de titre bleu sur jaune,
+          l'idiome que le site emploie déjà pour ses bandeaux, et un nom par
+          pastille pour qu'on puisse les compter d'un coup d'œil plutôt que de
+          suivre une file séparée par des points médians.
+
+          ─── Une fois pour la catégorie, pas par phase ───────────────────────
+
+          C'est le même panel du début à la fin, et le répéter à quatre reprises
+          le transformerait en bruit — exactement ce dont on vient de le sortir. */}
       {judges.length > 0 && (
-        <p className="silkscreen" style={{ margin: 0 }}>
-          {t('event.jury')} <span className="data">{judges.join(' · ')}</span>
-        </p>
+        <div className="jury">
+          <span className="jury__label">{t('event.jury')}</span>
+          <ul className="jury__list">
+            {judges.map((name) => (
+              <li className="jury__name" key={name}>{name}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Hors barème.
