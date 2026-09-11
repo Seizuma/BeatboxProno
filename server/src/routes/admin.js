@@ -717,7 +717,29 @@ adminRouter.post('/categories/:categoryId/phases', async (req, res) => {
 });
 
 adminRouter.patch('/phases/:id', async (req, res) => {
-  const phase = await prisma.phase.update({ where: { id: req.params.id }, data: req.body });
+  /**
+   * Le corps passait tel quel à Prisma.
+   *
+   * N'importe quelle colonne de la phase pouvait donc être écrite depuis le
+   * client — `resolved`, `categoryId`, `qualifierCount` — sans passer par les
+   * routes qui, elles, recomposent le tableau et recalculent les points
+   * derrière. C'est le même défaut qui avait été corrigé sur les événements ;
+   * il restait ici.
+   *
+   * La liste est volontairement courte : tout le reste a sa propre route,
+   * précisément parce que le modifier demande autre chose qu'un `update`.
+   */
+  const data = z
+    .object({
+      name: z.string().min(1).max(120).optional(),
+      position: z.number().int().optional(),
+      // Même règle que pour la catégorie : le champ vidé revient à `null`.
+      nameEn: z.string().trim().max(120).nullable().optional()
+        .transform((v) => (v ? v : v === undefined ? undefined : null)),
+    })
+    .parse(req.body);
+
+  const phase = await prisma.phase.update({ where: { id: req.params.id }, data });
   res.json({ phase });
 });
 
@@ -1415,6 +1437,16 @@ adminRouter.patch('/categories/:id', async (req, res) => {
      * quand même, cinq par participante, au hasard de l'ordre saisi.
      */
     noPoints: z.boolean().optional(),
+    /**
+     * Le nom en anglais, ou `null` pour dire qu'il n'y en a pas besoin.
+     *
+     * `null` et la chaîne vide doivent se rejoindre : l'organisateur efface le
+     * champ, le navigateur envoie `''`, et une chaîne vide stockée telle quelle
+     * ferait afficher un nom de catégorie vide aux lecteurs anglophones. Le
+     * `transform` les ramène au même endroit.
+     */
+    nameEn: z.string().trim().max(120).nullable().optional()
+      .transform((v) => (v ? v : v === undefined ? undefined : null)),
   });
   const data = schema.parse(req.body);
   const category = await prisma.category.update({

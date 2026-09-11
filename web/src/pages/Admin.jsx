@@ -778,6 +778,7 @@ const CATEGORY_VIEWS = [
   ['seeding', 'Tirage'],
   ['format', 'Format'],
   ['judges', 'Jury'],
+  ['names', 'Traduction'],
 ];
 
 /**
@@ -957,6 +958,10 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
 
       {view === 'format' && <CategoryFormat category={category} onDone={onDone} run={run} />}
 
+      {view === 'names' && (
+        <TranslationPanel category={category} onDone={onDone} run={run} />
+      )}
+
       {view === 'judges' && (
         <div className="stack" style={{ gap: '0.5rem' }}>
           <div className="row" style={{ gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -987,6 +992,97 @@ function CategoryPanel({ category, onDone, run, askDelete }) {
 }
 
 /** Ajout et retrait des participants — jusqu'ici réservé au script de seed. */
+/**
+ * Les noms anglais d'une catégorie et de ses phases.
+ *
+ * ─── Pourquoi un onglet à part ──────────────────────────────────────────────
+ *
+ * La traduction se fait une fois, à la création de la compète, et ne se
+ * retouche jamais ensuite. La glisser dans « Participants » — l'écran où l'on
+ * revient sans arrêt — la mettrait dans les jambes cinquante fois pour un
+ * geste qu'on pose une seule.
+ *
+ * ─── Pourquoi la catégorie ET ses phases au même endroit ────────────────────
+ *
+ * Sur une compétition de wildcards, la phase porte le nom de la catégorie et
+ * les deux s'affichent l'un sous l'autre sur la page événement. Traduire la
+ * catégorie sans traduire la phase laisse « Wildcard Solo Women » au-dessus de
+ * « Wildcard Solo Femme » — une demi-traduction se remarque plus qu'une absence
+ * de traduction. Les avoir sous les yeux ensemble rend l'oubli difficile.
+ *
+ * ─── Pourquoi ces champs sont facultatifs ───────────────────────────────────
+ *
+ * « Solo », « Tag Team », « Loopstation », « Crew » s'écrivent pareil dans les
+ * deux langues. Rendre le champ obligatoire ferait recopier le nom français
+ * dans une seconde case à chaque catégorie créée : une corvée qui finit bâclée,
+ * et une occasion de faute de frappe sur un nom qui n'en avait pas besoin.
+ */
+function TranslationPanel({ category, onDone, run }) {
+  // Un état par ligne, indexé par identifiant. La catégorie et les phases
+  // partagent le même tableau : ce sont les mêmes deux colonnes, et deux
+  // machineries séparées pour le même geste seraient deux fois à maintenir.
+  const [draft, setDraft] = useState(() => ({
+    [category.id]: category.nameEn ?? '',
+    ...Object.fromEntries(category.phases.map((p) => [p.id, p.nameEn ?? ''])),
+  }));
+
+  const rows = [
+    { id: category.id, kind: 'categories', label: 'Catégorie', name: category.name, saved: category.nameEn ?? '' },
+    ...category.phases.map((p) => ({
+      id: p.id, kind: 'phases', label: 'Phase', name: p.name, saved: p.nameEn ?? '',
+    })),
+  ];
+
+  const save = (row) =>
+    run(async () => {
+      const value = draft[row.id].trim();
+      await api.patch(`/admin/${row.kind}/${row.id}`, { nameEn: value || null });
+      await onDone();
+      return value
+        ? `« ${row.name} » s'affichera « ${value} » en anglais.`
+        : `« ${row.name} » s'affichera tel quel en anglais.`;
+    });
+
+  return (
+    <div className="stack" style={{ gap: '0.7rem' }}>
+      <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
+        Le nom affiché aux lecteurs anglophones. Laissez vide quand le nom français fait déjà
+        l'affaire — « Solo », « Loopstation », « Tag Team » n'ont rien à traduire. Ces noms sont
+        de la donnée, pas de l'interface : ils ne peuvent pas vivre dans le dictionnaire du site.
+      </p>
+
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          className="row"
+          style={{ alignItems: 'flex-end', gap: '0.7rem', flexWrap: 'wrap' }}
+        >
+          <div className="field" style={{ flex: '1 1 20rem', margin: 0 }}>
+            <label htmlFor={`en-${row.id}`}>
+              <span className="eyebrow">{row.label}</span> {row.name}
+            </label>
+            <input
+              id={`en-${row.id}`}
+              value={draft[row.id]}
+              maxLength={120}
+              placeholder={row.name}
+              onChange={(e) => setDraft((d) => ({ ...d, [row.id]: e.target.value }))}
+            />
+          </div>
+
+          <button
+            className="btn btn--small btn--primary"
+            disabled={draft[row.id].trim() === row.saved}
+            onClick={() => save(row)}
+          >
+            Enregistrer
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ContenderManager({ category, onDone, run, askDelete }) {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', seed: '', artistId: '' });

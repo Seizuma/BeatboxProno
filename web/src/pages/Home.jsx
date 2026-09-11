@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useSession } from '../lib/context.jsx';
 import { useI18n } from '../lib/i18n.jsx';
+import { localName } from '../lib/localName.js';
 import DiscordButton from '../components/DiscordButton.jsx';
 import ScoringHelp from '../components/ScoringHelp.jsx';
 import PostboxDialog from '../components/PostboxDialog.jsx';
@@ -29,7 +30,7 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [params] = useSearchParams();
   const { user } = useSession();
-  const { t, number } = useI18n();
+  const { t, number, lang } = useI18n();
 
   useEffect(() => {
     api.get('/events').then(({ events }) => setEvents(events)).catch((e) => setError(e.message));
@@ -106,7 +107,7 @@ export default function Home() {
                   <span className="rail__meta">
                     <span className={`tag ${STATUS_CLASS[ev.status] ?? ''}`}>{t(`status.${ev.status}`)}</span>
                     {ev.categories.map((c) => (
-                      <span className="tag" key={c.id}>{c.name}</span>
+                      <span className="tag" key={c.id}>{localName(c, lang)}</span>
                     ))}
                   </span>
                 </span>
@@ -156,7 +157,7 @@ export default function Home() {
                   <span className={`tag ${STATUS_CLASS[ev.status] ?? ''}`}>{t(`status.${ev.status}`)}</span>
                   {ev.status === 'DRAFT' && <span className="tag tag--draft">{t('home.draft.hint')}</span>}
                   {ev.categories.map((c) => (
-                    <span className="tag" key={c.id}>{c.name}</span>
+                    <span className="tag" key={c.id}>{localName(c, lang)}</span>
                   ))}
                 </span>
               </span>

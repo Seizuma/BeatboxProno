@@ -191,7 +191,7 @@ predictionRouter.get('/mine', async (req, res) => {
     where: { userId: req.user.id },
     include: {
       event: { select: { slug: true, name: true, year: true, status: true } },
-      category: { select: { name: true, slug: true, kind: true } },
+      category: { select: { name: true, nameEn: true, slug: true, kind: true } },
     },
     orderBy: [{ submitted: 'desc' }, { updatedAt: 'desc' }],
   });

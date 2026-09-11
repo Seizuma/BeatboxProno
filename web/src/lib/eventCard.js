@@ -1,3 +1,4 @@
+import { localName } from './localName.js';
 import { EXPORT_PIXEL_SCALE, ensureFonts, readPalette } from './predictionCard.js';
 
 /**
@@ -55,7 +56,7 @@ export { ensureFonts, readPalette };
  * Les catégories portent leur nombre d'inscrits : « SOLO — 20 » dit plus que
  * « SOLO », et c'est l'information qui fait mesurer l'ampleur du plateau.
  */
-export function buildEventCard(event, { locale = 'fr-FR', t } = {}) {
+export function buildEventCard(event, { locale = 'fr-FR', lang = 'fr', t } = {}) {
   // Repli en clair si aucun traducteur n'est fourni : mieux vaut une affiche en
   // anglais qu'une affiche portant « announce.banner ».
   const label = t ?? ((key) => key);
@@ -80,7 +81,10 @@ export function buildEventCard(event, { locale = 'fr-FR', t } = {}) {
     location: event.location ?? null,
     dates,
     categories: (event.categories ?? []).map((c) => ({
-      name: c.name,
+      // Résolu ICI, comme le décompte juste en dessous : le module de dessin
+      // n'a rien à savoir des langues, et une affiche déjà construite ne peut
+      // plus changer de langue à mi-chemin.
+      name: localName(c, lang),
       contenders: c.contenders?.length ?? 0,
       // Le décompte est une phrase, pas un nombre : « 20 entrants » et
       // « 20 inscrits » ne s'assemblent pas de la même façon selon la langue.

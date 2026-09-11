@@ -1,0 +1,26 @@
+-- Le nom anglais d'une catégorie et d'une phase.
+--
+-- ─── Pourquoi une colonne et pas une entrée de dictionnaire ─────────────────
+--
+-- `i18n.jsx` traduit l'INTERFACE : des libellés écrits par nous, connus à la
+-- compilation. Un nom de catégorie est de la DONNÉE, saisie par l'organisation,
+-- qui n'existe pas encore au moment où l'on écrirait la traduction. « Wildcard
+-- Solo Femme » n'a rien à faire dans un dictionnaire qu'il faudrait redéployer à
+-- chaque compète.
+--
+-- ─── Pourquoi les deux tables ───────────────────────────────────────────────
+--
+-- Sur une compétition de wildcards, la phase porte le nom de la catégorie et les
+-- deux s'affichent l'un sous l'autre. Traduire la catégorie seule laissait
+-- « Wildcard Solo Women » au-dessus de « Wildcard Solo Femme » : une demi-
+-- traduction se remarque plus qu'une absence de traduction.
+--
+-- ─── Pourquoi nullable ──────────────────────────────────────────────────────
+--
+-- La plupart des noms n'ont rien à traduire : « Solo », « Tag Team »,
+-- « Loopstation », « Crew » s'écrivent pareil dans les deux langues. Obliger à
+-- remplir un second champ pour recopier le premier serait une corvée qui
+-- finirait bâclée. Vide veut dire « le nom français fait l'affaire », et c'est le
+-- cas courant.
+ALTER TABLE "Category" ADD COLUMN "nameEn" TEXT;
+ALTER TABLE "Phase" ADD COLUMN "nameEn" TEXT;

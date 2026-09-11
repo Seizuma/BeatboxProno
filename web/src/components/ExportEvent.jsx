@@ -102,7 +102,7 @@ export default function ExportEvent({ slug, onClose }) {
         await ensureFonts();
         if (cancelled || !canvas.current) return;
 
-        const card = buildEventCard(event, { locale: cardLocale, t: cardT });
+        const card = buildEventCard(event, { locale: cardLocale, lang: cardLang, t: cardT });
         drawEventCard(canvas.current, card, spec, readPalette(), {
           pixelScale: previewScale(spec, cssW),
         });
@@ -124,7 +124,7 @@ export default function ExportEvent({ slug, onClose }) {
 
   const renderFile = async () => {
     await ensureFonts();
-    const card = buildEventCard(event, { locale: cardLocale, t: cardT });
+    const card = buildEventCard(event, { locale: cardLocale, lang: cardLang, t: cardT });
     const off = document.createElement('canvas');
     drawEventCard(off, card, spec, readPalette(), { pixelScale: EXPORT_PIXEL_SCALE });
     return new Promise((resolve, reject) => {
@@ -132,7 +132,7 @@ export default function ExportEvent({ slug, onClose }) {
     });
   };
 
-  const name = event ? eventFileName(buildEventCard(event, { locale: cardLocale, t: cardT }), spec) : 'annonce.png';
+  const name = event ? eventFileName(buildEventCard(event, { locale: cardLocale, lang: cardLang, t: cardT }), spec) : 'annonce.png';
 
   const download = async () => {
     try {
