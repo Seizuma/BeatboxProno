@@ -470,6 +470,12 @@ const DICT = {
     'event.closed.live':
       'The event is underway — predictions are closed. You can still browse your picks, but no longer edit them.',
     'event.judges': '{n} judges',
+    // Les deux avis de barème : une catégorie qui ne rapporte rien, et les
+    // qualifiés que personne ne pouvait connaître.
+    'event.noPoints':
+      'This category is outside the scoring system: nothing here earns points. Rank it for the record if you like — it changes no score.',
+    'event.offRadar':
+      'These qualifiers ran with unlisted videos, so nobody could have picked them. They are left out of the scoring entirely: the other ranks close up as if they had not competed, and no prediction gains or loses a point because of them.',
     'event.jury': 'Judges:',
     'event.saving': 'Saving…',
     'leave.title': 'You have unsaved changes',
@@ -1218,6 +1224,12 @@ const DICT = {
     'event.closed.live':
       'L’événement est en cours — les pronostics sont fermés. Vous pouvez encore consulter vos pronos, mais plus les modifier.',
     'event.judges': '{n} juges',
+    // Les deux avis de barème : une catégorie qui ne rapporte rien, et les
+    // qualifiés que personne ne pouvait connaître.
+    'event.noPoints':
+      "Cette catégorie est hors barème : rien n'y rapporte de points. Classez-la pour le plaisir si vous voulez, ça ne changera aucun score.",
+    'event.offRadar':
+      "Ces qualifiés ont concouru avec des vidéos non répertoriées : personne ne pouvait les pronostiquer. Ils sont entièrement retirés du calcul — les rangs des autres se resserrent comme s'ils n'avaient pas concouru, et aucun pronostic ne gagne ni ne perd de point à cause d'eux.",
     'event.jury': 'Jury :',
     'event.saving': 'Enregistrement…',
     'leave.title': 'Des modifications ne sont pas enregistrées',

@@ -253,6 +253,31 @@ model Category {
   // rarement le Solo et le Loopstation avec le même panel.
   judges    String[]     @default([])
 
+  /// Cette catégorie est-elle hors barème ?
+  ///
+  /// ─── Le cas qui l'a fait naître ──────────────────────────────────────────
+  ///
+  /// Une sélection de wildcards où TOUT LE MONDE passe. Le championnat de
+  /// France ouvre une catégorie féminine dont toutes les inscrites sont
+  /// qualifiées d'avance : il n'y a rien à deviner, et le classement demandé
+  /// aux joueurs ne mesure rien du tout.
+  ///
+  /// Le barème savait déjà ne pas distribuer de point de qualification quand la
+  /// coupe couvre tout le plateau — mais les points de PLACEMENT tombaient
+  /// quand même, cinq par participante, au hasard de l'ordre saisi. Une
+  /// catégorie sans enjeu distribuait ainsi plus de points qu'une finale.
+  ///
+  /// ─── Pourquoi ce n'est pas déductible ────────────────────────────────────
+  ///
+  /// « Coupe ≥ inscrits » ne suffit pas : une catégorie peut être hors barème
+  /// pour des raisons qui ne se lisent nulle part dans la structure — un format
+  /// démonstratif, une catégorie ouverte trop tard pour que quiconque ait pu la
+  /// pronostiquer. C'est une DÉCISION de l'organisation, elle s'écrit.
+  ///
+  /// `false` par défaut : c'est le comportement de toutes les catégories déjà
+  /// en base, et on ne retire pas rétroactivement des points déjà acquis.
+  noPoints  Boolean      @default(false)
+
   contenders  Contender[]
   phases      Phase[]
   predictions Prediction[]
@@ -359,6 +384,35 @@ model PhaseEntry {
   contender   Contender @relation(fields: [contenderId], references: [id], onDelete: Cascade)
   rank        Int?      // classement officiel, null tant que non joué
   qualified   Boolean   @default(false)
+
+  /// Ce qualifié était-il invisible au moment des pronostics ?
+  ///
+  /// ─── Le cas qui l'a fait naître ──────────────────────────────────────────
+  ///
+  /// Le championnat de France accepte les vidéos de qualification en « non
+  /// répertoriée » sur YouTube. Des candidats passent donc la sélection sans
+  /// que personne, en dehors du jury, ait su qu'ils concouraient. Ils ne
+  /// figuraient dans le top de AUCUN joueur — non par erreur de pronostic, mais
+  /// parce que leur existence n'était pas connaissable.
+  ///
+  /// Sans ce drapeau, chacun de ces qualifiés coûtait à tout le monde : une
+  /// place de qualification impossible à deviner, et surtout un décalage de
+  /// tout le classement officiel qui rabotait les points de placement en
+  /// cascade. Le barème sanctionnait une information que le jeu n'avait pas
+  /// distribuée.
+  ///
+  /// ─── Ce que le drapeau fait ──────────────────────────────────────────────
+  ///
+  /// Le moteur de score retire ces lignes AVANT de comparer, et resserre les
+  /// rangs restants sur 1..n. La coupe est diminuée d'autant. Le résultat est
+  /// que la compète se score exactement comme si ces candidats n'avaient pas
+  /// concouru : ni point gagné pour qui les aurait devinés, ni point perdu pour
+  /// les autres — c'est le sens de « n'influe pas ».
+  ///
+  /// La ligne RESTE en base, avec son vrai rang et sa vraie qualification :
+  /// c'est elle qui compose le tableau et qui s'affiche sur la page événement.
+  /// On l'écarte du calcul, on ne la cache pas.
+  offRadar    Boolean   @default(false)
 
   @@unique([phaseId, contenderId])
 }
