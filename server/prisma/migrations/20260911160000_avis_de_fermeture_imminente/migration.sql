@@ -1,0 +1,14 @@
+-- L'avis de fermeture imminente.
+--
+-- ─── Pourquoi cette migration ne contient QUE cette ligne ───────────────────
+--
+-- PostgreSQL refuse d'utiliser une valeur d'énumération dans la même
+-- transaction que celle qui l'ajoute. Une migration qui ferait
+-- `ALTER TYPE ... ADD VALUE` puis s'en servirait — un UPDATE, une contrainte,
+-- un index partiel — échouerait avec « unsafe use of new value ».
+--
+-- Prisma enveloppe chaque fichier de migration dans une transaction. La valeur
+-- est donc seule dans la sienne, et tout ce qui voudra s'en servir devra
+-- attendre la migration suivante. Ici rien n'en a besoin : c'est le code
+-- applicatif qui l'écrira, après le déploiement.
+ALTER TYPE "NotificationKind" ADD VALUE 'EVENT_CLOSING';

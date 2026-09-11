@@ -90,8 +90,9 @@ export default function NotificationBell() {
    * a été supprimé depuis.
    */
   const label = (n) => {
-    if (n.kind === 'EVENT_OPEN') {
-      return t('notif.EVENT_OPEN', {
+    // Les deux avis du site parlent d'une compète et de personne d'autre.
+    if (n.kind === 'EVENT_OPEN' || n.kind === 'EVENT_CLOSING') {
+      return t(`notif.${n.kind}`, {
         event: n.event ? `${n.event.name} ${n.event.year}` : '—',
       });
     }
@@ -203,8 +204,12 @@ export default function NotificationBell() {
                     {/* Une ouverture n'a pas d'avatar : c'est le site qui
                         parle. Un glyphe tient la colonne pour que les lignes
                         restent alignées. */}
-                    {n.kind === 'EVENT_OPEN' ? (
-                      <span aria-hidden="true">▶</span>
+                    {n.kind === 'EVENT_OPEN' || n.kind === 'EVENT_CLOSING' ? (
+                      /* Un glyphe par nature : la flèche annonce une
+                         ouverture, le sablier une fermeture qui approche. Deux
+                         avis du site qui se ressembleraient trop se liraient
+                         comme un doublon. */
+                      <span aria-hidden="true">{n.kind === 'EVENT_OPEN' ? '▶' : '⧗'}</span>
                     ) : (
                       n.actor?.avatarUrl && <img className="avatar" src={n.actor.avatarUrl} alt="" />
                     )}

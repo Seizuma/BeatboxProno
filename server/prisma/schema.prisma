@@ -747,6 +747,15 @@ enum NotificationKind {
   // SITE envoie, sans personne derrière : `actorId` reste vide, et la phrase
   // ne cite aucun nom.
   EVENT_OPEN
+
+  /// La date butoir d'une compétition approche. Envoyé une fois, vingt-quatre
+  /// heures avant, par le cron `jobs/closing-reminder.js`.
+  ///
+  /// Comme `EVENT_OPEN` : personne derrière, `actorId` vide, la phrase ne cite
+  /// aucun nom. Mais un destinataire plus étroit — seuls ceux qui n'ont rien
+  /// déposé sur cette compète le reçoivent. Rappeler de pronostiquer à qui l'a
+  /// déjà fait, c'est lui apprendre à ignorer la pastille rouge.
+  EVENT_CLOSING
 }
 
 // Un avis destiné à une personne.

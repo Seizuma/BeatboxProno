@@ -149,6 +149,69 @@ export async function notifyEventOpen(eventId) {
 }
 
 /**
+ * La date butoir approche : on rappelle à ceux qui n'ont rien déposé.
+ *
+ * ─── Pourquoi pas « tous les joueurs » ──────────────────────────────────────
+ *
+ * Le message dit « n'oubliez pas vos pronostics ». L'envoyer à quelqu'un qui
+ * les a déjà déposés ne lui apprend rien — ça lui apprend à ignorer la pastille
+ * rouge, ce qui coûte bien plus cher que l'avis n'aurait rapporté. On ne
+ * s'adresse donc qu'à ceux pour qui la phrase veut dire quelque chose.
+ *
+ * `submitted: true` et non la simple existence d'un pronostic : un brouillon
+ * abandonné est exactement la situation que ce rappel doit rattraper.
+ *
+ * ─── L'idempotence ──────────────────────────────────────────────────────────
+ *
+ * Même motif que `notifyEventOpen`, et pour la même raison : l'existence d'un
+ * avis `EVENT_CLOSING` pour cette compète EST la preuve de l'envoi. Un drapeau
+ * posé sur l'événement pourrait mentir — il serait levé même si l'insertion
+ * avait échoué juste après.
+ *
+ * Le cron passe toutes les heures ; sans cette garde, la même compète
+ * enverrait vingt-quatre rappels dans sa dernière journée.
+ *
+ * @returns {Promise<{sent: number, skipped: boolean}>}
+ */
+export async function notifyEventClosing(eventId) {
+  try {
+    const already = await prisma.notification.findFirst({
+      where: { kind: 'EVENT_CLOSING', eventId },
+      select: { id: true },
+    });
+    if (already) return { sent: 0, skipped: true };
+
+    // Les comptes écartés de CETTE compète n'ont rien à y déposer : les
+    // convier serait leur promettre une porte qui refusera de s'ouvrir.
+    const [users, done, excluded] = await Promise.all([
+      prisma.user.findMany({ select: { id: true } }),
+      prisma.prediction.findMany({
+        where: { eventId, submitted: true },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+      prisma.eventExclusion.findMany({ where: { eventId }, select: { userId: true } }),
+    ]);
+
+    const skip = new Set([...done.map((p) => p.userId), ...excluded.map((e) => e.userId)]);
+    const targets = users.map((u) => u.id).filter((id) => !skip.has(id));
+
+    if (targets.length === 0) {
+      console.log('[notifications] rappel inutile : tout le monde a déposé.');
+      return { sent: 0, skipped: true };
+    }
+
+    const sent = await push({ userIds: targets, kind: 'EVENT_CLOSING', eventId });
+
+    console.log(`[notifications] fermeture rappelée à ${sent} compte(s).`);
+    return { sent, skipped: false };
+  } catch (err) {
+    console.error('[notifications]', err?.message ?? err);
+    return { sent: 0, skipped: false };
+  }
+}
+
+/**
  * Les avis d'une personne, et le nombre de non-lus.
  *
  * Le décompte est une requête à part plutôt qu'un filtre sur la liste : les

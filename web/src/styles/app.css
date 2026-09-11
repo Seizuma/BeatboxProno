@@ -694,6 +694,142 @@ img {
 }
 
 /* ---------------------------------------------------------------------------
+   L'ACCUEIL — LES VEDETTES, LE TRI, L'URGENCE
+
+   La page listait toutes les compètes ouvertes les unes sous les autres. À
+   quatre c'était lisible ; à dix ce serait un mur où rien ne ressort, et la
+   question qu'on vient y poser — « où puis-je jouer maintenant ? » — n'aurait
+   plus de réponse immédiate.
+   --------------------------------------------------------------------------- */
+
+/* Deux vedettes côte à côte, qui retombent l'une sous l'autre sous 19 rem de
+   large disponible. Côte à côte elles se comparent, empilées elles se lisent :
+   les deux lectures sont bonnes, aucune requête média à écrire. */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 2.5rem;
+}
+
+.feature {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: var(--border-w) solid var(--line);
+  padding: 0.9rem;
+  color: var(--w);
+  text-decoration: none;
+}
+
+/* Le LISERÉ porte la distinction, pas un fond coloré : un pavé jaune plein
+   aurait la même présence qu'un bouton « Faire mes pronos », et les deux se
+   disputeraient le clic à l'intérieur de la même carte. */
+.feature--hot {
+  border-color: var(--y);
+}
+
+.feature--new {
+  border-color: var(--c);
+}
+
+.feature:hover {
+  background: #101010;
+}
+
+.feature__flag {
+  align-self: flex-start;
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  padding: 0.1rem 0.5rem;
+  color: #000;
+}
+
+.feature--hot .feature__flag {
+  background: var(--y);
+}
+
+.feature--new .feature__flag {
+  background: var(--c);
+}
+
+/* Deux pastilles quand la même compète est à la fois la plus jouée et la
+   dernière ouverte — ce qui arrive à toute compète qui ouvre en fanfare. On
+   l'affiche une seule fois, avec ses deux titres. */
+.feature__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.feature__title {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1;
+  margin: 0;
+}
+
+.feature__meta {
+  font-family: var(--font-data);
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+/* `margin-top: auto` colle le pied en bas : deux cartes de hauteurs de titre
+   différentes gardent leurs boutons alignés, ce qui se voit beaucoup quand
+   elles sont côte à côte. */
+.feature__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+/* Le compte à rebours sous 24 h. Rouge, parce que la charte réserve le rouge
+   aux alertes et qu'une fermeture imminente en est une. Au-delà de 24 h et
+   jusqu'à 72, c'est `tag--now` qui sert — jaune : une information à prendre,
+   pas encore une urgence. Au-delà, rien : « ferme dans trois semaines »
+   n'apprend rien et diluerait les deux autres. */
+.tag--urgent {
+  border-color: var(--r);
+  color: var(--r);
+}
+
+/* La barre de tri. Volontairement discrète : elle sert deux visiteurs sur dix
+   et ne doit pas peser autant que le titre de la section. */
+.sorter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sorter label {
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+}
+
+.sorter select {
+  font-size: 0.9rem;
+  padding: 0.1rem 0.3rem;
+}
+
+/* Le dépli. Pleine largeur : c'est une action sur la liste entière, pas sur la
+   dernière ligne — collé à droite, on le lirait comme appartenant à elle. */
+.more {
+  display: block;
+  width: 100%;
+  margin-top: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
    LE JURY D'UNE CATÉGORIE
 
    Une ligne grise en petites capitales, sans cadre, posée entre deux sections :
