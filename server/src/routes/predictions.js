@@ -681,19 +681,81 @@ predictionRouter.post('/:predictionId/withdraw', async (req, res) => {
 
 // --- Suppression ---------------------------------------------------------------
 
+/**
+ * Ce pronostic peut-il disparaître ?
+ *
+ * ─── Pourquoi la compète commande, et pas le pronostic ──────────────────────
+ *
+ * L'ancienne règle ne regardait que `submitted && scoredAt`. Elle laissait donc
+ * effacer un pronostic DÉPOSÉ sur une compète déjà commencée, tant que
+ * l'organisation n'avait pas encore lancé le calcul des points. Autrement dit :
+ * on pouvait regarder les premières battles, constater qu'on s'était trompé, et
+ * faire disparaître la preuve avant le décompte. C'est exactement ce que le jeu
+ * ne doit pas permettre.
+ *
+ * Une compète EN COURS ou TERMINÉE ferme donc la porte, pour un brouillon comme
+ * pour un dépôt. Le brouillon ne coûte pourtant rien à personne — il ne marque
+ * aucun point — mais deux règles pour deux cas obligeraient le joueur à deviner
+ * laquelle s'applique à sa ligne. Une seule règle, lisible depuis l'écran : la
+ * compète a commencé, on ne touche plus à rien.
+ *
+ * ─── Pourquoi la date butoir ne ferme QUE les dépôts ────────────────────────
+ *
+ * Passée la butoir, un pronostic déposé est verrouillé : l'effacer serait un
+ * retrait après coup, c'est-à-dire tout ce contre quoi une date limite existe.
+ *
+ * Un brouillon, lui, n'a jamais été en jeu. Interdire d'en faire le ménage
+ * pendant les heures qui séparent la butoir du coup d'envoi ne protégerait
+ * rien, et le quota de versions resterait occupé par des ébauches devenues
+ * inutiles.
+ *
+ * @returns {string|null} La raison du refus, ou `null` si c'est permis.
+ */
+function deletionGate(prediction) {
+  const event = prediction.category.event;
+
+  if (event.status === 'LIVE') {
+    return 'La compétition a commencé : les pronostics ne peuvent plus être supprimés.';
+  }
+  if (event.status === 'FINISHED') {
+    return 'Cette compétition est terminée : les pronostics ne peuvent plus être supprimés.';
+  }
+
+  if (
+    prediction.submitted &&
+    event.predictionsCloseAt &&
+    new Date(event.predictionsCloseAt) <= new Date()
+  ) {
+    return 'La date limite est passée : un pronostic déposé ne peut plus être supprimé.';
+  }
+
+  /**
+   * Le garde-fou de dernier recours.
+   *
+   * Les deux conditions ci-dessus devraient déjà couvrir le cas — un pronostic
+   * scoré appartient à une compète terminée. Mais le score peut être lancé à la
+   * main sur une compète encore ouverte, et si ça arrive un jour, ce sont des
+   * points DÉJÀ AU CLASSEMENT GÉNÉRAL qui disparaîtraient sans trace.
+   */
+  if (prediction.submitted && prediction.scoredAt) {
+    return 'Ce pronostic est déjà scoré : ses points comptent au classement.';
+  }
+
+  return null;
+}
+
+/**
+ * Supprimer un de ses pronostics.
+ *
+ * Déposé ou brouillon : la distinction ne se fait pas ici mais dans
+ * `deletionGate`, qui répond aussi à l'écran avant qu'on ne clique.
+ */
 predictionRouter.delete('/:predictionId', async (req, res) => {
   const prediction = await loadMine(req.params.predictionId, req.user.id);
   if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable.' });
 
-  // Seul un pronostic DÉPOSÉ et scoré est figé : ses points comptent au
-  // classement, l'effacer les ferait disparaître sans trace. Un brouillon reste
-  // supprimable, même s'il porte un score hérité d'un ancien dépôt.
-  if (prediction.submitted && prediction.scoredAt) {
-    return res.status(409).json({
-      error:
-        'Ce pronostic est déposé et déjà scoré. Déposez une autre version, ou retirez-le, avant de le supprimer.',
-    });
-  }
+  const refused = deletionGate(prediction);
+  if (refused) return res.status(409).json({ error: refused });
 
   await prisma.prediction.delete({ where: { id: prediction.id } });
   res.json({ ok: true });
