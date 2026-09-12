@@ -347,24 +347,73 @@ body.is-dragging {
   margin: 0 0 0.55rem;
 }
 
+/* ---------------------------------------------------------------------------
+   LA GÉOMÉTRIE DU TABLEAU
+
+   ─── Le défaut ──────────────────────────────────────────────────────────────
+
+   Les traits de liaison se décalaient dès qu'un pronostic était posé, et se
+   remettaient d'aplomb une fois la colonne entièrement remplie. Plus le tableau
+   était grand, plus l'écart se voyait.
+
+   La cause tient en une ligne : `.bracket__pair::after` tire sa barre verticale
+   de `top: 25%` à `bottom: 75%` de la paire. Ces deux nombres ne désignent le
+   centre des deux affiches que si elles ont EXACTEMENT la même hauteur.
+
+   Or `justify-content: space-around` répartit l'espace LIBRE, pas les enfants.
+   Avec deux affiches de hauteurs hA et hB dans une paire de hauteur H, la
+   première se centre à (H − hA − hB)/4 + hA/2 : ce n'est H/4 que lorsque
+   hA = hB. Et les hauteurs divergent dès qu'un vainqueur est désigné — la ligne
+   de score et le bouton « Effacer » apparaissent d'un côté seulement. D'où le
+   réalignement quand tout est rempli : les deux affiches redeviennent égales.
+
+   Le même raisonnement vaut d'un cran plus haut : des paires de hauteurs
+   différentes ne placent pas leurs milieux là où la colonne suivante attend ses
+   affiches, et l'écart s'accumule de tour en tour.
+
+   ─── Le correctif ───────────────────────────────────────────────────────────
+
+   On cesse de répartir de l'espace pour découper des CASES égales. Chaque tour
+   est une grille dont toutes les lignes valent `1fr` : les paires d'une colonne
+   font la même hauteur, les deux affiches d'une paire aussi, et l'affiche se
+   centre dans sa case au lieu de flotter.
+
+   Les 25 % et 75 % redeviennent alors exacts par construction — quelle que soit
+   la hauteur du contenu. C'est ce qui règle le problème pour de bon, et non
+   seulement pour la ligne de score : un nom qui passe à deux lignes ou une
+   vignette manquante décalaient aussi le tracé, en plus discret.
+
+   `minmax(0, 1fr)` et non `1fr` : le second vaut `minmax(auto, 1fr)`, dont le
+   plancher automatique laisse une ligne dépasser la hauteur de ses voisines
+   pour loger son contenu — ce qui ramènerait exactement l'inégalité qu'on
+   cherche à supprimer.
+
+   La colonne des finales n'est pas concernée : elle pose ses deux enfants sur
+   des lignes explicites via son propre `grid-template-rows`, donc
+   `grid-auto-rows` ne s'y applique jamais.
+   --------------------------------------------------------------------------- */
+
 .bracket__col {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
   gap: 0.5rem;
 }
 
 .bracket__pair {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   position: relative;
 }
 
+/* L'affiche se centre dans sa case. Sans ça elle se collerait en haut, et son
+   trait horizontal — tiré de son propre `top: 50%` — ne tomberait plus sur le
+   milieu de la case que la barre verticale vise. */
 .bracket__node {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .bracket__pair>.bracket__node::after {
@@ -1163,11 +1212,25 @@ details.panel>summary .eyebrow {
   cursor: pointer;
 }
 
-.wc-suggest__item:last-child { border-bottom: 0; }
+.wc-suggest__item:last-child {
+  border-bottom: 0;
+}
+
 .wc-suggest__item:hover,
-.wc-suggest__item:focus-visible { background: var(--surface-2); outline: none; }
-.wc-suggest__item:disabled { opacity: 0.5; cursor: default; }
-.wc-suggest__item .faint { margin-left: auto; font-size: 0.82rem; }
+.wc-suggest__item:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.wc-suggest__item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wc-suggest__item .faint {
+  margin-left: auto;
+  font-size: 0.82rem;
+}
 
 /* Sur téléphone, un Top 32 tient quatre colonnes dans 360 pixels : les photos
    reprennent leur ancienne taille plutôt que de manger le nom. */
