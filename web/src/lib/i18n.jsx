@@ -589,6 +589,12 @@ const DICT = {
     'draft.submitted': 'Filed',
     'draft.close': 'Close',
     'draft.empty': 'Nothing was filled in on this category.',
+    'prediction.delete.title': 'Delete this prediction',
+    'prediction.delete.keep': 'Keep it',
+    'prediction.delete.filed':
+      'This one is filed. Deleting it removes it for good — there is no undo, and you will have to rebuild it from scratch if you change your mind. Predictions can only be deleted while the competition has not started.',
+    'prediction.delete.draft':
+      'This draft has never been filed, so it scores nothing. Deleting it frees a version slot in its category.',
     'draft.delete': 'Delete',
     'draft.untitled': 'Untitled',
 
@@ -1354,6 +1360,12 @@ const DICT = {
     'draft.submitted': 'Déposé',
     'draft.close': 'Fermer',
     'draft.empty': 'Rien n’a été rempli sur cette catégorie.',
+    'prediction.delete.title': 'Supprimer ce pronostic',
+    'prediction.delete.keep': 'Le garder',
+    'prediction.delete.filed':
+      "Celui-ci est déposé. Le supprimer l'efface pour de bon — rien ne se rattrape, et il faudra tout refaire si vous changez d'avis. On ne peut supprimer un pronostic que tant que la compétition n'a pas commencé.",
+    'prediction.delete.draft':
+      "Ce brouillon n'a jamais été déposé, il ne rapporte donc rien. Le supprimer libère une place de version dans sa catégorie.",
     'draft.delete': 'Supprimer',
     'draft.untitled': 'Sans titre',
 

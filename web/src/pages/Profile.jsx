@@ -7,6 +7,7 @@ import { localName } from '../lib/localName.js';
 import DiscordButton from '../components/DiscordButton.jsx';
 import PredictionView from '../components/PredictionView.jsx';
 import DeleteAccount from '../components/DeleteAccount.jsx';
+import Modal from '../components/Modal.jsx';
 import { Badge, Banded, FramedAvatar, Name } from '../components/Cosmetics.jsx';
 import BadgeDetail from '../components/BadgeDetail.jsx';
 import { BADGES } from '../lib/cosmetics.js';
@@ -30,6 +31,15 @@ export default function Profile({ preview = null }) {
   // le serveur n'expose que les pronostics déposés.
   const [reading, setReading] = useState(null);
   const [busy, setBusy] = useState(null);
+  /**
+   * Le pronostic dont on demande confirmation.
+   *
+   * Une confirmation pour TOUS, brouillon compris. On aurait pu n'en demander
+   * que pour un dépôt — c'est lui qui a de la valeur —, mais les deux boutons
+   * sont côte à côte dans la même colonne, et un joueur qui a pris l'habitude
+   * qu'un clic efface sans rien demander cliquera aussi vite sur l'autre ligne.
+   */
+  const [dropping, setDropping] = useState(null);
   const [closing, setClosing] = useState(false);
   // Le badge dont on consulte la fiche : { code, event, awardedAt }.
   const [sheet, setSheet] = useState(null);
@@ -73,11 +83,40 @@ export default function Profile({ preview = null }) {
     band: preview?.band !== undefined ? preview.band : data.user.equippedBand,
   };
 
-  const removeDraft = async (p) => {
+  /**
+   * Ce pronostic peut-il encore être supprimé ?
+   *
+   * ─── Pourquoi la règle est recopiée ici ─────────────────────────────────────
+   *
+   * Le serveur la porte aussi, et c'est LUI qui fait foi — `deletionGate` dans
+   * `routes/predictions.js`. Celle-ci ne garde rien : elle décide seulement si
+   * l'on montre le bouton. Proposer une action que le serveur refusera est un
+   * mensonge à l'écran, et l'apprendre par un message d'erreur après le clic est
+   * la pire façon de l'apprendre.
+   *
+   * Les deux doivent donc rester d'accord. Si l'une change, l'autre suit.
+   */
+  const deletable = (p) => {
+    // Jamais sur le profil d'un autre, ni dans l'aperçu de boutique : là on
+    // essaie une tenue, on ne fait pas le ménage dans ses pronostics.
+    if (!own || preview) return false;
+    // La compète a commencé ou s'est terminée : on ne touche plus à rien, ni au
+    // dépôt ni au brouillon.
+    if (p.event.status === 'LIVE' || p.event.status === 'FINISHED') return false;
+    // Passée la butoir, un dépôt est verrouillé — l'effacer serait un retrait
+    // après coup. Un brouillon, lui, n'a jamais été en jeu.
+    if (p.submitted && p.event.predictionsCloseAt) {
+      return new Date(p.event.predictionsCloseAt).getTime() > Date.now();
+    }
+    return true;
+  };
+
+  const remove = async (p) => {
     setBusy(p.id);
     try {
       await api.del(`/predictions/${p.id}`);
       setData(await api.get(`/users/${targetId}`));
+      setDropping(null);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -256,13 +295,15 @@ export default function Profile({ preview = null }) {
                             <button className="btn btn--small" onClick={() => setReading(p.id)}>
                               {t('common.open')}
                             </button>
-                            {/* Un brouillon se supprime depuis son profil : c'est
-                                là qu'on gère ses versions, pas dans l'éditeur. */}
-                            {own && !p.submitted && (
+                            {/* Un pronostic se supprime depuis son profil :
+                                c'est là qu'on gère ses versions, pas dans
+                                l'éditeur. Dépôt comme brouillon — tant que la
+                                compète n'a pas commencé. */}
+                            {deletable(p) && (
                               <button
                                 className="btn btn--small btn--danger"
                                 disabled={busy === p.id}
-                                onClick={() => removeDraft(p)}
+                                onClick={() => setDropping(p)}
                               >
                                 {t('draft.delete')}
                               </button>
@@ -277,6 +318,44 @@ export default function Profile({ preview = null }) {
             )}
           </section>
         ))}
+
+        {/* La confirmation.
+
+            Le bilan est écrit ici et non demandé au serveur : contrairement à
+            une suppression d'administration, il n'y a rien à aller compter —
+            un pronostic n'a de conséquence que pour son auteur, et il est
+            devant lui. */}
+        {dropping && (
+          <Modal title={t('prediction.delete.title')} onClose={() => setDropping(null)}>
+            <div className="stack" style={{ gap: '0.8rem' }}>
+              <p style={{ margin: 0 }}>
+                <span className="data">
+                  {dropping.event.name} {dropping.event.year}
+                </span>
+                {' — '}
+                {localName(dropping.category, lang)}
+                {dropping.label && <span className="faint"> · {dropping.label}</span>}
+              </p>
+
+              <p className="notice" style={{ margin: 0 }}>
+                {t(dropping.submitted ? 'prediction.delete.filed' : 'prediction.delete.draft')}
+              </p>
+
+              <span className="row" style={{ gap: '0.6rem', justifyContent: 'flex-end' }}>
+                <button className="btn btn--small btn--ghost" onClick={() => setDropping(null)}>
+                  {t('prediction.delete.keep')}
+                </button>
+                <button
+                  className="btn btn--small btn--danger"
+                  disabled={busy === dropping.id}
+                  onClick={() => remove(dropping)}
+                >
+                  {t('draft.delete')}
+                </button>
+              </span>
+            </div>
+          </Modal>
+        )}
 
         {/* La zone dangereuse, sur son propre profil seulement. En bas de page et
             bordée de rouge : on ne la croise pas, on va la chercher. */}

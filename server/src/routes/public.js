@@ -563,8 +563,18 @@ publicRouter.get('/users/:id', requireAuth, guard(async (req, res) => {
   const predictions = await prisma.prediction.findMany({
     where: { userId: user.id, ...(req.user?.id === user.id ? {} : { submitted: true }) },
     include: {
-      event: { select: { slug: true, name: true, year: true, status: true } },
-      category: { select: { name: true, slug: true, kind: true } },
+      // `predictionsCloseAt` en plus du statut : c'est lui qui décide si un
+      // dépôt est encore effaçable, et l'écran doit pouvoir cacher un bouton
+      // que le serveur refuserait.
+      event: {
+        select: {
+          slug: true, name: true, year: true, status: true, predictionsCloseAt: true,
+        },
+      },
+      // `nameEn` manquait ici : le profil est le seul écran qui lit les
+      // pronostics par cette route, et il affichait donc les noms de catégorie
+      // en français même en anglais.
+      category: { select: { name: true, nameEn: true, slug: true, kind: true } },
     },
     orderBy: { updatedAt: 'desc' },
   });
