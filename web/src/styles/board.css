@@ -393,15 +393,34 @@ body.is-dragging {
    `grid-auto-rows` ne s'y applique jamais.
    --------------------------------------------------------------------------- */
 
+/* `grid-template-columns: minmax(0, 1fr)` n'est PAS décoratif.
+
+   Une grille sans colonne déclarée s'en crée une implicite, dimensionnée
+   `auto` — c'est-à-dire au MAX-CONTENT de ce qu'elle contient. Un blaze un peu
+   long ou une liste de scores un peu large, et la piste s'élargit au-delà du
+   tour : la paire débordait dans la gouttière, entraînant avec elle la barre
+   verticale accrochée à son bord droit, qui allait alors se dessiner par-dessus
+   la carte du tour suivant.
+
+   Mesuré : tour à 220 px de bord droit, paire à 331. La barre visait 341 alors
+   que la carte suivante commençait à 240 — elle passait DERRIÈRE elle, et l'on
+   n'en voyait que les deux bouts qui dépassaient au-dessus et en dessous.
+
+   C'est exactement le piège documenté en haut de ce fichier pour `.bracket`
+   lui-même, un étage plus bas. Une colonne explicite qui peut descendre à zéro
+   règle les deux d'un coup : la paire fait la largeur du tour, ni plus ni
+   moins, et le décalage de gouttière retombe où il doit. */
 .bracket__col {
   flex: 1;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: minmax(0, 1fr);
   gap: 0.5rem;
 }
 
 .bracket__pair {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   position: relative;
 }
@@ -411,6 +430,9 @@ body.is-dragging {
    milieu de la case que la barre verticale vise. */
 .bracket__node {
   position: relative;
+  /* Même raison qu'au-dessus : sans ce plancher, l'affiche refuse de descendre
+     sous sa largeur de contenu et pousse la case qui la porte. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
