@@ -128,9 +128,29 @@ export default function Layout() {
               <NavLink to="/" end>{t('nav.events')}</NavLink>
               <NavLink to="/leaderboard">{t('nav.leaderboard')}</NavLink>
               <NavLink to="/artists">{t('nav.artists')}</NavLink>
-              {/* Les groupes ne s'affichent que connecté : déconnecté, la page
-                  n'aurait rien à montrer. */}
-              {user && <NavLink to="/groups">{t('nav.groups')}</NavLink>}
+              {/* La boutique remplace les groupes dans cette rangée.
+
+                  ─── Pourquoi elle monte ──────────────────────────────────
+
+                  Elle n'était accessible que par un bouton posé à côté du
+                  porte-monnaie, sur le profil. Autrement dit : il fallait déjà
+                  savoir qu'elle existait pour la trouver. Une boutique qu'on
+                  ne trouve pas ne vend rien.
+
+                  Montrée même déconnecté, contrairement aux groupes : la page
+                  affiche le catalogue et invite à se connecter pour acheter.
+                  Un visiteur qui voit ce qu'on peut gagner a une raison de
+                  créer un compte.
+
+                  ─── Pourquoi les groupes descendent ──────────────────────
+
+                  Un groupe se rejoint une fois et se consulte rarement — c'est
+                  un objet personnel, pas une section du site. Sa place est
+                  auprès des autres compteurs du profil, d'où l'on y accède
+                  d'un bouton. Et la rangée garde six pavés : au-delà, la
+                  grille passe à la ligne sur les écrans étroits et la
+                  navigation cesse de se lire d'un coup d'œil. */}
+              <NavLink to="/shop">{t('nav.shop')}</NavLink>
               {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
               {isStaff(user) && <NavLink to="/admin">{t('nav.admin')}</NavLink>}
             </span>
