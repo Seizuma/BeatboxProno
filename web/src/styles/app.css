@@ -383,6 +383,14 @@ img {
    est fixe, contrairement aux intitulés : un dessin n'a pas de raison de
    s'étirer, et deux colonnes de plus dans la grille voleraient de la place aux
    mots. */
+/* Le conteneur des deux icônes. En rangée au bureau, en colonne sur
+   téléphone — voir mobile.css. */
+.nav__icons {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.35rem;
+}
+
 .nav__icon {
   flex: 0 0 auto;
   display: inline-flex;
@@ -413,6 +421,18 @@ img {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  /**
+   * `margin-left: auto` et non le seul `space-between` du parent.
+   *
+   * `space-between` ne pousse à droite que tant que la ligne porte DEUX
+   * éléments. Sur téléphone, le titre du site prend toute la largeur et passe
+   * à la ligne : l'aside se retrouve seul sur la sienne, et `space-between`
+   * n'a plus rien à répartir — il le colle au début, donc à gauche.
+   *
+   * La marge automatique, elle, absorbe la place libre de SA ligne, quelle que
+   * soit la façon dont le reste s'est réparti. Le rendu de bureau ne bouge pas.
+   */
+  margin-left: auto;
 }
 
 @media (max-width: 620px) {

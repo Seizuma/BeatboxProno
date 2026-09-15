@@ -220,6 +220,14 @@ export default function Layout() {
                 Un lien et non un bouton, contrairement à la loupe : la boutique
                 a une adresse, et le clic du milieu doit pouvoir l'ouvrir dans
                 un onglet. */}
+            {/* Les deux pavés à icône dans un même conteneur.
+
+                Sur téléphone, la grille des intitulés passe à trois rangées et
+                `align-items: stretch` étirait chaque icône sur toute cette
+                hauteur : deux colonnes cyan de cent pixels de haut pour deux
+                dessins de quinze. Groupés, ils peuvent s'empiler et se partager
+                la hauteur au lieu de la prendre chacun en entier. */}
+            <span className="nav__icons">
             <NavLink
               to="/shop"
               className="nav__icon"
@@ -239,6 +247,7 @@ export default function Layout() {
             >
               <GlassIcon size={15} />
             </button>
+            </span>
           </nav>
         </div>
       </header>
