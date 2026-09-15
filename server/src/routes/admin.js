@@ -1991,14 +1991,34 @@ adminRouter.get('/search/predictions', async (req, res, next) => {
       prisma.prediction.findMany({
         where,
         /**
-         * Par date de CRÉATION, et non de dernière modification.
+         * Par date de DÉPÔT.
          *
-         * `updatedAt` bouge à chaque recalcul de points : un settlement
-         * d'événement remonte d'un coup mille pronostics vieux de six mois en
-         * tête de liste. La colonne affichée à l'écran serait alors dans un
-         * ordre que personne ne comprendrait.
+         * ─── Pourquoi plus par `createdAt` ─────────────────────────────────
+         *
+         * `createdAt` date l'OUVERTURE du brouillon, pas le dépôt. Une version
+         * ouverte le 2 et déposée le 15 portait la date du 2. Comme la liste
+         * est plafonnée à 200 lignes, ces dépôts-là atterrissaient au-delà du
+         * plafond : le compteur total montait — 920 puis 929 — sans qu'aucune
+         * ligne nouvelle n'apparaisse à l'écran. La recherche avait l'air
+         * figée alors qu'elle répondait juste à une autre question.
+         *
+         * ─── Pourquoi toujours pas `updatedAt` ─────────────────────────────
+         *
+         * Il bouge à chaque recalcul de points : un settlement d'événement
+         * remonterait d'un coup mille pronostics vieux de six mois en tête.
+         *
+         * ─── Pourquoi `nulls: 'last'` ──────────────────────────────────────
+         *
+         * En Postgres, un tri décroissant place les NULL EN PREMIER. Les
+         * brouillons n'ont pas de date de dépôt : sans cette précision, cocher
+         * « inclure les brouillons » les collerait tous en tête. `createdAt`
+         * en second critère leur rend un ordre à eux.
          */
-        orderBy: [{ submitted: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { submitted: 'desc' },
+          { submittedAt: { sort: 'desc', nulls: 'last' } },
+          { createdAt: 'desc' },
+        ],
         take: TAKE,
         select: {
           id: true,
@@ -2007,6 +2027,7 @@ adminRouter.get('/search/predictions', async (req, res, next) => {
           points: true,
           scoredAt: true,
           createdAt: true,
+          submittedAt: true,
           updatedAt: true,
           user: { select: { id: true, username: true, globalName: true, avatarUrl: true } },
           event: { select: { slug: true, name: true, year: true } },
@@ -2093,6 +2114,9 @@ adminRouter.get('/search/predictions', async (req, res, next) => {
         points: p.points,
         scored: Boolean(p.scoredAt),
         createdAt: p.createdAt,
+        // La date que la colonne affiche. `null` sur un brouillon : l'écran
+        // retombe alors sur `createdAt` et le dit.
+        submittedAt: p.submittedAt,
         updatedAt: p.updatedAt,
         user: p.user,
         event: p.event,

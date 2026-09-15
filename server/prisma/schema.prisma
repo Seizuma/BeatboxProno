@@ -518,6 +518,23 @@ model Prediction {
   category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   submitted   Boolean  @default(false)
+
+  /// L'instant du DÉPÔT, distinct de `createdAt` et de `updatedAt`.
+  ///
+  /// `createdAt` date l'ouverture du brouillon, pas le dépôt : quelqu'un peut
+  /// ouvrir une version le 2 et ne la déposer que le 15. Trier les pronostics
+  /// déposés par `createdAt` enterrait donc les dépôts récents au milieu de la
+  /// liste, et l'écran de recherche — plafonné à 200 lignes — ne les montrait
+  /// tout simplement plus.
+  ///
+  /// `updatedAt` ne convient pas non plus : il bouge à chaque recalcul de
+  /// points, et un settlement remonterait mille pronostics vieux de six mois.
+  ///
+  /// Nullable : un brouillon n'a pas de date de dépôt. Retirer le dépôt la
+  /// remet à `null`, redéposer la repose — c'est la date du dépôt COURANT, pas
+  /// celle du premier.
+  submittedAt DateTime?
+
   points      Int      @default(0)
   breakdown   Json?    // détail du calcul, affiché sur la fiche de résultat
   scoredAt    DateTime?
@@ -552,6 +569,12 @@ model Prediction {
   // Plus d'unicité stricte : c'est elle qui écrasait le pronostic précédent.
   @@index([userId, categoryId])
   @@index([categoryId, submitted])
+
+  // La recherche admin balaie TOUS les pronostics déposés, triés par date de
+  // dépôt décroissante, et n'en garde que les 200 premiers. Sans cet index,
+  // Postgres trie 900+ lignes à chaque recherche ; avec lui, il lit les 200
+  // premières entrées de l'index et s'arrête.
+  @@index([submitted, submittedAt])
 }
 
 model PredictedRank {

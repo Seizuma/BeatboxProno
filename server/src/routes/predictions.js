@@ -644,12 +644,34 @@ predictionRouter.post('/:predictionId/submit', async (req, res) => {
       // avec des points qu'il ne rapporte plus.
       await tx.prediction.update({
         where: { id: previous.id },
-        data: { submitted: false, points: 0, breakdown: null, scoredAt: null },
+        // `submittedAt` part avec le dépôt, au même titre que les points : elle
+        // date le dépôt COURANT, et cette version n'en a plus. La laisser
+        // ferait remonter un brouillon en tête des listes triées par date de
+        // dépôt.
+        data: {
+          submitted: false,
+          submittedAt: null,
+          points: 0,
+          breakdown: null,
+          scoredAt: null,
+        },
       });
     }
     const submitted = await tx.prediction.update({
       where: { id: prediction.id },
-      data: { submitted: true },
+      /**
+       * L'instant du dépôt, posé ici et nulle part ailleurs.
+       *
+       * C'est le seul endroit du code qui fait passer un pronostic à
+       * `submitted: true` : la date ne peut donc pas diverger du drapeau. La
+       * calculer à l'affichage était impossible — ni `createdAt` (ouverture du
+       * brouillon) ni `updatedAt` (bougé par chaque settlement) ne répondent à
+       * « quand ce pronostic a-t-il été déposé ? ».
+       *
+       * `new Date()` et non `now()` de Postgres : la transaction peut durer, et
+       * on veut l'instant du geste, pas celui du commit.
+       */
+      data: { submitted: true, submittedAt: new Date() },
       ...withContent,
     });
 
@@ -674,7 +696,17 @@ predictionRouter.post('/:predictionId/withdraw', async (req, res) => {
 
   const updated = await prisma.prediction.update({
     where: { id: prediction.id },
-    data: { submitted: false, points: 0, breakdown: null, scoredAt: null },
+    // Même remise à zéro que lors d'une rétrogradation automatique : le
+    // pronostic n'est plus déposé, il n'a donc plus de date de dépôt. Un
+    // redépôt en posera une nouvelle — c'est voulu, c'est bien la date du
+    // dépôt en vigueur qu'on veut lire.
+    data: {
+      submitted: false,
+      submittedAt: null,
+      points: 0,
+      breakdown: null,
+      scoredAt: null,
+    },
   });
   res.json({ prediction: updated });
 });
