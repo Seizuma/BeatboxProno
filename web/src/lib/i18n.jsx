@@ -34,7 +34,11 @@ const DICT = {
     'nav.groups': 'Groups',
     'nav.artists': 'Artists',
     'nav.stats': 'Stats',
-    'nav.mine': 'My picks',
+    // « Mon profil » et non « Mes pronos » : la page porte aussi les badges, le
+    // porte-monnaie, les groupes et les réglages du compte. La clé garde son nom
+    // — trois appels la lisent, dont le titre de l'avatar dans l'en-tête, et les
+    // renommer toutes pour un libellé serait du bruit dans l'historique.
+    'nav.mine': 'My profile',
     'nav.admin': 'Admin',
     'nav.logout': 'Sign out',
     'nav.language': 'Language',
@@ -823,7 +827,11 @@ const DICT = {
     'nav.groups': 'Groupes',
     'nav.artists': 'Artistes',
     'nav.stats': 'Stats',
-    'nav.mine': 'Mes pronos',
+    // « Mon profil » et non « Mes pronos » : la page porte aussi les badges, le
+    // porte-monnaie, les groupes et les réglages du compte. La clé garde son nom
+    // — trois appels la lisent, dont le titre de l'avatar dans l'en-tête, et les
+    // renommer toutes pour un libellé serait du bruit dans l'historique.
+    'nav.mine': 'Mon profil',
     'nav.admin': 'Admin',
     'nav.logout': 'Déconnexion',
     'nav.language': 'Langue',
