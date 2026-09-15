@@ -632,7 +632,22 @@ publicRouter.get('/users/:id', requireAuth, guard(async (req, res) => {
   recordView({ viewerId: req.user.id, userId: user.id });
   const views = await countViews({ userId: user.id });
 
-  res.json({ user, predictions, totals, badges, wallet, views });
+  /**
+   * Le nombre de groupes, chez soi seulement.
+   *
+   * Le bouton du profil mène aux groupes ; sans ce chiffre, il ne dirait pas
+   * s'il y a quelque chose derrière. « Mes groupes · 3 » est une raison de
+   * cliquer, « Mes groupes » tout court est un pari.
+   *
+   * Jamais sur le profil d'un autre : un groupe est privé, et son simple
+   * DÉCOMPTE en dit déjà trop — il révèle l'activité sociale de quelqu'un qui
+   * n'a rien demandé.
+   */
+  const groups = req.user?.id === user.id
+    ? await prisma.groupMember.count({ where: { userId: user.id } })
+    : null;
+
+  res.json({ user, predictions, totals, badges, wallet, views, groups });
 }));
 
 /**

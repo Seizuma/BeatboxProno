@@ -23,6 +23,69 @@ import { FramedAvatar } from './Cosmetics.jsx';
  */
 const IS_DEV_ENV = import.meta.env.VITE_APP_ENV === 'dev';
 
+/**
+ * Le caddie, un caractère par pixel.
+ *
+ * ─── Sur le « low poly » ────────────────────────────────────────────────────
+ *
+ * Demandé en low poly, dessiné en pixel art, et c'est délibéré. À quinze
+ * pixels de côté, des facettes triangulaires ne produisent pas des facettes :
+ * elles produisent des bords crénelés qu'aucun lissage ne rattrape. Et surtout,
+ * ce caddie se pose À CÔTÉ de la loupe : deux langages graphiques différents
+ * dans deux pavés voisins se verraient plus que n'importe quel détail.
+ *
+ * L'esprit du low poly est respecté là où il tient à cette taille : des aplats
+ * géométriques francs, un panier trapézoïdal, des roues carrées. Aucune courbe,
+ * aucun dégradé — ce que la charte demande de toute façon.
+ *
+ * ─── Pourquoi le panier est PLEIN ───────────────────────────────────────────
+ *
+ * Une première version le dessinait en contour, comme la loupe. À quinze pixels
+ * l'intérieur creux se confondait avec le fond du pavé, les roues passaient
+ * pour des pieds, et l'ensemble se lisait comme une table. Une masse pleine n'a
+ * pas cette ambiguïté : elle dit « ça contient quelque chose », ce qui est tout
+ * ce qu'un caddie doit dire.
+ *
+ * ─── Pourquoi il vit ici et pas près de la loupe ────────────────────────────
+ *
+ * `GlassIcon` est exporté par `SearchDrawer` parce que le tiroir s'en sert
+ * aussi, dans son champ de saisie. Le caddie n'a qu'un seul usage : ce pavé.
+ * Le ranger ailleurs créerait un module partagé pour un unique appelant.
+ */
+const CART = [
+  '............',
+  '.##.........',
+  '..#.........',
+  '..#########.',
+  '..#########.',
+  '..#########.',
+  '...#######..',
+  '...#######..',
+  '............',
+  '...##...##..',
+  '...##...##..',
+  '............',
+];
+
+function CartIcon({ size = 15 }) {
+  return (
+    <svg
+      viewBox={`0 0 ${CART[0].length} ${CART.length}`}
+      width={size}
+      height={size}
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {CART.flatMap((row, y) =>
+        [...row].map((ch, x) =>
+          ch === '#' ? <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill="currentColor" /> : null
+        )
+      )}
+    </svg>
+  );
+}
+
 export default function Layout() {
   const { user } = useSession();
   const { t } = useI18n();
@@ -128,7 +191,7 @@ export default function Layout() {
               <NavLink to="/" end>{t('nav.events')}</NavLink>
               <NavLink to="/leaderboard">{t('nav.leaderboard')}</NavLink>
               <NavLink to="/artists">{t('nav.artists')}</NavLink>
-              {/* Les groupes ne s'affichent que connecté : déconnecté, la page
+{/* Les groupes ne s'affichent que connecté : déconnecté, la page
                   n'aurait rien à montrer. */}
               {user && <NavLink to="/groups">{t('nav.groups')}</NavLink>}
               {user && <NavLink to="/me">{t('nav.mine')}</NavLink>}
@@ -143,9 +206,40 @@ export default function Layout() {
                 Un <button> et non un lien : la recherche n'a pas d'adresse à
                 elle, et lui en donner une obligerait à gérer un retour arrière
                 qui ne rouvre rien. */}
+            {/* La boutique, en pavé à icône plutôt qu'en intitulé.
+
+                Elle n'avait qu'un point d'entrée — un bouton posé à côté du
+                porte-monnaie, sur le profil : il fallait savoir qu'elle
+                existait pour la trouver. Ici elle se voit de partout sans
+                prendre une colonne de la grille, qui reste aux six sections.
+
+                Montrée même déconnecté : la page affiche le catalogue et invite
+                à se connecter pour acheter. Un visiteur qui voit ce qu'on peut
+                gagner a une raison de créer un compte.
+
+                Un lien et non un bouton, contrairement à la loupe : la boutique
+                a une adresse, et le clic du milieu doit pouvoir l'ouvrir dans
+                un onglet. */}
+            {/* Les deux pavés à icône dans un même conteneur.
+
+                Sur téléphone, la grille des intitulés passe à trois rangées et
+                `align-items: stretch` étirait chaque icône sur toute cette
+                hauteur : deux colonnes cyan de cent pixels de haut pour deux
+                dessins de quinze. Groupés, ils peuvent s'empiler et se partager
+                la hauteur au lieu de la prendre chacun en entier. */}
+            <span className="nav__icons">
+            <NavLink
+              to="/shop"
+              className="nav__icon"
+              aria-label={t('nav.shop')}
+              title={t('nav.shop')}
+            >
+              <CartIcon size={15} />
+            </NavLink>
+
             <button
               type="button"
-              className="nav__search"
+              className="nav__icon"
               aria-expanded={searching}
               aria-label={t('search.open')}
               title={t('search.open')}
@@ -153,6 +247,7 @@ export default function Layout() {
             >
               <GlassIcon size={15} />
             </button>
+            </span>
           </nav>
         </div>
       </header>

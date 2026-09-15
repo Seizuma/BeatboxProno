@@ -171,11 +171,27 @@
     padding: 0.35rem 0.4rem;
   }
 
-  /* La loupe fait 2,1 rem au bureau, où l'on vise à la souris. Au doigt c'est
-     une cible de trente-quatre pixels de large : on la porte à la largeur d'un
-     pouce sans toucher à la grille des pavés, qui garde ce qui reste. */
-  .nav__search {
+  /* Les deux icônes s'empilent.
+
+     Côte à côte, elles prenaient deux colonnes sur une largeur qui en compte
+     déjà à peine deux pour les intitulés — et comme la grille passe à trois
+     rangées, `align-items: stretch` les étirait sur toute cette hauteur. Deux
+     pavés cyan de cent pixels de haut pour deux dessins de quinze.
+
+     Empilées, elles ne coûtent qu'une colonne, et `flex: 1` leur fait partager
+     la hauteur de la grille au lieu de la prendre chacune en entier. */
+  .nav__icons {
+    flex-direction: column;
+  }
+
+  .nav__icon {
+    /* Plus large qu'au bureau : au doigt, 2,1 rem est une cible de
+       trente-quatre pixels. */
     width: 2.7rem;
+    flex: 1 1 0;
+    /* Le plancher sert le cas où la grille ne fait qu'une rangée — deux
+       demi-hauteurs de pavé seraient alors intouchables. */
+    min-height: 2.2rem;
   }
 
   /* Plus de marge à occuper : la fenêtre prend la largeur de l'écran, sous la

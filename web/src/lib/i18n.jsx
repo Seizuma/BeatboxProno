@@ -34,7 +34,11 @@ const DICT = {
     'nav.groups': 'Groups',
     'nav.artists': 'Artists',
     'nav.stats': 'Stats',
-    'nav.mine': 'My picks',
+    // « Mon profil » et non « Mes pronos » : la page porte aussi les badges, le
+    // porte-monnaie, les groupes et les réglages du compte. La clé garde son nom
+    // — trois appels la lisent, dont le titre de l'avatar dans l'en-tête, et les
+    // renommer toutes pour un libellé serait du bruit dans l'historique.
+    'nav.mine': 'My profile',
     'nav.admin': 'Admin',
     'nav.logout': 'Sign out',
     'nav.language': 'Language',
@@ -762,6 +766,11 @@ const DICT = {
     'profile.badges': 'Badges',
     'profile.badges.empty':
       'No badges yet — they drop when a competition you predicted is finished.',
+    // Les groupes ont quitté la barre de navigation : ils vivent désormais
+    // dans les compteurs du profil.
+    'profile.groups': 'My groups',
+    'profile.groups.cta': 'Open',
+    'profile.groups.none': 'Create or join one',
     'profile.wallet': 'Wallet',
     'profile.views': 'Profile views',
     'profile.gate': 'Sign in with Discord to see this profile. Counted once per member per day.',
@@ -818,7 +827,11 @@ const DICT = {
     'nav.groups': 'Groupes',
     'nav.artists': 'Artistes',
     'nav.stats': 'Stats',
-    'nav.mine': 'Mes pronos',
+    // « Mon profil » et non « Mes pronos » : la page porte aussi les badges, le
+    // porte-monnaie, les groupes et les réglages du compte. La clé garde son nom
+    // — trois appels la lisent, dont le titre de l'avatar dans l'en-tête, et les
+    // renommer toutes pour un libellé serait du bruit dans l'historique.
+    'nav.mine': 'Mon profil',
     'nav.admin': 'Admin',
     'nav.logout': 'Déconnexion',
     'nav.language': 'Langue',
@@ -1531,6 +1544,11 @@ const DICT = {
     'profile.badges': 'Badges',
     'profile.badges.empty':
       'Aucun badge pour l’instant — ils tombent à la clôture d’une compétition que vous avez pronostiquée.',
+    // Les groupes ont quitté la barre de navigation : ils vivent désormais
+    // dans les compteurs du profil.
+    'profile.groups': 'Mes groupes',
+    'profile.groups.cta': 'Ouvrir',
+    'profile.groups.none': 'En créer ou en rejoindre un',
     'profile.wallet': 'Porte-monnaie',
     'profile.views': 'Vues du profil',
     'profile.gate': 'Connectez-vous avec Discord pour voir ce profil. Une vue par membre et par jour.',

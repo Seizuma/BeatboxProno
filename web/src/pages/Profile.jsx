@@ -206,6 +206,35 @@ export default function Profile({ preview = null }) {
               la même page n'ajoute rien. Le chiffre dit combien de membres sont
               passés, pas combien de requêtes ont eu lieu. */}
           {data.views != null && <Stat value={data.views} label={t('profile.views')} />}
+          {/* Les groupes, chez soi seulement.
+
+              ─── Pourquoi ici et plus dans la navigation ──────────────────
+
+              Un groupe se rejoint une fois et se consulte rarement. Ce n'est
+              pas une section du site, c'est un objet personnel — sa place est
+              auprès des autres compteurs qui ne parlent que de soi.
+
+              ─── Pourquoi un compteur et pas la liste ─────────────────────
+
+              Déplier les groupes ici en ferait un deuxième écran de groupes à
+              tenir d'accord avec le premier, et allongerait un profil qui est
+              déjà long. Le chiffre suffit à dire s'il y a quelque chose
+              derrière le bouton — « Mes groupes » tout court serait un pari. */}
+          {own && data.groups != null && (
+            <div className="panel">
+              <p
+                className="display"
+                style={{ fontSize: 'calc(2.6rem * var(--display-scale))', color: 'var(--c)' }}
+              >
+                {data.groups}
+              </p>
+              <p className="eyebrow" style={{ margin: '0.4rem 0 0' }}>{t('profile.groups')}</p>
+              <Link className="btn btn--small" style={{ marginTop: '0.6rem' }} to="/groups">
+                {t(data.groups > 0 ? 'profile.groups.cta' : 'profile.groups.none')}
+              </Link>
+            </div>
+          )}
+
           {/* Le porte-monnaie n'apparaît que chez soi : les points dépensables
               des autres ne regardent personne — leurs badges, si. */}
           {own && data.wallet != null && (
