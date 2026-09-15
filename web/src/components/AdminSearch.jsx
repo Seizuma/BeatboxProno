@@ -7,12 +7,21 @@ import ConfirmDelete from './ConfirmDelete.jsx';
 /**
  * La date d'un pronostic, à la minute.
  *
- * ─── Pourquoi `createdAt` et pas `updatedAt` ────────────────────────────────
+ * ─── Ce que la colonne montre désormais ─────────────────────────────────────
  *
- * `updatedAt` bouge à chaque recalcul de points : un settlement d'événement
- * réécrit mille lignes d'un coup, et la colonne afficherait la date du
- * settlement pour des pronostics déposés six mois plus tôt. C'est la question
- * « quand ce pronostic a-t-il été fait ? » qu'on vient poser ici.
+ * `submittedAt` — l'instant du DÉPÔT — et non plus `createdAt`, qui date
+ * l'ouverture du brouillon. Les deux se confondent quand on dépose dans la
+ * foulée, et divergent de plusieurs jours sinon : quelqu'un qui ouvre sa
+ * version le 2 et ne la dépose que le 15 apparaissait au 2, au milieu d'une
+ * liste triée par date. Comme elle est plafonnée à 200 lignes, son dépôt
+ * pouvait tomber hors du plafond et rester invisible — le compteur total
+ * montait sans qu'aucune ligne n'apparaisse.
+ *
+ * ─── Pourquoi toujours pas `updatedAt` ──────────────────────────────────────
+ *
+ * Il bouge à chaque recalcul de points : un settlement réécrit mille lignes
+ * d'un coup et la colonne afficherait la date du settlement pour des
+ * pronostics déposés six mois plus tôt.
  *
  * ─── Pourquoi pas la seconde ────────────────────────────────────────────────
  *
@@ -458,7 +467,11 @@ export default function AdminSearch() {
                                     <tr>
                                         <th>Joueur</th>
                                         <th>Compétition</th>
-                                        <th>Date</th>
+                                        {/* « Déposé le » plutôt que « Date » : la colonne
+                                            répond à une question précise, et le titre
+                                            générique laissait croire à une date de
+                                            création. */}
+                                        <th>Déposé le</th>
                                         {/* La justification n'apparaît que
                                             lorsqu'elle a quelque chose à dire :
                                             elle ne se remplit que sur une
@@ -493,8 +506,19 @@ export default function AdminSearch() {
                                                 <span style={{ display: 'block' }}>{r.category.name}</span>
                                             </td>
 
+                                            {/* Un brouillon n'a pas de date de dépôt : on
+                                                retombe sur son ouverture, et on le dit.
+                                                Afficher la même colonne pour deux dates de
+                                                nature différente sans le signaler, c'est
+                                                laisser conclure qu'un brouillon a été
+                                                déposé. */}
                                             <td className="muted data" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                                                {stamp(r.createdAt)}
+                                                {stamp(r.submittedAt ?? r.createdAt)}
+                                                {!r.submittedAt && (
+                                                    <span className="faint" style={{ display: 'block', fontSize: '0.72rem' }}>
+                                                        ouvert le
+                                                    </span>
+                                                )}
                                             </td>
 
                                             {/* La justification de chaque ligne. Sans elle, il
