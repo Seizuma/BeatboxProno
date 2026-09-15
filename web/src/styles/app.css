@@ -373,9 +373,17 @@ img {
   gap: 0.35rem;
 }
 
-/* La loupe. Cyan comme les pavés : elle mène ailleurs, c'est le rôle de la
-   couleur. Jaune une fois ouverte, comme tout ce que l'on tient. */
-.nav__search {
+/* Les deux pavés à icône, au bout de la rangée : la loupe et le caddie.
+
+   Cyan comme les intitulés — ils mènent ailleurs, c'est le rôle de la couleur.
+   Jaune quand on les tient : la loupe pendant que le tiroir est ouvert, le
+   caddie quand on est sur la boutique.
+
+   Carrés et de la hauteur des pavés grâce au `stretch` de `.nav`. Leur largeur
+   est fixe, contrairement aux intitulés : un dessin n'a pas de raison de
+   s'étirer, et deux colonnes de plus dans la grille voleraient de la place aux
+   mots. */
+.nav__icon {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -388,11 +396,15 @@ img {
   cursor: pointer;
 }
 
-.nav__search:hover {
+.nav__icon:hover {
   background: var(--w);
 }
 
-.nav__search[aria-expanded='true'] {
+/* Le tiroir de recherche est ouvert, ou l'on est dans la boutique. Deux états
+   différents, une seule couleur : dans les deux cas c'est « vous y êtes ». */
+.nav__icon[aria-expanded='true'],
+.nav__icon.active,
+.nav__icon[aria-current='page'] {
   background: var(--y);
 }
 
