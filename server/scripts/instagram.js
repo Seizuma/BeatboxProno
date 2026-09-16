@@ -65,7 +65,11 @@ const ROUNDS = [
     ['SEMI', 'Demi-finales'],
     ['FINAL', 'Finale'],
 ];
-const ROUND_ORDER = new Map(ROUNDS.map(([r], i) => [r, i]));
+// La même liste que `MAIN_LINE` de `server/src/lib/bracket.js` : l'ordre dans
+// lequel un tour alimente le suivant. Elle est recopiée plutôt qu'importée
+// parce qu'un script autonome ne doit pas dépendre du graphe de modules du
+// serveur — mais si un tour s'ajoute là-bas, il s'ajoute ici.
+const MAIN_LINE = ROUNDS.map(([r]) => r);
 const ROUND_LABEL = new Map([...ROUNDS, ['SMALL_FINAL', 'Petite finale'], ['LEGACY', 'Affiches']]);
 
 /* ---------------------------------------------------------------------------
@@ -315,6 +319,205 @@ async function rankingOf(category) {
     return null;
 }
 
+/* ---------------------------------------------------------------------------
+   La propagation
+   --------------------------------------------------------------------------- */
+
+/**
+ * Qui passe, entre deux noms, d'après les confrontations pronostiquées.
+ *
+ * On regarde d'abord ce qui s'est joué à CE tour : « X contre Y en demie » et
+ * « X contre Y en quart » ne se pronostiquent pas pareil, et un public qui
+ * envoie X en finale peut très bien lui préférer Y plus tôt. Faute de
+ * rencontre à ce tour, on élargit à toute la phase. Si les deux ne se sont
+ * jamais croisés dans aucun pronostic — ce qui arrive sur un tirage libre —,
+ * on tranche par le nombre de victoires que chacun accumule à ce tour.
+ *
+ * `winnerPct` est la part des pronostics QUI ONT POSÉ CETTE AFFICHE, pas du
+ * total : sur une affiche que quinze personnes ont vue venir, rapporter au
+ * total donnerait 8 % à un vainqueur désigné à l'unanimité.
+ */
+function decide(book, round, A, B) {
+    const key = [A, B].sort().join('|');
+
+    for (const scope of [`${round}|${key}`, key]) {
+        const tally = book.h2h.get(scope);
+        if (!tally || !tally.size) continue;
+        const a = tally.get(A) ?? 0;
+        const b = tally.get(B) ?? 0;
+        if (a + b === 0) continue;
+        const winner = a === b ? [A, B].sort()[0] : a > b ? A : B;
+        return { winner, winnerPct: Math.round((100 * Math.max(a, b)) / (a + b)) };
+    }
+
+    const wa = book.wins.get(`${round}|${A}`) ?? 0;
+    const wb = book.wins.get(`${round}|${B}`) ?? 0;
+    return { winner: wa === wb ? [A, B].sort()[0] : wa > wb ? A : B, winnerPct: null };
+}
+
+/** Combien de pronostics ont posé cette affiche, à ce tour puis en général. */
+function metCount(book, round, A, B) {
+    const key = [A, B].sort().join('|');
+    return book.met.get(`${round}|${key}`) ?? book.met.get(key) ?? 0;
+}
+
+/** Une affiche prête à sortir, à partir de deux identifiants. */
+function makeBattle(book, round, slot, A, B, total) {
+    const d = decide(book, round, A, B);
+    return {
+        slot,
+        unId: A,
+        deuxId: B,
+        winnerId: d.winner,
+        winnerPct: d.winnerPct,
+        pairPct: Math.round((100 * metCount(book, round, A, B)) / Math.max(total, 1)),
+    };
+}
+
+/** Le tour de départ, celui qu'aucun autre n'alimente : issu de `assignRound`. */
+function seedRound(slots, total) {
+    return assignRound(slots, total).map((c) => {
+        const [id, n] = [...c.winners.entries()].sort((x, y) => y[1] - x[1])[0] ?? [];
+        return {
+            slot: c.slot,
+            unId: c.un,
+            deuxId: c.deux,
+            winnerId: id ?? null,
+            winnerPct: id ? Math.round((100 * n) / Math.max(c.n, 1)) : null,
+            pairPct: c.pairPct,
+        };
+    });
+}
+
+/**
+ * Le tableau, à partir des affiches comptées. Séparée de `bracketOf` parce
+ * qu'elle ne touche pas la base : c'est la partie qui se vérifie hors ligne,
+ * et c'est aussi la seule qui puisse produire un arbre faux.
+ */
+export function buildBracket(rows, names, total) {
+    // (tour → case → paire → { n, vainqueurs }), pour le tour de départ.
+    const tree = new Map();
+    // Les confrontations, indexées à part : une fois par tour et une fois
+    // toutes phases confondues. C'est ce qui permet de trancher une affiche
+    // que la propagation vient d'inventer et qui ne tombe dans aucune case.
+    const book = { h2h: new Map(), met: new Map(), wins: new Map() };
+
+    const bump = (map, k, v) => map.set(k, (map.get(k) ?? 0) + v);
+    const bumpIn = (map, k, id, v) => {
+        if (!map.has(k)) map.set(k, new Map());
+        const inner = map.get(k);
+        inner.set(id, (inner.get(id) ?? 0) + v);
+    };
+
+    for (const r of rows) {
+        if (!tree.has(r.round)) tree.set(r.round, new Map());
+        const slots = tree.get(r.round);
+        if (!slots.has(r.slot)) slots.set(r.slot, new Map());
+        const pairs = slots.get(r.slot);
+
+        const key = `${r.un}|${r.deux}`;
+        if (!pairs.has(key)) pairs.set(key, { un: r.un, deux: r.deux, n: 0, winners: new Map() });
+        const pair = pairs.get(key);
+        pair.n += r.n;
+
+        bump(book.met, `${r.round}|${key}`, r.n);
+        bump(book.met, key, r.n);
+
+        if (r.gagnant) {
+            pair.winners.set(r.gagnant, (pair.winners.get(r.gagnant) ?? 0) + r.n);
+            bumpIn(book.h2h, `${r.round}|${key}`, r.gagnant, r.n);
+            bumpIn(book.h2h, key, r.gagnant, r.n);
+            bump(book.wins, `${r.round}|${r.gagnant}`, r.n);
+        }
+    }
+
+    /**
+     * Le tableau, construit de l'avant.
+     *
+     * ─── Le défaut que ça corrige ────────────────────────────────────────
+     *
+     * Chaque tour était choisi indépendamment : on prenait les affiches les
+     * plus pronostiquées des quarts, puis celles des demies, sans vérifier
+     * que les secondes découlaient des premières. Sur un tirage figé les
+     * deux coïncident, et Loopstation sortait juste. Sur un tirage que
+     * chacun pronostique, les numéros de case ne désignent pas la même
+     * chose d'un joueur à l'autre, et les demies les plus fréquentes se
+     * retrouvaient peuplées de gens que les quarts affichés venaient
+     * d'éliminer : la demie 1 du Solo opposait FootboxG à River' alors que
+     * les traits du tableau la font alimenter par King Inertia.
+     *
+     * Un lecteur ne voit pas deux statistiques indépendantes, il voit un
+     * arbre — et un arbre dont les traits contredisent les noms est faux,
+     * quelle que soit la rigueur de chaque case prise à part.
+     *
+     * ─── La règle ────────────────────────────────────────────────────────
+     *
+     * Seul le PREMIER tour est élu sur les fréquences. Ensuite, la case j
+     * du tour suivant oppose les vainqueurs des cases 2j et 2j+1, sans
+     * exception, et on ne se demande plus QUI s'y trouve mais seulement
+     * lequel des deux passe. L'arbre est alors juste par construction, et
+     * la petite finale — les deux perdants de demie — aussi.
+     *
+     * Le prix : une affiche affichée peut n'avoir été pronostiquée que par
+     * une poignée de gens. `pairPct` le dit, et c'est la bonne façon de le
+     * dire — bien mieux qu'un tableau flatteur mais impossible.
+     */
+    const present = MAIN_LINE.filter((r) => tree.has(r));
+    const built = [];
+
+    for (let i = 0; i < present.length; i += 1) {
+        const round = present[i];
+        const prev = built[i - 1]?.battles ?? null;
+        const expected = prev ? prev.length / 2 : 0;
+
+        let battles = null;
+        if (prev && Number.isInteger(expected) && expected >= 1 && prev.every((b) => b.winnerId)) {
+            battles = [];
+            for (let j = 0; j < expected; j += 1) {
+                battles.push(
+                    makeBattle(book, round, j, prev[2 * j].winnerId, prev[2 * j + 1].winnerId, total)
+                );
+            }
+        }
+
+        built.push({ round, battles: battles ?? seedRound(tree.get(round), total) });
+    }
+
+    // La petite finale se déduit des demies, pas des fréquences : ses deux
+    // places sont prises par ceux qui viennent de perdre.
+    if (tree.has('SMALL_FINAL')) {
+        const semi = built.find((b) => b.round === 'SEMI');
+        let battles = null;
+        if (semi && semi.battles.length === 2 && semi.battles.every((b) => b.winnerId)) {
+            const losers = semi.battles.map((b) => (b.winnerId === b.unId ? b.deuxId : b.unId));
+            battles = [makeBattle(book, 'SMALL_FINAL', 0, losers[0], losers[1], total)];
+        }
+        built.push({ round: 'SMALL_FINAL', battles: battles ?? seedRound(tree.get('SMALL_FINAL'), total) });
+    }
+
+    // Les tours hors ligne principale — LEGACY — n'alimentent rien et ne
+    // sont alimentés par rien : ils restent élus sur les fréquences.
+    for (const round of tree.keys()) {
+        if (MAIN_LINE.includes(round) || round === 'SMALL_FINAL') continue;
+        built.push({ round, battles: seedRound(tree.get(round), total) });
+    }
+
+    const rounds = built.map(({ round, battles }) => ({
+        round,
+        label: ROUND_LABEL.get(round) ?? round,
+        battles: battles.map((b) => ({
+            slot: b.slot,
+            a: names.get(b.unId) ?? '—',
+            b: names.get(b.deuxId) ?? '—',
+            pairPct: b.pairPct,
+            winner: b.winnerId ? names.get(b.winnerId) ?? null : null,
+            winnerPct: b.winnerPct,
+        })),
+    }));
+
+    return rounds;
+}
+
 async function bracketOf(category, total) {
     for (const phase of category.phases) {
         if (!BRACKET_TYPES.includes(phase.type)) continue;
@@ -325,46 +528,11 @@ async function bracketOf(category, total) {
         ]);
         if (!rows.length) continue;
 
-        // (tour → case → paire → { n, vainqueurs }). Le vainqueur est rangé
-        // SOUS la paire : c'est ce qui permet de dire « parmi ceux qui ont
-        // pronostiqué cette affiche », et non « parmi ceux qui ont rempli
-        // cette case ».
-        const tree = new Map();
-        for (const r of rows) {
-            if (!tree.has(r.round)) tree.set(r.round, new Map());
-            const slots = tree.get(r.round);
-            if (!slots.has(r.slot)) slots.set(r.slot, new Map());
-            const pairs = slots.get(r.slot);
-
-            const key = `${r.un}|${r.deux}`;
-            if (!pairs.has(key)) pairs.set(key, { un: r.un, deux: r.deux, n: 0, winners: new Map() });
-            const pair = pairs.get(key);
-            pair.n += r.n;
-            if (r.gagnant) pair.winners.set(r.gagnant, (pair.winners.get(r.gagnant) ?? 0) + r.n);
-        }
-
-        const order = (r) => ROUND_ORDER.get(r) ?? (r === 'SMALL_FINAL' ? 98 : 99);
-        const rounds = [...tree.keys()]
-            .sort((a, b) => order(a) - order(b))
-            .map((round) => ({
-                round,
-                label: ROUND_LABEL.get(round) ?? round,
-                battles: assignRound(tree.get(round), total).map((c) => {
-                    const [id, n] = [...c.winners.entries()].sort((x, y) => y[1] - x[1])[0] ?? [];
-                    return {
-                        slot: c.slot,
-                        a: names.get(c.un) ?? '—',
-                        b: names.get(c.deux) ?? '—',
-                        pairPct: c.pairPct,
-                        // Le vainqueur est forcément l'un des deux camps : il
-                        // est compté à l'intérieur de cette affiche-là.
-                        winner: id ? names.get(id) ?? null : null,
-                        winnerPct: id ? Math.round((100 * n) / Math.max(c.n, 1)) : null,
-                    };
-                }),
-            }));
-
-        return { phase: phase.name, phaseEn: phase.nameEn ?? phase.name, rounds };
+        return {
+            phase: phase.name,
+            phaseEn: phase.nameEn ?? phase.name,
+            rounds: buildBracket(rows, names, total),
+        };
     }
     return null;
 }
@@ -459,9 +627,11 @@ async function main() {
     console.error(`[instagram] ${out.length} catégorie(s), ${total} pronostic(s).`);
 }
 
-main()
-    .catch((err) => {
-        console.error(err.message ?? err);
-        process.exitCode = 1;
-    })
-    .finally(() => prisma.$disconnect());
+if (process.argv[1] && process.argv[1].endsWith('instagram.js')) {
+    main()
+        .catch((err) => {
+            console.error(err.message ?? err);
+            process.exitCode = 1;
+        })
+        .finally(() => prisma.$disconnect());
+}
