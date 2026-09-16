@@ -33,6 +33,50 @@
     --grp: var(--m);
 }
 
+/* --- La couleur de groupe hors de la page de groupe -------------------------
+
+   Une variable CSS s'hérite par l'arbre du DOM, pas par l'arbre React. Or les
+   fenêtres modales sont projetées sur `document.body` par un portail : `.grp`
+   n'est plus un ancêtre, et `var(--grp)` n'y valait donc RIEN.
+
+   Ce n'est pas une couleur approximative, c'est une déclaration invalide : le
+   navigateur jette la propriété entière et la remet à sa valeur initiale. Les
+   pastilles de commentaire — `background: var(--grp)` avec un texte noir —
+   devenaient transparentes sur fond noir, donc invisibles tout en restant
+   cliquables. La bulle perdait son cadre, son titre sa couleur, et le mode pose
+   son liseré de survol.
+
+   Deux garde-fous :
+
+   1. Un défaut sur `:root`. Il ne servira jamais sur une page de groupe, où
+      `.grp` gagne. Il garantit qu'un futur composant projeté hors de `.grp`
+      s'affiche dans la mauvaise couleur plutôt que pas du tout — c'est une
+      panne qu'on voit, et non une panne qu'on croit être un bug serveur.
+
+   2. Le relais explicite par la fenêtre. `Modal` recopie l'accent du groupe sur
+      sa racine, et la fenêtre redevient un point de départ valable pour la
+      variable. C'est ce qui rend la bonne couleur, pas seulement une couleur. */
+
+:root {
+    --grp: var(--y);
+}
+
+.modal[data-accent='y'] {
+    --grp: var(--y);
+}
+
+.modal[data-accent='c'] {
+    --grp: var(--c);
+}
+
+.modal[data-accent='g'] {
+    --grp: var(--g);
+}
+
+.modal[data-accent='m'] {
+    --grp: var(--m);
+}
+
 /* --- Sortir de la coquille de 980 px ---------------------------------------
    La fiche de groupe porte deux colonnes ; le reste du site n'en porte qu'une.
    Enfermée dans le même `.shell`, elle laissait la moitié d'un écran large

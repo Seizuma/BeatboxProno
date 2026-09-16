@@ -374,6 +374,10 @@ export default function GroupPage() {
                     predictionId={reading}
                     groupSlug={slug}
                     groupName={group.name}
+                    // La fenêtre est projetée hors de `.grp` : sans cet accent
+                    // recopié, `--grp` n'existe plus à l'intérieur et les
+                    // pastilles de commentaire s'y peignent en transparent.
+                    accent={group.accent}
                     onClose={() => {
                         setReading(null);
                         // Le compteur de bulles des vignettes est daté dès qu'on a écrit
