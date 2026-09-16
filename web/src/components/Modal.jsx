@@ -62,7 +62,16 @@ const EXIT_MS = 180;
  */
 const stack = [];
 
-export default function Modal({ title, subtitle, onClose, children, footer, wide = false, narrow = false }) {
+export default function Modal({
+    title,
+    subtitle,
+    onClose,
+    children,
+    footer,
+    wide = false,
+    narrow = false,
+    accent,
+}) {
     const { t } = useI18n();
     const panel = useRef(null);
     const returnTo = useRef(null);
@@ -128,6 +137,22 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
     return createPortal(
         <div
             className={`modal cos-pop${closing ? ' cos-pop--out' : ''}`}
+            /**
+             * La couleur du groupe, réintroduite au sommet du portail.
+             *
+             * Les variables CSS descendent par le DOM, pas par l'arbre React :
+             * projeté sur `document.body`, le contenu de la fenêtre n'a plus
+             * `.grp` pour ancêtre et `var(--grp)` n'y vaut plus rien. Le
+             * problème est le pendant exact de celui qui a motivé le portail —
+             * là on gagnait l'indépendance vis-à-vis des `transform` des
+             * ancêtres, ici on perd leur héritage.
+             *
+             * L'attribut plutôt qu'un `style={{ '--grp': … }}` : la
+             * correspondance accent → couleur est déjà écrite une fois dans
+             * `groups.css` pour `.grp`. La réécrire en JavaScript, c'est deux
+             * tables à tenir d'accord le jour où un cinquième accent arrive.
+             */
+            data-accent={accent}
             onMouseDown={(e) => e.target === e.currentTarget && close()}
         >
             <div

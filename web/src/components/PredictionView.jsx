@@ -16,7 +16,7 @@ const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
  * d'autrui. On y voit ce que la personne avait annoncé : ses classements et
  * ses vainqueurs, dans l'ordre des phases.
  */
-export default function PredictionView({ predictionId, onClose, groupSlug, groupName }) {
+export default function PredictionView({ predictionId, onClose, groupSlug, groupName, accent }) {
     const { t, date } = useI18n();
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
@@ -47,6 +47,12 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     return (
         <Modal
             wide
+            /* La couleur du groupe doit traverser le portail de la fenêtre :
+               les pastilles de commentaire et leur bulle sont peintes avec
+               `--grp`, qui ne s'hérite plus une fois le contenu projeté sur
+               `document.body`. Absent — fiche ouverte depuis un profil ou
+               depuis l'admin — le défaut de `:root` prend le relais. */
+            accent={accent}
             title={data ? `${data.event.name} ${data.event.year} — ${data.category.name}` : t('common.loading')}
             subtitle={data ? who : undefined}
             onClose={onClose}
