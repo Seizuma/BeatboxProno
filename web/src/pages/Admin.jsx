@@ -1629,9 +1629,98 @@ function ArtistRow({ artist, onDone, run, askDelete }) {
   );
 }
 
+/**
+ * Vérification instantanée d'un nom d'artiste, contre la liste déjà chargée.
+ *
+ * Mêmes règles que le serveur (`routes/admin.js`), qui reste l'arbitre :
+ *  - DOUBLON : un artiste porte exactement ce nom, casse ignorée
+ *    (« Cam » = « CAM »). La création est refusée.
+ *  - PROCHE : même nom une fois la ponctuation et les accents retirés
+ *    (« Cam. » ≈ « CAM »), ou ancien nom d'un artiste renommé. La création
+ *    reste permise — ce sont souvent deux personnes distinctes — mais on
+ *    montre les homonymes pour qu'on ne crée pas un doublon par mégarde.
+ *
+ * Le slug prévu est affiché dans ce cas : c'est l'adresse de la fiche, et le
+ * seul endroit où les deux artistes se distinguent autrement que par le nom.
+ */
+const normName = (s) => String(s ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+const slugifyName = (s) =>
+  String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+function checkArtistName(raw, artists) {
+  const name = normName(raw);
+  if (!name) return { status: 'empty' };
+
+  const twin = artists.find((a) => normName(a.name) === name);
+  if (twin) return { status: 'taken', twin };
+
+  const slug = slugifyName(raw);
+  const similar = artists
+    .map((a) => {
+      if (slug && slugifyName(a.name) === slug) return { artist: a, why: 'name' };
+      const alias = (a.aliases ?? []).find(
+        (al) => normName(al) === name || (slug && slugifyName(al) === slug)
+      );
+      return alias ? { artist: a, why: 'alias', alias } : null;
+    })
+    .filter(Boolean);
+
+  if (similar.length === 0) return { status: 'free' };
+
+  // Le slug que le serveur attribuera : le premier libre, `cam`, `cam-2`…
+  const taken = new Set(artists.map((a) => a.slug));
+  const root = slug || 'artiste';
+  let n = 1;
+  while (taken.has(n === 1 ? root : `${root}-${n}`)) n += 1;
+  return { status: 'similar', similar, slug: n === 1 ? root : `${root}-${n}` };
+}
+
+/** Le verdict, en une ligne sous le formulaire. */
+function ArtistNameCheck({ check }) {
+  if (check.status === 'empty') return null;
+
+  if (check.status === 'taken') {
+    return (
+      <p className="notice" role="status" style={{ fontSize: '0.88rem' }}>
+        « {check.twin.name} »{check.twin.country ? ` (${check.twin.country})` : ''} existe
+        déjà. Engagez cet artiste plutôt que d'en créer un second.
+      </p>
+    );
+  }
+
+  if (check.status === 'similar') {
+    return (
+      <p
+        className="notice"
+        role="status"
+        style={{ fontSize: '0.88rem', borderColor: 'var(--y)', color: 'var(--y)' }}
+      >
+        Nom proche de :{' '}
+        {check.similar.map(({ artist, why, alias }, i) => (
+          <span key={artist.id}>
+            {i > 0 && ' · '}
+            « {artist.name} »{artist.country ? ` (${artist.country})` : ''}
+            {why === 'alias' && ` — ancien nom « ${alias} »`}
+          </span>
+        ))}
+        . S'il s'agit bien d'un autre artiste, la création est possible : sa
+        fiche sera à l'adresse /artists/{check.slug}.
+      </p>
+    );
+  }
+
+  return (
+    <p className="notice notice--ok" role="status" style={{ fontSize: '0.88rem' }}>
+      Nom disponible.
+    </p>
+  );
+}
+
 function ArtistsAdmin() {
   const [artists, setArtists] = useState([]);
   const [form, setForm] = useState({ name: '', country: '', kinds: [] });
+  const nameCheck = useMemo(() => checkArtistName(form.name, artists), [form.name, artists]);
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('');
   const [flash, run] = useFlash();
@@ -1690,7 +1779,7 @@ function ArtistsAdmin() {
           </div>
           <button
             className="btn btn--primary"
-            disabled={!form.name}
+            disabled={nameCheck.status === 'empty' || nameCheck.status === 'taken'}
             onClick={() =>
               run(async () => {
                 await api.post('/admin/artists', { ...form, aliases: [] });
@@ -1701,6 +1790,9 @@ function ArtistsAdmin() {
           >
             Ajouter
           </button>
+        </div>
+        <div aria-live="polite">
+          <ArtistNameCheck check={nameCheck} />
         </div>
         <p className="faint" style={{ fontSize: '0.85rem', margin: 0 }}>
           Un artiste créé ici est réutilisable sur tous les événements suivants.
