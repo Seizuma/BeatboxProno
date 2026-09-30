@@ -30,6 +30,68 @@ const slugify = (s) =>
 
 // --- Artistes -----------------------------------------------------------------
 
+/**
+ * Deux notions qu'on confondait : le NOM et le SLUG.
+ *
+ * Le slug est l'adresse de la fiche (/artists/cam). Il doit être unique, mais
+ * il écrase la casse et la ponctuation : « Cam. » et « CAM » donnent tous deux
+ * `cam`. Tant que le slug servait aussi de test de doublon, le second artiste
+ * était refusé alors que ce sont deux beatboxers distincts.
+ *
+ * Désormais :
+ *  - le DOUBLON se juge sur le nom, à la casse près (« Cam » = « CAM ») ;
+ *  - le slug est libéré au besoin par un suffixe (`cam`, puis `cam-2`…).
+ */
+const normalizeName = (s) => String(s).normalize('NFC').trim().replace(/\s+/g, ' ');
+
+/** L'artiste qui porte déjà exactement ce nom (casse ignorée), sauf `exceptId`. */
+const findNameTwin = (db, name, exceptId = null) =>
+  db.artist.findFirst({
+    where: {
+      name: { equals: normalizeName(name), mode: 'insensitive' },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { id: true, name: true, slug: true },
+  });
+
+/**
+ * Le premier slug libre à partir de `base` : `cam`, `cam-2`, `cam-3`…
+ * `exceptId` laisse un artiste garder le sien lors d'un renommage.
+ * Un nom sans lettre ni chiffre (« ??? ») donnerait un slug vide : on le
+ * remplace par `artiste` plutôt que de créer une adresse /artists/.
+ */
+async function freeSlug(db, base, exceptId = null) {
+  const root = base || 'artiste';
+  for (let n = 1; ; n += 1) {
+    const candidate = n === 1 ? root : `${root}-${n}`;
+    const taken = await db.artist.findUnique({ where: { slug: candidate }, select: { id: true } });
+    if (!taken || taken.id === exceptId) return candidate;
+  }
+}
+
+/**
+ * L'artiste derrière un nom saisi au clavier sur un participant : celui qui
+ * porte ce nom, à défaut celui qui a ce slug (comportement historique), à
+ * défaut un nouveau. Renvoie `{ artist, created }`. Le nom passe en premier : avec « Cam. » et « CAM » en
+ * base, taper « Cam. » doit rattacher Cam., pas le premier venu sous `cam`.
+ */
+async function artistForName(db, rawName, country = null) {
+  const name = normalizeName(rawName);
+  const found =
+    (await findNameTwin(db, name)) ??
+    (await db.artist.findUnique({ where: { slug: slugify(name) } }));
+  if (found) return { artist: found, created: false };
+  const artist = await db.artist.create({
+    data: { name, slug: await freeSlug(db, slugify(name)), country: country ?? null },
+  });
+  return { artist, created: true };
+}
+
+const duplicateError = (twin) => ({
+  error: `« ${twin.name} » existe déjà.`,
+  artist: twin,
+});
+
 adminRouter.post('/artists', async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),
@@ -44,8 +106,14 @@ adminRouter.post('/artists', async (req, res) => {
     bio: z.string().optional().nullable(),
   });
   const data = schema.parse(req.body);
+  const name = normalizeName(data.name);
+  if (!name) return res.status(400).json({ error: 'Indiquez un nom.' });
+
+  const twin = await findNameTwin(prisma, name);
+  if (twin) return res.status(409).json(duplicateError(twin));
+
   const artist = await prisma.artist.create({
-    data: { ...data, slug: slugify(data.name) },
+    data: { ...data, name, slug: await freeSlug(prisma, slugify(name)) },
   });
   res.status(201).json({ artist });
 });
@@ -294,8 +362,12 @@ adminRouter.patch('/artists/:id', async (req, res) => {
   if (!current) return res.status(404).json({ error: 'Artiste introuvable.' });
 
   const patch = { ...data };
-  if (data.name && data.name !== current.name) {
-    patch.slug = slugify(data.name);
+  if (data.name) patch.name = normalizeName(data.name);
+  if (patch.name && patch.name !== current.name) {
+    const twin = await findNameTwin(prisma, patch.name, current.id);
+    if (twin) return res.status(409).json(duplicateError(twin));
+
+    patch.slug = await freeSlug(prisma, slugify(patch.name), current.id);
     patch.aliases = [...new Set([...(data.aliases ?? current.aliases), current.name])];
   }
 
@@ -483,10 +555,7 @@ adminRouter.post('/categories/:categoryId/contenders', async (req, res) => {
       if (!data.name) {
         throw Object.assign(new Error('Indiquez un artiste ou un nom.'), { status: 400 });
       }
-      const slug = slugify(data.name);
-      const artist =
-        (await tx.artist.findUnique({ where: { slug } })) ??
-        (await tx.artist.create({ data: { name: data.name, slug, country: country ?? null } }));
+      const { artist } = await artistForName(tx, data.name, country);
       linked = [artist.id];
     }
 
@@ -558,16 +627,12 @@ adminRouter.post('/orphan-contenders/repair', async (req, res) => {
   let created = 0;
 
   for (const contender of todo) {
-    const slug = slugify(contender.name);
     // Séquentiel et non en parallèle : deux participants du même nom dans deux
     // catégories doivent aboutir au même artiste, pas à deux doublons.
     await prisma.$transaction(async (tx) => {
-      let artist = await tx.artist.findUnique({ where: { slug } });
-      if (artist) linked += 1;
-      else {
-        artist = await tx.artist.create({ data: { name: contender.name, slug } });
-        created += 1;
-      }
+      const { artist, created: isNew } = await artistForName(tx, contender.name);
+      if (isNew) created += 1;
+      else linked += 1;
       await tx.contenderArtist.create({
         data: { contenderId: contender.id, artistId: artist.id },
       });
@@ -645,10 +710,7 @@ adminRouter.patch('/contenders/:id/artist', async (req, res) => {
     let linked = artistId;
 
     if (!linked) {
-      const slug = slugify(name);
-      const artist =
-        (await tx.artist.findUnique({ where: { slug } })) ??
-        (await tx.artist.create({ data: { name, slug, country: country ?? null } }));
+      const { artist } = await artistForName(tx, name, country);
       linked = artist.id;
     }
 
