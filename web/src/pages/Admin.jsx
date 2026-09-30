@@ -1234,7 +1234,25 @@ function FormatBuilder({ event, onDone, onClose, run }) {
 
   useEffect(() => { api.get('/admin/formats').then(setCatalog).catch(() => { }); }, []);
 
-  const existingKinds = new Set(event.categories.map((c) => c.kind));
+  /**
+   * Cette entrée du catalogue existe-t-elle déjà dans l'événement ?
+   *
+   * Le kind seul ne suffit plus : « Solo », « Solo U18 » et « Solo Women »
+   * portent tous SOLO. Une variante se reconnaît donc à son nom, et la
+   * discipline de base à son kind porté par une catégorie qui n'est PAS une
+   * variante — sans quoi un Solo U18 cocherait aussi le Solo.
+   */
+  const isVariant = (k) => Boolean(k.kind) && k.kind !== k.id;
+  const variantNames = new Set(
+    (catalog?.kinds ?? []).filter(isVariant).map((k) => k.label.toLowerCase())
+  );
+  const alreadyThere = (k) =>
+    event.categories.some((c) =>
+      c.kind === (k.kind ?? k.id) &&
+      (isVariant(k)
+        ? (c.name ?? '').toLowerCase() === k.label.toLowerCase()
+        : !variantNames.has((c.name ?? '').toLowerCase()))
+    );
 
   /**
    * Cocher une entrée.
@@ -1336,9 +1354,9 @@ function FormatBuilder({ event, onDone, onClose, run }) {
               <button
                 key={k.id}
                 className={`btn btn--small${picked[k.id] ? ' btn--primary' : ''}`}
-                onClick={() => toggle({ id: k.id, kind: k.id, label: k.label })}
+                onClick={() => toggle({ id: k.id, kind: k.kind ?? k.id, label: k.label })}
               >
-                {k.label}{existingKinds.has(k.id) ? ' ✓' : ''}
+                {k.label}{alreadyThere(k) ? ' ✓' : ''}
               </button>
             ))}
           </div>
