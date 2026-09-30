@@ -795,6 +795,31 @@ export const CATEGORY_KINDS = {
   LEGACY: 'Legacy',
 };
 
+/**
+ * Les variantes d'une discipline, proposées à côté d'elle.
+ *
+ * Même règle que les wildcards (`lib/wildcard.js`) : le `kind` reste la
+ * discipline réelle — c'est lui qui décide quels artistes on peut engager — et
+ * le nom porte la nuance. Un Solo U18 ou un Solo Women est un Solo : mêmes
+ * phases, même tableau, mêmes artistes typés SOLO. En faire des valeurs de
+ * `CategoryKind` viderait le sélecteur de participants et imposerait une
+ * migration d'enum pour une distinction que le nom dit déjà.
+ */
+export const CATEGORY_VARIANTS = [
+  { id: 'SOLO_U18', kind: 'SOLO', label: 'Solo U18' },
+  { id: 'SOLO_WOMEN', kind: 'SOLO', label: 'Solo Women' },
+];
+
+/**
+ * Le catalogue des disciplines, variantes rangées juste après leur discipline.
+ * Chaque entrée porte son identifiant de catalogue ET son kind : pour les
+ * disciplines de base les deux coïncident.
+ */
+const CATEGORY_CATALOG = Object.entries(CATEGORY_KINDS).flatMap(([id, label]) => [
+  { id, kind: id, label },
+  ...CATEGORY_VARIANTS.filter((v) => v.kind === id),
+]);
+
 /** Le catalogue, pour que l'interface n'ait pas à dupliquer ces constantes. */
 adminRouter.get('/formats', (_req, res) => {
   res.json({
@@ -804,7 +829,7 @@ adminRouter.get('/formats', (_req, res) => {
       size: f.size,
       rounds: f.rounds.map(([round, count]) => ({ round, count })),
     })),
-    kinds: Object.entries(CATEGORY_KINDS).map(([id, label]) => ({ id, label })),
+    kinds: CATEGORY_CATALOG,
     // Les sélections sur vidéo. Elles portent une DISCIPLINE réelle — c'est
     // elle qui décide quels artistes on peut engager — et un nom qui dit la
     // nuance que la discipline ignore : mixte, féminine.
