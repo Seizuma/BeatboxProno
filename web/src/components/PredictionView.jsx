@@ -6,7 +6,7 @@ import ArtistFigure from './ArtistFigure.jsx';
 import PredictionComments from './PredictionComments.jsx';
 import GroupStamps from './GroupStamps.jsx';
 import ExportPrediction from './ExportPrediction.jsx';
-import { BattleScore, PhaseScore, RankScore, SCORE_LAYER_EXIT_MS, scoreIndex } from './ScoreLayer.jsx';
+import { BattleScore, PhaseScore, RankScore, RankScoreHead, SCORE_LAYER_EXIT_MS, scoreIndex } from './ScoreLayer.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -380,6 +380,17 @@ export function Body({ prediction, score }) {
                         {kind === 'ranking' ? (
                             <div className="panel panel--flush">
                                 <table>
+                                    {/* L'en-tête de la colonne-calque : dit une
+                                        fois ce que chaque ligne répétait. */}
+                                    {entry && (
+                                        <thead>
+                                            <tr>
+                                                <th colSpan={2} className="score-host score-head">
+                                                    <RankScoreHead mode={score} />
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                    )}
                                     <tbody>
                                         {ranks.map((r, k) => {
                                             const c = byId.get(r.contenderId);
@@ -395,7 +406,7 @@ export function Body({ prediction, score }) {
                                                             <RankScore
                                                                 line={entry.rows.get(r.contenderId)}
                                                                 mode={score}
-                                                                i={k}
+                                                                i={k + 1}
                                                             />
                                                         )}
                                                         <span className="stat-row">

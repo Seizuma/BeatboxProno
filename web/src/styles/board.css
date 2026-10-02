@@ -1271,28 +1271,41 @@ details.panel>summary .eyebrow {
    Le mode MIX du télétexte : la page posée sur l'image. On regarde son
    pronostic ; on pose le résultat par-dessus ; on le retire.
 
-   Les règles du système tiennent : aplats purs, aucun arrondi, aucune ombre,
-   aucune transparence. Le vert est aux points — c'est son rôle —, le jaune à
-   ce qui a payé en partie, le magenta au résultat officiel, qui est une
-   méta-information sur le pronostic.
+   Les couleurs gardent leurs rôles : le vert aux points, le jaune à ce qui a
+   payé en partie, le rouge à ce qui n'a rien rapporté, le magenta au résultat
+   officiel, qui est une méta-information sur le pronostic.
 
-   L'animation non plus n'invente rien : le tube dessinait ses pages ligne par
-   ligne et faisait clignoter ce qu'il voulait signaler. D'où les `steps()` —
-   un fondu serait un dégradé dans le temps, et le télétexte n'en connaît pas.
+   ─── La lisibilité ──────────────────────────────────────────────────────────
+
+   La première version posait un bandeau encadré par ligne, de largeur
+   variable, avec l'intitulé « réel » répété partout et des points en petits
+   caractères. Rien ne s'alignait : il fallait lire chaque bandeau en entier
+   pour trouver un chiffre. Le calque est maintenant UNE colonne continue, aux
+   sous-colonnes de largeur fixe, sous un en-tête unique ; les points y sont
+   l'élément le plus grand, comme ils sont l'information la plus attendue.
+
+   ─── Le mouvement ───────────────────────────────────────────────────────────
+
+   La première version découpait par paliers (`steps()` sur `clip-path`) pour
+   imiter le balayage du tube. C'était fidèle et c'était saccadé : la découpe
+   se recalcule à chaque image sans passer par la carte graphique, et les
+   paliers sont des à-coups par définition. Tout passe désormais par
+   `transform` et `opacity`, les deux seules propriétés que le navigateur
+   anime sans redessiner la page, sur des courbes qui freinent à l'arrivée.
    =========================================================================== */
 
 .score-host {
   position: relative;
 }
 
-/* --- Les pastilles de points ------------------------------------------------ */
+/* --- Les pastilles (total de phase, top 4) -------------------------------- */
 
 .score-chip {
   display: inline-block;
-  padding: 0 0.35rem;
+  padding: 0 0.4rem;
   font-family: var(--font-display);
-  font-size: 1.15rem;
-  line-height: 1.2;
+  font-size: 1.2rem;
+  line-height: 1.25;
   white-space: nowrap;
 }
 
@@ -1300,52 +1313,97 @@ details.panel>summary .eyebrow {
 .score-chip--part { background: var(--y); color: #000; }
 .score-chip--none { background: var(--line); color: var(--ink-faint); }
 
-/* --- Une ligne de classement ---------------------------------------------- */
+/* --- La colonne-calque du classement --------------------------------------- */
 
-/* Un bandeau calé à droite de la ligne. Il recouvre la fin de la cellule, pas
-   le nom : les noms tiennent dans la moitié gauche, et la ligne garde sa
-   hauteur — le classement ne bouge pas quand le calque se pose. */
+/* Pleine hauteur de ligne et collée au bord droit : d'une ligne à l'autre,
+   les bandeaux forment une seule colonne, bordée à gauche par le filet
+   magenta du résultat officiel. Les filets de séparation des lignes restent
+   visibles — ils sont sur la bordure de la cellule, hors de la zone couverte.
+
+   Les quatre sous-colonnes ont une largeur fixe : c'est ce qui aligne les
+   rangs réels entre eux, et les points entre eux. */
 .score-strip {
+  --score-cols: 3.1rem 3rem 1.4rem 3.4rem;
   position: absolute;
-  top: 50%;
-  right: 0.3rem;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 2;
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--score-cols);
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.05rem 0 0.05rem 0.45rem;
-  transform: translateY(-50%);
-  background: var(--screen);
-  border: var(--border-w) solid var(--line);
+  column-gap: 0.35rem;
+  padding: 0 0.75rem 0 0.85rem;
+  background: var(--surface-2);
+  border-left: var(--border-w) solid var(--m);
   font-family: var(--font-data);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   white-space: nowrap;
 }
 
-.score-strip--full { border-color: var(--g); }
-.score-strip--part { border-color: var(--y); }
-
-.score-strip__real { color: var(--ink); }
-
-.score-strip__label {
-  margin-right: 0.35em;
-  color: var(--m);
-  text-transform: uppercase;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
+/* L'en-tête : les intitulés, une fois. */
+.score-head {
+  height: 2rem;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.score-strip__gap { color: var(--m); }
+.score-strip--head {
+  color: var(--m);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.score-strip__real {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.score-strip__real--none { color: var(--ink-faint); }
+
+/* L'écart, coloré par gravité : pile, proche (des points de placement), loin
+   (plus aucun). La flèche dit le sens, la couleur dit si c'est grave. */
+.score-strip__gap { font-size: 0.95rem; }
 .score-strip__gap--exact { color: var(--g); }
+.score-strip__gap--near { color: var(--y); }
+.score-strip__gap--far { color: var(--r); }
 
 .score-strip__q {
+  justify-self: start;
   padding: 0 0.25rem;
   background: var(--g);
   color: #000;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
-.score-strip .score-chip { align-self: stretch; display: flex; align-items: center; }
+/* La colonne Q est vide sur la plupart des lignes : sans ce garde, la case
+   vide garderait son aplat vert. */
+.score-strip__q:empty { background: none; padding: 0; }
+.score-strip--head > :nth-child(3) { justify-self: start; }
+
+/* Les points : le plus grand de la ligne, calés à droite pour que les unités
+   s'alignent. En couleur de texte et non en pastille — vingt aplats jaunes
+   superposés à vingt noms verts, c'était là que l'œil se perdait. */
+.score-strip__pts {
+  justify-self: end;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  line-height: 1;
+  transform-origin: right center;
+}
+
+.score-strip--head .score-strip__pts {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.score-strip__pts--full { color: var(--g); }
+.score-strip__pts--part { color: var(--y); }
+.score-strip__pts--none { color: var(--ink-faint); }
 
 /* --- Une affiche ----------------------------------------------------------- */
 
@@ -1359,23 +1417,23 @@ details.panel>summary .eyebrow {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.1rem;
-  padding: 0.2rem 0.55rem;
+  gap: 0.15rem;
+  padding: 0.25rem 2.4rem 0.25rem 0.6rem;
   transform: translate(4px, -4px);
-  background: var(--screen);
+  background: var(--surface-2);
   border: var(--border-w) solid var(--m);
   font-family: var(--font-data);
-  font-size: 0.8rem;
+  font-size: 0.88rem;
 }
 
 .score-sheet__tag {
   position: absolute;
-  top: -0.7rem;
-  left: 0.4rem;
-  padding: 0 0.3rem;
+  top: -0.75rem;
+  left: 0.45rem;
+  padding: 0 0.35rem;
   background: var(--m);
   color: #000;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -1383,7 +1441,7 @@ details.panel>summary .eyebrow {
 .score-sheet__side {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: 0.45rem;
   min-width: 0;
 }
 
@@ -1391,7 +1449,7 @@ details.panel>summary .eyebrow {
    nom quand la carte est étroite. */
 .score-sheet__was {
   flex: 0 1 auto;
-  max-width: 42%;
+  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1417,7 +1475,14 @@ details.panel>summary .eyebrow {
   color: var(--y);
 }
 
-.score-sheet__score { margin-left: auto; color: var(--m); }
+.score-sheet__score {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--m);
+}
+
 .score-sheet__score--right { color: var(--g); }
 
 .score-sheet__none {
@@ -1425,18 +1490,21 @@ details.panel>summary .eyebrow {
   color: var(--ink-faint);
 }
 
-/* Les points de l'affiche, au coin, dépassant de la feuille comme une
-   étiquette agrafée. */
+/* Les points de l'affiche, dans le coin droit de la feuille — DANS la
+   feuille, la marge de droite leur est réservée : en débordant, l'étiquette
+   recouvrait le coin de l'affiche voisine. */
 .score-badge {
   position: absolute;
-  top: -0.85rem;
-  right: -0.55rem;
+  top: 50%;
+  right: 0.35rem;
   z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
-  padding: 0.05rem 0.35rem 0.2rem;
+  gap: 0.15rem;
+  min-width: 1.8rem;
+  padding: 0.1rem 0.25rem 0.2rem;
+  transform: translateY(-50%);
   color: #000;
 }
 
@@ -1446,7 +1514,7 @@ details.panel>summary .eyebrow {
 
 .score-badge__value {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   line-height: 1;
 }
 
@@ -1462,6 +1530,19 @@ details.panel>summary .eyebrow {
 .score-pip--on { background: currentColor; }
 
 /* --- L'en-tête de phase ---------------------------------------------------- */
+
+/* Une grille à une ligne dont on anime la hauteur, de 0fr à 1fr : c'est la
+   seule façon d'ouvrir en douceur un bloc de hauteur inconnue. Sans elle,
+   l'en-tête apparaissait d'un coup et le classement sautait vers le bas. */
+.score-phase-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.score-phase-wrap > .score-phase {
+  min-height: 0;
+  overflow: hidden;
+}
 
 .score-phase {
   display: flex;
@@ -1485,83 +1566,136 @@ details.panel>summary .eyebrow {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding-left: 0.4rem;
+  padding-left: 0.45rem;
   border: var(--border-w) solid var(--line);
   font-family: var(--font-data);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
 .score-four__place--hit { border-color: var(--g); }
-.score-four__rank { font-family: var(--font-display); font-size: 1.1rem; color: var(--y); }
+.score-four__rank { font-family: var(--font-display); font-size: 1.15rem; color: var(--y); }
 .score-four__name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* --- Le mouvement ---------------------------------------------------------- */
 
-/* Le tracé : de haut en bas, par paliers, comme le balayage du tube. Les
-   marges négatives du découpage laissent dépasser l'étiquette de points et
-   l'intitulé « réel », qui sortent du cadre de la feuille. */
-.score--on,
-.score--leaving {
-  animation-duration: 0.26s;
-  animation-timing-function: steps(6, end);
+/* L'arrivée : 340 ms, une courbe qui freine fort à la fin — l'élément arrive
+   vite et se pose. Décalée de 32 ms par élément, plafonnée côté JSX.
+   Le départ : 200 ms, une courbe qui accélère — on ne regarde pas partir ce
+   qu'on a choisi de retirer. Décalage plus serré, 14 ms.
+   Ces durées de départ sont reprises par SCORE_LAYER_EXIT_MS : les changer
+   ici, c'est les changer là-bas. */
+.score--on {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   animation-fill-mode: both;
-  animation-delay: calc(var(--score-i, 0) * 28ms);
+  animation-delay: calc(var(--score-i, 0) * 32ms);
+  animation-name: score-in;
 }
 
-.score--on { animation-name: score-draw; }
-.score--leaving { animation-name: score-erase; }
+.score--leaving {
+  animation-duration: 0.2s;
+  animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--score-i, 0) * 14ms);
+  animation-name: score-out;
+}
 
-/* Le bandeau de classement se déroule de droite à gauche : il entre par le
-   bord où il se cale. */
-.score-strip.score--on { animation-name: score-wipe-in; }
-.score-strip.score--leaving { animation-name: score-wipe-out; }
+/* La colonne-calque glisse depuis le bord droit, où elle se cale. */
+.score-strip.score--on { animation-name: score-strip-in; }
+.score-strip.score--leaving { animation-name: score-strip-out; }
 
-/* Les points arrivent APRÈS leur support, en clignotant deux fois : l'attribut
-   « flash » du télétexte, celui qui signalait un résultat qui vient de tomber. */
-.score--on .score-badge,
+/* La feuille se pose : elle tombe d'un peu plus haut, puis s'arrête à son
+   décalage final. */
+.score-sheet.score--on { animation-name: score-sheet-in; }
+.score-sheet.score--leaving { animation-name: score-sheet-out; }
+
+/* Les points arrivent juste APRÈS leur support, avec un léger rebond : c'est
+   le chiffre qu'on attend, il mérite d'être vu tomber. */
+.score--on .score-strip__pts,
+.score--on .score-badge__value,
 .score--on .score-chip {
-  animation: score-flash 0.5s steps(1, end) both;
-  animation-delay: calc(var(--score-i, 0) * 28ms + 0.26s);
+  animation: score-pop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: calc(var(--score-i, 0) * 32ms + 0.14s);
 }
 
-@keyframes score-draw {
-  from { clip-path: inset(-1.2rem -1.2rem 100% -1.2rem); }
-  to   { clip-path: inset(-1.2rem -1.2rem -1.2rem -1.2rem); }
+/* L'en-tête de phase s'ouvre, puis son contenu apparaît. Il se referme à la
+   fin du départ, une fois les lignes parties. */
+.score-phase-wrap--on { animation: score-grow 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.score-phase-wrap--leaving { animation: score-shrink 0.2s cubic-bezier(0.55, 0, 1, 0.45) 0.14s both; }
+
+.score--on,
+.score--leaving,
+.score--on .score-strip__pts,
+.score--on .score-badge__value,
+.score--on .score-chip {
+  will-change: transform, opacity;
 }
 
-@keyframes score-erase {
-  from { clip-path: inset(-1.2rem -1.2rem -1.2rem -1.2rem); }
-  to   { clip-path: inset(100% -1.2rem -1.2rem -1.2rem); }
+@keyframes score-in {
+  from { opacity: 0; transform: translateY(-0.4rem); }
+  to   { opacity: 1; transform: none; }
 }
 
-@keyframes score-wipe-in {
-  from { clip-path: inset(-0.2rem -0.2rem -0.2rem 100%); }
-  to   { clip-path: inset(-0.2rem -0.2rem -0.2rem -0.2rem); }
+@keyframes score-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-0.3rem); }
 }
 
-@keyframes score-wipe-out {
-  from { clip-path: inset(-0.2rem -0.2rem -0.2rem -0.2rem); }
-  to   { clip-path: inset(-0.2rem -0.2rem -0.2rem 100%); }
+@keyframes score-strip-in {
+  from { opacity: 0; transform: translateX(1.5rem); }
+  to   { opacity: 1; transform: none; }
 }
 
-@keyframes score-flash {
-  0%   { opacity: 0; }
-  20%  { opacity: 1; }
-  40%  { opacity: 0; }
-  60%  { opacity: 1; }
-  100% { opacity: 1; }
+@keyframes score-strip-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(1rem); }
+}
+
+@keyframes score-sheet-in {
+  from { opacity: 0; transform: translate(14px, -14px); }
+  to   { opacity: 1; transform: translate(4px, -4px); }
+}
+
+@keyframes score-sheet-out {
+  from { opacity: 1; transform: translate(4px, -4px); }
+  to   { opacity: 0; transform: translate(12px, -12px); }
+}
+
+@keyframes score-pop {
+  from { opacity: 0; transform: scale(0.55); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes score-grow {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to   { grid-template-rows: 1fr; opacity: 1; }
+}
+
+@keyframes score-shrink {
+  from { grid-template-rows: 1fr; opacity: 1; }
+  to   { grid-template-rows: 0fr; opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .score--on,
   .score--leaving,
-  .score--on .score-badge,
-  .score--on .score-chip { animation: none; }
+  .score--on .score-strip__pts,
+  .score--on .score-badge__value,
+  .score--on .score-chip,
+  .score-phase-wrap--on,
+  .score-phase-wrap--leaving { animation: none; }
 }
 
-/* Sur téléphone, le bandeau perd son intitulé : le rang, la flèche et les
-   points suffisent, et le nom de l'artiste garde sa place. */
+/* Sur téléphone, les sous-colonnes se resserrent et les chiffres rapetissent
+   d'un cran : le nom de l'artiste doit garder la moitié gauche de la ligne. */
 @media (max-width: 520px) {
-  .score-strip__label { display: none; }
-  .score-sheet { font-size: 0.74rem; padding-inline: 0.4rem; }
+  .score-strip {
+    --score-cols: 2.3rem 2.3rem 1.1rem 2.5rem;
+    column-gap: 0.2rem;
+    padding: 0 0.45rem 0 0.5rem;
+  }
+
+  .score-strip__real { font-size: 1.2rem; }
+  .score-strip__pts { font-size: 1.35rem; }
+  .score-sheet { font-size: 0.78rem; padding: 0.2rem 2.2rem 0.2rem 0.45rem; }
 }

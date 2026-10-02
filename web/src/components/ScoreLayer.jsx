@@ -34,12 +34,20 @@ import { useI18n } from '../lib/i18n.jsx';
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 const pairKey = (a, b) => [a, b].filter(Boolean).sort().join('::');
 
-/** Au-delà, les éléments apparaissent ensemble : un long classement ne doit pas mettre deux secondes à se poser. */
-const STAGGER_CAP = 14;
-const STAGGER_MS = 28;
+/**
+ * Le rythme du calque. Ces trois nombres sont ceux de `board.css` — la durée
+ * de sortie et son décalage par élément — et doivent le rester : c'est d'eux
+ * que dépend le moment où l'on démonte.
+ *
+ * Au-delà de STAGGER_CAP, les éléments partent ensemble : un long classement
+ * ne doit pas mettre deux secondes à se poser.
+ */
+const STAGGER_CAP = 12;
+const EXIT_MS = 200;
+const EXIT_STAGGER_MS = 14;
 
 /** La durée totale d'une disparition, décalages compris : ce qu'il faut attendre avant de démonter. */
-export const SCORE_LAYER_EXIT_MS = 260 + STAGGER_CAP * STAGGER_MS;
+export const SCORE_LAYER_EXIT_MS = EXIT_MS + STAGGER_CAP * EXIT_STAGGER_MS + 40;
 
 /**
  * Indexe le détail des points d'un pronostic, phase par phase.
@@ -135,8 +143,40 @@ const delay = (i) => ({ '--score-i': Math.min(i, STAGGER_CAP) });
    --------------------------------------------------------------------------- */
 
 /**
- * Le bandeau posé sur une ligne de classement : le rang réel, l'écart, les
- * points.
+ * Le niveau d'un écart de placement : pile, proche, loin. C'est ce qui colore
+ * la colonne « écart » — une flèche seule disait la direction, pas si c'était
+ * grave.
+ */
+function gapTier(gap) {
+    if (gap === 0) return 'exact';
+    return gap < 5 ? 'near' : 'far';
+}
+
+/**
+ * L'en-tête de la colonne-calque, posé une fois au-dessus du classement.
+ *
+ * Il remplace l'intitulé « réel » que chaque ligne répétait : vingt fois le
+ * même mot, c'était vingt fois du bruit entre l'œil et le chiffre.
+ */
+export function RankScoreHead({ mode }) {
+    const { t } = useI18n();
+    return (
+        <span className={`score-strip score-strip--head score--${mode}`} style={delay(0)}>
+            <span>{t('score.col.real')}</span>
+            <span>{t('score.col.gap')}</span>
+            <span title={t('score.qualified')}>Q</span>
+            <span className="score-strip__pts">{t('score.pts')}</span>
+        </span>
+    );
+}
+
+/**
+ * La colonne-calque d'une ligne de classement : le rang réel, l'écart, la
+ * qualification, les points.
+ *
+ * Des colonnes de largeur FIXE, et c'est l'essentiel de la lisibilité : les
+ * rangs réels s'alignent, les points s'alignent, et l'œil descend une colonne
+ * au lieu de chercher le chiffre dans chaque bandeau.
  *
  * Une ligne absente du détail n'est pas une erreur : le contender n'a pas de
  * rang officiel (hors-radar, ou non départagé). Elle ne rapporte rien et le
@@ -147,37 +187,39 @@ export function RankScore({ line, mode, i }) {
 
     if (!line) {
         return (
-            <span className={`score-strip score-strip--none score--${mode}`} style={delay(i)}>
-                <span className="score-strip__real">{t('score.unranked')}</span>
-                <span className="score-chip score-chip--none">0</span>
+            <span className={`score-strip score--${mode}`} style={delay(i)} title={t('score.unranked')}>
+                <span className="score-strip__real score-strip__real--none">—</span>
+                <span />
+                <span />
+                <span className="score-strip__pts score-strip__pts--none">0</span>
             </span>
         );
     }
 
     const diff = line.officialRank - line.predictedRank;
+    const gap = Math.abs(diff);
     // « Tout juste », c'est la bonne place — le point de qualification est un
     // bonus à côté, il ne suffit pas à passer au vert.
     const level = line.points <= 0 ? 'none' : diff === 0 ? 'full' : 'part';
 
     return (
         <span
-            className={`score-strip score-strip--${level} score--${mode}`}
+            className={`score-strip score--${mode}`}
             style={delay(i)}
-            title={t('score.rank.detail', { gap: line.gapPoints, qualif: line.qualificationPoints })}
+            title={t('score.rank.detail', {
+                said: ordinal(line.predictedRank, lang),
+                real: ordinal(line.officialRank, lang),
+                gap: line.gapPoints,
+                qualif: line.qualificationPoints,
+            })}
         >
-            <span className="score-strip__real">
-                <span className="score-strip__label">{t('score.real')}</span>
-                {ordinal(line.officialRank, lang)}
+            <span className="score-strip__real">{ordinal(line.officialRank, lang)}</span>
+            {/* ↓ : l'artiste a fini plus bas qu'annoncé, ↑ plus haut. */}
+            <span className={`score-strip__gap score-strip__gap--${gapTier(gap)}`}>
+                {gap === 0 ? '=' : `${diff > 0 ? '↓' : '↑'}${gap}`}
             </span>
-            {/* L'écart en flèches télétexte : ▼ quand l'artiste a fini plus bas
-                qu'annoncé, ▲ plus haut, « = » pile à la place. */}
-            <span className={`score-strip__gap${diff === 0 ? ' score-strip__gap--exact' : ''}`}>
-                {diff === 0 ? '=' : `${diff > 0 ? '▼' : '▲'}${Math.abs(diff)}`}
-            </span>
-            {line.qualificationPoints > 0 && (
-                <span className="score-strip__q" title={t('score.qualified')}>Q</span>
-            )}
-            <span className={`score-chip score-chip--${level}`}>
+            <span className="score-strip__q">{line.qualificationPoints > 0 ? 'Q' : ''}</span>
+            <span className={`score-strip__pts score-strip__pts--${level}`}>
                 {line.points > 0 ? `+${line.points}` : '0'}
             </span>
         </span>
@@ -314,28 +356,32 @@ export function PhaseScore({ entry, byId, mode }) {
     const shown = useCountUp(entry.total, mode === 'on');
 
     return (
-        <div className={`score-phase score--${mode}`} style={delay(0)}>
-            <span className={`score-chip score-chip--${entry.total > 0 ? 'full' : 'none'} score-phase__total`}>
-                +{shown} {t('score.pts')}
-            </span>
+        // L'enveloppe s'ouvre en hauteur : sans elle, l'en-tête apparaissait
+        // d'un coup et poussait tout le classement vers le bas.
+        <div className={`score-phase-wrap score-phase-wrap--${mode}`}>
+            <div className={`score-phase score--${mode}`} style={delay(0)}>
+                <span className={`score-chip score-chip--${entry.total > 0 ? 'full' : 'none'} score-phase__total`}>
+                    +{shown} {t('score.pts')}
+                </span>
 
-            {entry.four?.length > 0 && (
-                <ol className="score-four" aria-label={t('score.top4')}>
-                    {entry.four.map((line, k) => (
-                        <li
-                            key={line.place}
-                            className={`score-four__place score--${mode}${line.hit ? ' score-four__place--hit' : ''}`}
-                            style={delay(k + 1)}
-                        >
-                            <span className="score-four__rank">{ordinal(line.place, lang)}</span>
-                            <span className="score-four__name">{byId.get(line.contenderId)?.name ?? '—'}</span>
-                            <span className={`score-chip score-chip--${line.hit ? 'full' : 'none'}`}>
-                                {line.hit ? `+${line.points}` : '0'}
-                            </span>
-                        </li>
-                    ))}
-                </ol>
-            )}
+                {entry.four?.length > 0 && (
+                    <ol className="score-four" aria-label={t('score.top4')}>
+                        {entry.four.map((line, k) => (
+                            <li
+                                key={line.place}
+                                className={`score-four__place score--${mode}${line.hit ? ' score-four__place--hit' : ''}`}
+                                style={delay(k + 1)}
+                            >
+                                <span className="score-four__rank">{ordinal(line.place, lang)}</span>
+                                <span className="score-four__name">{byId.get(line.contenderId)?.name ?? '—'}</span>
+                                <span className={`score-chip score-chip--${line.hit ? 'full' : 'none'}`}>
+                                    {line.hit ? `+${line.points}` : '0'}
+                                </span>
+                            </li>
+                        ))}
+                    </ol>
+                )}
+            </div>
         </div>
     );
 }
