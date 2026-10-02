@@ -1438,6 +1438,12 @@ details.panel>summary .eyebrow {
   text-transform: uppercase;
 }
 
+/* Jouée dans un autre tour : l'étiquette passe en jaune et nomme le tour. La
+   feuille ne montre pas l'affiche de l'emplacement, mais celle qui a payé. */
+.score-sheet__tag--elsewhere {
+  background: var(--y);
+}
+
 .score-sheet__side {
   display: flex;
   align-items: baseline;

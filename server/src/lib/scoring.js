@@ -14,7 +14,7 @@ import { isWildcardCategory } from './wildcard.js';
  *   uniquement les points d'écart de placement
  *
  * Brackets — pour chaque battle
- *   +2 si la battle a bien eu lieu (même si le seeding diffère)
+ *   +2 si la battle a bien eu lieu, où que ce soit dans le tableau
  *   +2 si le vainqueur est le bon
  *   +2 si le score est le bon
  *
@@ -324,40 +324,76 @@ const pairKey = (a, b) => [a, b].filter(Boolean).sort().join('::');
 /**
  * Score d'une phase à battles (BRACKET / LEGACY).
  *
- * Une battle prédite rapporte ses 2 points « la battle a eu lieu » dès lors que
- * l'affiche existe dans le même tour, même si elle n'est pas au même slot —
- * c'est le sens de « même si le seeding n'est pas le même ».
+ * Une battle prédite rapporte ses points dès lors que l'affiche a eu lieu
+ * QUELQUE PART dans le tableau : à un autre emplacement du même tour, ou dans
+ * un autre tour. Le vainqueur et le score se comparent à cette affiche-là.
+ *
+ * ─── Pourquoi un autre tour compte ──────────────────────────────────────────
+ *
+ * La règle exigeait le même tour. Or annoncer « D-low contre FootboxG » et la
+ * voir se jouer en quart plutôt qu'en demie, c'est avoir lu la rencontre :
+ * c'est le seeding qui l'a avancée, pas le pronostic qui s'est trompé de
+ * duel. Le joueur l'attendait, et le barème affiché — « la battle a eu lieu »
+ * — ne parlait d'aucun tour.
+ *
+ * ─── L'ordre de la correspondance ───────────────────────────────────────────
+ *
+ * Deux passes. D'abord le même tour, comme avant ; ensuite les autres tours,
+ * parmi les affiches officielles encore libres. Sans cet ordre, une affiche
+ * annoncée en finale pourrait prendre la finale officielle à une affiche
+ * annoncée au bon tour, simplement parce qu'elle était lue avant.
+ *
+ * Une affiche officielle ne paie qu'une fois : le total d'une phase reste
+ * sous son maximum, qui compte six points par affiche officielle.
+ *
+ * Chaque ligne dit où l'affiche a été trouvée (`matchedRound`, `matchedSlot`) :
+ * le calque des points montre la battle qui a payé, pas celle qui occupait
+ * l'emplacement.
  *
  * @param {Array} predicted  {round, slot, contenderAId, contenderBId, winnerId, scoreA, scoreB}
  * @param {Array} official   {round, slot, contenderAId, contenderBId, winnerId, scoreA, scoreB, played}
  */
 export function scoreBattlePhase(predicted, official) {
-  const lines = [];
-  let total = 0;
-
-  // Index des battles officielles jouées, par tour puis par paire.
-  const byRound = new Map();
+  // Les affiches officielles jouées, par paire. Une paire peut en théorie se
+  // rencontrer deux fois (format Legacy) : on les garde toutes.
+  const byPair = new Map();
   for (const b of official) {
     if (!b.played || !b.contenderAId || !b.contenderBId) continue;
-    if (!byRound.has(b.round)) byRound.set(b.round, new Map());
-    byRound.get(b.round).set(pairKey(b.contenderAId, b.contenderBId), b);
+    const key = pairKey(b.contenderAId, b.contenderBId);
+    if (!byPair.has(key)) byPair.set(key, []);
+    byPair.get(key).push(b);
   }
 
   const consumed = new Set(); // une battle officielle ne paie qu'une fois
+  const uid = (b) => `${b.round}#${b.slot}`;
+  const picks = predicted.filter((p) => p.contenderAId && p.contenderBId);
+  const matches = new Map(); // pick → affiche officielle
 
-  for (const pick of predicted) {
-    if (!pick.contenderAId || !pick.contenderBId) continue;
+  const claim = (sameRound) => {
+    for (const pick of picks) {
+      if (matches.has(pick)) continue;
+      const found = (byPair.get(pairKey(pick.contenderAId, pick.contenderBId)) ?? []).find(
+        (b) => !consumed.has(uid(b)) && (sameRound ? b.round === pick.round : true)
+      );
+      if (!found) continue;
+      consumed.add(uid(found));
+      matches.set(pick, found);
+    }
+  };
+  claim(true);
+  claim(false);
 
-    const key = pairKey(pick.contenderAId, pick.contenderBId);
-    const match = byRound.get(pick.round)?.get(key);
-    const uid = match ? `${match.round}#${match.slot}` : null;
+  const lines = [];
+  let total = 0;
+
+  for (const pick of picks) {
+    const match = matches.get(pick);
 
     let happened = 0;
     let winner = 0;
     let score = 0;
 
-    if (match && !consumed.has(uid)) {
-      consumed.add(uid);
+    if (match) {
       happened = BATTLE_HAPPENED;
 
       if (pick.winnerId && pick.winnerId === match.winnerId) {
@@ -377,6 +413,8 @@ export function scoreBattlePhase(predicted, official) {
       contenderAId: pick.contenderAId,
       contenderBId: pick.contenderBId,
       matched: Boolean(match),
+      matchedRound: match?.round ?? null,
+      matchedSlot: match?.slot ?? null,
       happenedPoints: happened,
       winnerPoints: winner,
       scorePoints: score,
