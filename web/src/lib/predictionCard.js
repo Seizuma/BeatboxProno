@@ -222,8 +222,11 @@ export function paletteForSkin(base, skinId) {
  * @param {object}  [options.stamp]   même logique pour le tampon : `undefined`
  *   garde celui du pronostic, `null` l'efface. L'aperçu de tampon dessine le
  *   sien par-dessus le canvas, il n'en veut donc pas DANS le canvas.
+ * @param {object[]} [options.groupStamps]  les tampons posés par les membres
+ *   d'un groupe, tels que les renvoie la route du groupe. La carte exportée
+ *   depuis un groupe montre ce que la fiche montre.
  */
-export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {}) {
+export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp, groupStamps = [] } = {}) {
     const label = (key, fallback) => (t ? t(key) : fallback);
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
     const nameOf = (id) => byId.get(id)?.name ?? '—';
@@ -238,13 +241,20 @@ export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {
                 .map((r) => ({
                     rank: r.rank,
                     name: nameOf(r.contenderId),
+                    // Les clés d'ancre sont celles de la fiche (`data-anchor`) :
+                    // un tampon posé sur une ligne de la fiche retombe sur la
+                    // même ligne de la carte, et inversement.
+                    anchor: `rank:${phase.id}:${r.contenderId}`,
                     // Sans nombre de qualifiés déclaré, personne n'est barré : mieux vaut
                     // ne rien affirmer que d'inventer une coupe.
                     through: phase.qualifierCount ? r.rank <= phase.qualifierCount : true,
                 }));
 
             if (rows.length) {
-                sections.push({ kind: 'ranking', label: phase.name, cut: phase.qualifierCount ?? null, rows });
+                sections.push({
+                    kind: 'ranking', anchor: `phase:${phase.id}`, label: phase.name,
+                    cut: phase.qualifierCount ?? null, rows,
+                });
             }
             continue;
         }
@@ -255,6 +265,7 @@ export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {
         if (all.length === 0) continue;
 
         const toBattle = (b) => ({
+            anchor: `battle:${phase.id}:${b.round}:${b.slot}`,
             a: b.contenderAId ? nameOf(b.contenderAId) : null,
             b: b.contenderBId ? nameOf(b.contenderBId) : null,
             winnerIsA: Boolean(b.winnerId) && b.winnerId === b.contenderAId,
@@ -284,7 +295,9 @@ export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {
             annex = null;
         }
 
-        if (rounds.length) sections.push({ kind: 'bracket', label: localName(phase, lang), rounds, annex });
+        if (rounds.length) {
+            sections.push({ kind: 'bracket', anchor: `phase:${phase.id}`, label: localName(phase, lang), rounds, annex });
+        }
     }
 
     return {
@@ -298,16 +311,32 @@ export function buildCardModel(prediction, { t, lang = 'en', skinId, stamp } = {
         // Le tampon est figé au moment où il a été posé : son identifiant vit
         // dans le pronostic, pas dans la tenue actuelle de l'auteur. Changer de
         // tampon ne doit pas réécrire une carte déjà partagée.
-        stamp: stamp === undefined ? readStamp(prediction.stamp, lang) : stamp && readStamp(stamp, lang),
+        //
+        // Ceux du groupe d'abord, celui de l'auteur en dernier : il se dessine
+        // par-dessus, c'est sa carte.
+        stamps: [
+            ...groupStamps.map((s) => readStamp({ ...s, id: s.itemId }, lang, s.author)),
+            stamp === undefined
+                ? readStamp(prediction.stamp, lang, prediction.user)
+                : stamp && readStamp(stamp, lang, prediction.user),
+        ].filter(Boolean),
         skinId: skinId === undefined ? prediction.user?.equippedCardSkin ?? null : skinId,
     };
 }
 
-/** Le tampon posé sur ce pronostic, ou rien. */
-function readStamp(raw, lang) {
+/**
+ * Un tampon posé, ou rien.
+ *
+ * @param {object} by  la personne qui l'a posé : son avatar devient la punaise.
+ */
+function readStamp(raw, lang, by) {
     if (!raw || typeof raw !== 'object') return null;
     const item = itemById(raw.id);
     if (!item || item.slot !== 'stamp') return null;
+    // Zéro est un décalage légitime — le bord gauche de l'élément —, d'où
+    // `isFinite` plutôt qu'un `||`.
+    const unit = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
+    const name = by?.globalName ?? by?.username ?? '';
     return {
         text: item.text[lang] ?? item.text.en,
         color: STAMP_COLOR[item.color] ?? 'ink',
@@ -315,6 +344,10 @@ function readStamp(raw, lang) {
         // entre la pose et l'export, et sortirait le tampon de l'image.
         x: Math.min(0.95, Math.max(0.05, Number(raw.x) || 0.5)),
         y: Math.min(0.95, Math.max(0.05, Number(raw.y) || 0.5)),
+        anchorKey: typeof raw.anchorKey === 'string' && raw.anchorKey ? raw.anchorKey : null,
+        anchorX: unit(raw.anchorX),
+        anchorY: unit(raw.anchorY),
+        pin: { url: by?.avatarUrl ?? null, initial: name.trim().charAt(0).toUpperCase() || '?' },
     };
 }
 
@@ -375,6 +408,7 @@ function layoutRanking(ctx, section, LW, top) {
     const ops = [];
     let y = top;
 
+    ops.push({ t: 'anchor', key: section.anchor, x: 0, y, w: LW, h: SECTION });
     ops.push({ t: 'text', x: 0, y, s: SECTION, f: DATA, c: 'dim', v: section.label.toUpperCase() });
     if (section.cut) {
         ops.push({
@@ -396,6 +430,8 @@ function layoutRanking(ctx, section, LW, top) {
         const line = i % perCol;
         const x = col * colW;
         const ry = y + line * ROW_H;
+
+        ops.push({ t: 'anchor', key: row.anchor, x, y: ry - 4, w: colW - 16, h: ROW_H });
 
         // Le rang reste jaune quoi qu'il arrive, comme `.rank-cell` sur le site ;
         // c'est le NOM qui passe au vert quand la personne est donnée qualifiée.
@@ -419,6 +455,8 @@ function layoutRanking(ctx, section, LW, top) {
 function battleOps(ctx, battle, x, y, w) {
     const ops = [];
     const cardH = SIDE_H * 2 + 6;
+
+    ops.push({ t: 'anchor', key: battle.anchor, x, y, w, h: cardH });
 
     // Le cadre passe au jaune dès qu'un vainqueur est désigné — c'est
     // `.battle--called` sur le site.
@@ -471,6 +509,7 @@ function layoutBracket(ctx, section, LW, top) {
     const ops = [];
     let y = top;
 
+    ops.push({ t: 'anchor', key: section.anchor, x: 0, y, w: LW, h: SECTION });
     ops.push({ t: 'text', x: 0, y, s: SECTION, f: DATA, c: 'dim', v: section.label.toUpperCase() });
     y += SECTION + 16;
 
@@ -621,8 +660,12 @@ function buildLayout(ctx, model, LW) {
  * @param {object} model    issu de buildCardModel
  * @param {object} format   une entrée de FORMATS
  * @param {object} palette  issu de readPalette
+ * @param {object} options
+ * @param {Map}    [options.images]  les avatars déjà chargés, par adresse — voir
+ *   `loadPinImages`. Le tracé est synchrone : il ne peut pas attendre une image.
+ * @returns {object} la géométrie du tracé, pour `locateOnCard`.
  */
-export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_PIXEL_SCALE } = {}) {
+export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_PIXEL_SCALE, images } = {}) {
     const w = Math.round(format.w * pixelScale);
     const h = Math.round(format.h * pixelScale);
     canvas.width = w;
@@ -726,50 +769,187 @@ export function drawCard(canvas, model, format, palette, { pixelScale = EXPORT_P
         }
     }
 
-    // Le tampon, en dernier : il se pose PAR-DESSUS, c'est le principe même
-    // d'un tampon. Ses coordonnées sont des fractions de la mise en page et non
-    // des pixels — l'endroit choisi sur le tableau se retrouve au même endroit
-    // relatif de la carte, quel que soit le format exporté.
-    if (model.stamp) {
-        const sx = model.stamp.x * layout.width;
-        const sy = model.stamp.y * layout.height;
-        const size = 34;
+    // Les tampons, en dernier : ils se posent PAR-DESSUS, c'est le principe même
+    // d'un tampon. Chacun retrouve l'élément qu'il vise — une battle, une ligne
+    // de classement — et se place DANS sa boîte. Une fraction de l'image ne
+    // suffisait pas : la carte se met en page différemment selon le format, et
+    // la même fraction tombait sur une autre affiche.
+    const anchors = new Map();
+    for (const op of layout.ops) if (op.t === 'anchor') anchors.set(op.key, op);
 
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate((-11 * Math.PI) / 180);
-
-        font(ctx, size, DATA);
-        const label = model.stamp.text.toUpperCase();
-        const tw = ctx.measureText(label).width;
-        const padX = 16;
-        const padY = 10;
-        const boxW = tw + padX * 2;
-        const boxH = size + padY * 2;
-
-        // Un aplat de fond d'abord : le tampon se pose où l'auteur a cliqué, et
-        // c'est souvent par-dessus deux noms. Sans ce cache, les deux textes se
-        // superposent et aucun des deux ne se lit.
-        ctx.globalAlpha = 0.82;
-        ctx.fillStyle = palette.screen;
-        ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
-        ctx.globalAlpha = 1;
-
-        ctx.strokeStyle = color(model.stamp.color);
-        ctx.fillStyle = color(model.stamp.color);
-        ctx.lineWidth = 4;
-        ctx.strokeRect(-boxW / 2, -boxH / 2, boxW, boxH);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, 0, 2);
-        ctx.restore();
-
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
+    for (const stamp of model.stamps ?? []) {
+        const a = stamp.anchorKey && anchors.get(stamp.anchorKey);
+        const sx = a ? a.x + stamp.anchorX * a.w : stamp.x * layout.width;
+        const sy = a ? a.y + stamp.anchorY * a.h : stamp.y * layout.height;
+        drawStamp(ctx, stamp, sx, sy, { palette, color, scale, images });
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    return canvas;
+    return {
+        canvasW: w,
+        canvasH: h,
+        scale,
+        offsetX,
+        offsetY,
+        width: layout.width,
+        height: layout.height,
+        anchors: [...anchors.values()],
+    };
+}
+
+const STAMP_TILT = (-11 * Math.PI) / 180;
+
+/** Un tampon et sa punaise, centrés sur (sx, sy) en coordonnées logiques. */
+function drawStamp(ctx, stamp, sx, sy, { palette, color, scale, images }) {
+    const size = 34;
+    const ink = color(stamp.color);
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(STAMP_TILT);
+
+    font(ctx, size, DATA);
+    const label = stamp.text.toUpperCase();
+    const tw = ctx.measureText(label).width;
+    const padX = 16;
+    const padY = 10;
+    const boxW = tw + padX * 2;
+    const boxH = size + padY * 2;
+
+    // Un aplat de fond d'abord : le tampon se pose où l'on a cliqué, et c'est
+    // souvent par-dessus deux noms. Sans ce cache, les deux textes se
+    // superposent et aucun des deux ne se lit.
+    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = palette.screen;
+    ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = ink;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-boxW / 2, -boxH / 2, boxW, boxH);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 2);
+    ctx.restore();
+
+    // La punaise : plantée au milieu du bord haut du tampon, mais pas inclinée
+    // avec lui — une tête ronde ne tourne pas, et un visage penché de onze
+    // degrés aurait l'air d'un défaut.
+    // Le point (0, -boxH/2) du repère incliné, ramené dans le repère de la carte.
+    const px = sx + Math.sin(STAMP_TILT) * (boxH / 2);
+    const py = sy - Math.cos(STAMP_TILT) * (boxH / 2);
+    drawPin(ctx, stamp.pin, px, py, 21, { ink, palette, scale, image: images?.get(stamp.pin?.url) });
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+}
+
+/**
+ * La tête de punaise : l'avatar de la personne qui a tamponné, cerclé de la
+ * couleur du tampon.
+ *
+ * Sans avatar chargé — compte sans image, CDN injoignable — l'initiale prend la
+ * place. Une punaise vide dirait « quelqu'un », l'initiale dit déjà « qui ».
+ */
+function drawPin(ctx, pin, x, y, R, { ink, palette, scale, image }) {
+    ctx.save();
+
+    // L'ombre portée est ce qui fait « planté » plutôt que « collé ». Les
+    // ombres du canvas ignorent la transformation : leurs mesures sont en
+    // pixels réels, d'où la multiplication par l'échelle.
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 7 * scale;
+    ctx.shadowOffsetX = 2 * scale;
+    ctx.shadowOffsetY = 4 * scale;
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.arc(x, y, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const r = R - 4;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.clip();
+    if (image) {
+        ctx.drawImage(image, x - r, y - r, r * 2, r * 2);
+    } else {
+        ctx.fillStyle = palette.screen;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.fillStyle = ink;
+        font(ctx, 22, DATA);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pin?.initial ?? '?', x, y + 1);
+    }
+
+    // Un reflet en haut à gauche : la tête bombée d'une punaise, pas une
+    // pastille plate.
+    const gx = x - R * 0.4;
+    const gy = y - R * 0.45;
+    const gloss = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * 0.9);
+    gloss.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+    gloss.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gloss;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.restore();
+}
+
+/**
+ * Charge les avatars qui serviront de punaises.
+ *
+ * Par `fetch` puis un blob, et non par une balise image : une image d'un autre
+ * domaine dessinée telle quelle « salit » le canvas, et l'export échoue au
+ * moment de produire le fichier. Un blob est local, il ne salit rien. Un échec
+ * n'est pas une erreur — la punaise prend l'initiale.
+ */
+export async function loadPinImages(urls) {
+    const images = new Map();
+    await Promise.all(
+        [...new Set(urls.filter(Boolean))].map(async (url) => {
+            try {
+                const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+                if (!res.ok) return;
+                images.set(url, await createImageBitmap(await res.blob()));
+            } catch {
+                // L'initiale fera l'affaire.
+            }
+        })
+    );
+    return images;
+}
+
+/**
+ * Où tombe un clic sur la carte affichée.
+ *
+ * @param {object} geometry  ce que renvoie `drawCard`
+ * @param {number} fx        la position du clic, en fraction de la largeur du
+ *   canvas AFFICHÉ
+ * @param {number} fy        idem, en fraction de sa hauteur
+ * @returns la position à enregistrer : l'élément visé et le décalage dans sa
+ *   boîte, plus des fractions de la mise en page en repli.
+ *
+ * C'est l'inverse exact du tracé. La version précédente enregistrait des
+ * fractions du canvas entier, que le tracé relisait comme des fractions de la
+ * mise en page — réduite, centrée, entourée de marges : le tampon tombait
+ * d'autant plus loin du clic que la carte était peu remplie.
+ */
+export function locateOnCard(geometry, fx, fy) {
+    const lx = (fx * geometry.canvasW - geometry.offsetX) / geometry.scale;
+    const ly = (fy * geometry.canvasH - geometry.offsetY) / geometry.scale;
+    const unit = (v) => Math.min(1, Math.max(0, v));
+
+    const hit = geometry.anchors.find((a) => lx >= a.x && lx <= a.x + a.w && ly >= a.y && ly <= a.y + a.h);
+
+    return {
+        x: Math.min(0.95, Math.max(0.05, lx / geometry.width)),
+        y: Math.min(0.95, Math.max(0.05, ly / geometry.height)),
+        anchorKey: hit?.key ?? null,
+        anchorX: hit ? unit((lx - hit.x) / hit.w) : null,
+        anchorY: hit ? unit((ly - hit.y) / hit.h) : null,
+    };
 }
 
 /**

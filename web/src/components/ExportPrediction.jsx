@@ -10,6 +10,8 @@ import {
     drawCard,
     ensureFonts,
     fileNameFor,
+    loadPinImages,
+    locateOnCard,
     paletteForSkin,
     previewScale,
     readPalette,
@@ -55,8 +57,16 @@ const ORDER = ['square', 'story', 'wide'];
  *
  * Seul l'auteur peut tamponner, et seulement s'il en porte un. Consulter la
  * carte de quelqu'un d'autre n'ouvre aucune commande.
+ *
+ * ─── Les tampons du groupe ──────────────────────────────────────────────────
+ *
+ * Ouverte depuis la fiche d'un groupe, la fenêtre reprend les tampons que ses
+ * membres y ont posés : on exporte ce qu'on a sous les yeux. Ils ne se
+ * déplacent pas d'ici — leur pose appartient à la fiche.
+ *
+ * Chaque tampon est épinglé par l'avatar de la personne qui l'a posé.
  */
-export default function ExportPrediction({ prediction, onClose }) {
+export default function ExportPrediction({ prediction, groupSlug, onClose }) {
     const { t, lang } = useI18n();
     const { user } = useSession();
 
@@ -78,6 +88,12 @@ export default function ExportPrediction({ prediction, onClose }) {
      */
     const [stamp, setStamp] = useState(prediction.stamp ?? null);
     const [placing, setPlacing] = useState(false);
+    const [groupStamps, setGroupStamps] = useState([]);
+    const [images, setImages] = useState(() => new Map());
+
+    // La géométrie du dernier aperçu tracé : c'est elle qui traduit un clic en
+    // position sur la carte.
+    const geometry = useRef(null);
 
     const mine = Boolean(user?.id) && user.id === prediction.user?.id;
     const worn = user?.equippedStamp ?? null;
@@ -86,7 +102,32 @@ export default function ExportPrediction({ prediction, onClose }) {
     const spec = FORMATS[format];
     // `stamp` est passé explicitement : sans lui, le modèle relirait
     // `prediction.stamp`, c'est-à-dire l'état d'avant la pose.
-    const model = buildCardModel(prediction, { t, lang, stamp });
+    const model = buildCardModel(prediction, { t, lang, stamp, groupStamps });
+
+    useEffect(() => {
+        if (!groupSlug) return undefined;
+        let cancelled = false;
+        api.get(`/groups/${groupSlug}/predictions/${prediction.id}/stamps`)
+            .then(({ stamps }) => { if (!cancelled) setGroupStamps(stamps); })
+            // Sans eux, la carte reste exportable : ce n'est pas une erreur à
+            // afficher.
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [groupSlug, prediction.id]);
+
+    // Les avatars des punaises. Chargés une fois par adresse : la carte se
+    // redessine à chaque pose, pas besoin de retélécharger qui que ce soit.
+    const pinUrls = model.stamps.map((s) => s.pin.url).filter((u) => u && !images.has(u));
+    const pinKey = [...new Set(pinUrls)].join('|');
+    useEffect(() => {
+        if (!pinKey) return undefined;
+        let cancelled = false;
+        loadPinImages(pinKey.split('|')).then((loaded) => {
+            if (cancelled || loaded.size === 0) return;
+            setImages((prev) => new Map([...prev, ...loaded]));
+        });
+        return () => { cancelled = true; };
+    }, [pinKey]);
 
     /**
      * La palette effective : celle du site, puis celle du skin porté par
@@ -146,8 +187,9 @@ export default function ExportPrediction({ prediction, onClose }) {
                 await ensureFonts();
                 if (cancelled || !canvas.current) return;
 
-                drawCard(canvas.current, model, spec, palette(), {
+                geometry.current = drawCard(canvas.current, model, spec, palette(), {
                     pixelScale: previewScale(spec, cssW),
+                    images,
                 });
 
                 // Le canvas porte sa définition dans `width`/`height` et sa taille
@@ -169,28 +211,31 @@ export default function ExportPrediction({ prediction, onClose }) {
         // boucle. Les entrées qui comptent sont le pronostic, le format, la largeur
         // d'affichage — et le tampon, qui est dessiné DANS la carte.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [prediction, format, cssW, boxW, t, lang, model.skinId, stamp]);
+    }, [prediction, format, cssW, boxW, t, lang, model.skinId, stamp, groupStamps, images]);
 
     /**
      * Poser le tampon là où on a cliqué.
      *
-     * Les coordonnées sont ramenées en fractions du CANVAS et non de son
-     * conteneur : celui-ci porte une bordure et un rembourrage, et une story
-     * plus étroite que la fenêtre laisse du vide de chaque côté. Mesurer la
-     * boîte extérieure décalait le tampon de quelques pour cent — invisible à
-     * l'aperçu, visible sur l'image exportée.
+     * Le clic est d'abord ramené au CANVAS — pas à son conteneur, qui porte
+     * bordure et rembourrage — puis traversé à l'envers par la transformation
+     * du tracé : marges, centrage, échelle. On enregistre l'élément visé et le
+     * décalage dans sa boîte, donc le tampon reste sur sa battle quel que soit
+     * le format exporté.
      *
      * L'affichage passe d'abord, l'enregistrement ensuite : le geste doit
      * répondre tout de suite. Un échec réseau remet l'état d'avant plutôt que
      * de laisser croire à une marque qui n'existe pas en base.
      */
     const place = async (event) => {
-        if (!placing || !canStamp || !canvas.current) return;
+        if (!placing || !canStamp || !canvas.current || !geometry.current) return;
         const box = canvas.current.getBoundingClientRect();
         const next = {
             id: worn,
-            x: Math.min(0.95, Math.max(0.05, (event.clientX - box.left) / box.width)),
-            y: Math.min(0.95, Math.max(0.05, (event.clientY - box.top) / box.height)),
+            ...locateOnCard(
+                geometry.current,
+                (event.clientX - box.left) / box.width,
+                (event.clientY - box.top) / box.height
+            ),
         };
 
         const avant = stamp;
@@ -223,7 +268,7 @@ export default function ExportPrediction({ prediction, onClose }) {
     const renderFile = async () => {
         await ensureFonts();
         const off = document.createElement('canvas');
-        drawCard(off, model, spec, palette(), { pixelScale: EXPORT_PIXEL_SCALE });
+        drawCard(off, model, spec, palette(), { pixelScale: EXPORT_PIXEL_SCALE, images });
         return new Promise((resolve, reject) => {
             off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Canvas vide.'))), 'image/png');
         });

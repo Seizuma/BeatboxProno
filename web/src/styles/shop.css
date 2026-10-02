@@ -983,9 +983,87 @@
 /* Un tampon posé n'intercepte rien : il flotte au-dessus de la fiche, et une
    cible invisible par-dessus une bulle la rendrait inutilisable. */
 .gs-mark {
+  position: absolute;
   z-index: 5;
   pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+/* Le tampon lui-même. Sa couleur vient de l'enveloppe (`.cos-stamp--y`…), que
+   la punaise partage. */
+.gs-mark__stamp {
+  display: block;
   font-size: 0.95rem;
+  background: var(--screen);
+}
+
+/* La punaise : l'avatar de l'auteur, planté au milieu du bord haut du tampon.
+   Légèrement à gauche du centre, parce que le tampon penche de onze degrés et
+   que son bord haut penche avec lui. L'ombre portée fait « planté » plutôt que
+   « collé ». */
+.stamp-pin {
+  position: absolute;
+  left: 47%;
+  top: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  transform: translate(-50%, -62%);
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  background: var(--screen);
+  box-shadow: 2px 4px 6px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.stamp-pin img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Le reflet : une tête bombée, pas une pastille plate. */
+.stamp-pin::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.45), transparent 60%);
+}
+
+.stamp-pin__initial {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+}
+
+/* La pose : le tampon frappe, PUIS la punaise s'enfonce. Deux temps, comme
+   avec les mains. */
+.gs-mark--slam {
+  animation: gs-slam 0.28s cubic-bezier(0.2, 1.1, 0.4, 1) both;
+}
+
+.gs-mark--slam .stamp-pin {
+  animation: stamp-pin-drop 0.3s 0.24s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+
+@keyframes gs-slam {
+  0%   { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+  55%  { transform: translate(-50%, -50%) scale(0.9); opacity: 1; }
+  78%  { transform: translate(-50%, -50%) scale(1.06); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+@keyframes stamp-pin-drop {
+  0%   { transform: translate(-50%, -170%) scale(1.5); opacity: 0; }
+  100% { transform: translate(-50%, -62%) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-mark--slam,
+  .gs-mark--slam .stamp-pin { animation: none; }
 }
 
 /* La barre de commandes des tampons, en tête de fiche.
