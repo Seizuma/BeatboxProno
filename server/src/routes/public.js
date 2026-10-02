@@ -258,7 +258,19 @@ publicRouter.get('/predictions/:predictionId', guard(async (req, res) => {
           kind: true,
           phases: {
             orderBy: { position: 'asc' },
-            select: { id: true, name: true, type: true, resolved: true, qualifierCount: true },
+            select: {
+              id: true, name: true, type: true, resolved: true, qualifierCount: true,
+              // Le résultat officiel, pour le calque des points de la fiche.
+              // Lu ici pour toutes les phases, mais retiré plus bas de celles
+              // qui ne sont pas publiées : voir `redactPhase`.
+              entries: { select: { contenderId: true, rank: true, qualified: true, offRadar: true } },
+              battles: {
+                select: {
+                  round: true, slot: true, contenderAId: true, contenderBId: true,
+                  winnerId: true, scoreA: true, scoreB: true, played: true,
+                },
+              },
+            },
           },
           contenders: {
             select: {
@@ -305,6 +317,20 @@ publicRouter.get('/predictions/:predictionId', guard(async (req, res) => {
   }
 
   prediction.category.contenders = prediction.category.contenders.map(withName);
+
+  /**
+   * Le résultat officiel, sous `result`, et seulement pour les phases PUBLIÉES.
+   *
+   * C'est la règle de `redactPhase` : tant que l'organisation n'a pas cliqué
+   * « Publier », ni rang ni vainqueur ne sort. Le calque des points de la fiche
+   * n'a de toute façon rien à montrer avant — le détail des points n'existe
+   * que pour une phase publiée.
+   */
+  prediction.category.phases = prediction.category.phases.map(({ entries, battles, ...phase }) => ({
+    ...phase,
+    result: phase.resolved ? { entries, battles: battles.filter((b) => b.played) } : null,
+  }));
+
   res.json({ prediction });
 }));
 

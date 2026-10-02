@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.jsx';
 import Modal from './Modal.jsx';
@@ -6,6 +6,7 @@ import ArtistFigure from './ArtistFigure.jsx';
 import PredictionComments from './PredictionComments.jsx';
 import GroupStamps from './GroupStamps.jsx';
 import ExportPrediction from './ExportPrediction.jsx';
+import { BattleScore, PhaseScore, RankScore, SCORE_LAYER_EXIT_MS, scoreIndex } from './ScoreLayer.jsx';
 
 const RANKING_TYPES = ['SEEDING', 'WILDCARD', 'ELIMINATION'];
 
@@ -27,6 +28,29 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     const [stamping, setStamping] = useState(false);
     const [exporting, setExporting] = useState(false);
 
+    /**
+     * Le calque des points : éteint, posé, ou en train de partir.
+     *
+     * Trois états et non un booléen : une disparition animée suppose que les
+     * éléments restent montés le temps de l'animation. Démontés tout de suite,
+     * ils s'évanouiraient d'un coup — exactement ce qu'on cherche à éviter.
+     */
+    const [layer, setLayer] = useState('off');
+    const leaving = useRef(null);
+
+    const toggleLayer = () => {
+        clearTimeout(leaving.current);
+        if (layer === 'on') {
+            const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+            setLayer('leaving');
+            leaving.current = setTimeout(() => setLayer('off'), still ? 0 : SCORE_LAYER_EXIT_MS);
+        } else {
+            setLayer('on');
+        }
+    };
+
+    useEffect(() => () => clearTimeout(leaving.current), []);
+
     // La boîte annotée : c'est elle qui porte `position: relative`, donc
     // l'origine du repère dans lequel les pastilles de commentaire se placent.
     const canvas = useRef(null);
@@ -36,6 +60,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
         setError(null);
         setPlacing(false);
         setExporting(false);
+        setLayer('off');
         api
             .get(`/predictions/${predictionId}`)
             .then(({ prediction }) => setData(prediction))
@@ -43,6 +68,9 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
     }, [predictionId]);
 
     const who = data?.user?.globalName ?? data?.user?.username ?? '';
+    // Le bouton n'existe que s'il y a un détail à montrer : pronostic scoré,
+    // phase publiée, catégorie au barème.
+    const scored = useMemo(() => Boolean(scoreIndex(data)), [data]);
 
     return (
         <Modal
@@ -71,6 +99,16 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                     {data && (
                         <button className="btn btn--small" onClick={() => setExporting(true)}>
                             {t('export.open')}
+                        </button>
+                    )}
+
+                    {scored && (
+                        <button
+                            className={`btn btn--small${layer === 'on' ? ' btn--primary' : ''}`}
+                            aria-pressed={layer === 'on'}
+                            onClick={toggleLayer}
+                        >
+                            {layer === 'on' ? t('score.layer.hide') : t('score.layer.show')}
                         </button>
                     )}
 
@@ -129,7 +167,7 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
                         />
                     )}
 
-                    <Body prediction={data} />
+                    <Body prediction={data} score={layer === 'off' ? null : layer} />
 
                     {groupSlug && (
                         <PredictionComments
@@ -171,8 +209,20 @@ const ROUND_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER', 'SEMI', 'SMALL_FIN
  * l'alimentent, et les deux finales dans la même colonne. Une liste à plat
  * ne dit rien du chemin parcouru — or c'est précisément ce qu'on vient lire.
  */
-export function ReadOnlyBracket({ battles, byId, photo }) {
+/**
+ * @param {object} [score]  le calque des points : { mode, entry } — voir
+ *   ScoreLayer. Absent, l'arbre est celui d'avant, à l'identique.
+ */
+export function ReadOnlyBracket({ battles, byId, photo, score }) {
     const { t } = useI18n();
+
+    // L'ordre d'apparition sur le calque : celui de la lecture, tour après
+    // tour, de haut en bas.
+    const order = new Map(
+        [...battles]
+            .sort((x, y) => ROUND_ORDER.indexOf(x.round) - ROUND_ORDER.indexOf(y.round) || x.slot - y.slot)
+            .map((b, i) => [`${b.round}:${b.slot}`, i])
+    );
 
     const byRound = {};
     for (const b of battles) (byRound[b.round] ??= []).push(b);
@@ -200,7 +250,17 @@ export function ReadOnlyBracket({ battles, byId, photo }) {
                 key={`${b.round}:${b.slot}`}
                 data-anchor={`battle:${b.phaseId}:${b.round}:${b.slot}`}
             >
-                <div className="battle battle--called">
+                <div className={`battle battle--called${score ? ' score-host' : ''}`}>
+                    {score && (
+                        <BattleScore
+                            pick={b}
+                            line={score.entry.battles.get(`${b.round}:${b.slot}`)}
+                            official={score.entry.official}
+                            byId={byId}
+                            mode={score.mode}
+                            i={order.get(`${b.round}:${b.slot}`) ?? 0}
+                        />
+                    )}
                     {sides.map((id, i) => {
                         const c = byId.get(id);
                         const won = b.winnerId === id;
@@ -267,9 +327,14 @@ export function ReadOnlyBracket({ battles, byId, photo }) {
  * Exporté pour l'aperçu de boutique : le tampon se juge sur un vrai tableau, et
  * c'est ce composant qui sait le dessiner en lecture seule.
  */
-export function Body({ prediction }) {
+/**
+ * @param {string} [score]  'on' ou 'leaving' pour poser le calque des points,
+ *   rien sinon.
+ */
+export function Body({ prediction, score }) {
     const { t } = useI18n();
     const byId = new Map(prediction.category.contenders.map((c) => [c.id, c]));
+    const points = useMemo(() => (score ? scoreIndex(prediction) : null), [prediction, score]);
     const photo = (c) => c?.imageUrl ?? c?.artists?.[0]?.artist?.imageUrl ?? null;
 
     const sections = prediction.category.phases.map((phase) => {
@@ -296,6 +361,11 @@ export function Body({ prediction }) {
                 if (kind === 'ranking' && ranks.length === 0) return null;
                 if (kind === 'bracket' && battles.length === 0) return null;
 
+                // Une phase non publiée n'a pas de détail : elle reste nue sous
+                // le calque, ce qui dit justement qu'elle n'a rien rapporté
+                // encore.
+                const entry = score && points?.get(phase.id);
+
                 return (
                     <section className="stack" key={phase.id} style={{ gap: '0.5rem' }}>
                         {/* Le titre de phase est accrochable : c'est là qu'on
@@ -305,11 +375,13 @@ export function Body({ prediction }) {
                             {phase.qualifierCount ? ` — ${t('ranking.cut', { n: phase.qualifierCount })}` : ''}
                         </h3>
 
+                        {entry && <PhaseScore entry={entry} byId={byId} mode={score} />}
+
                         {kind === 'ranking' ? (
                             <div className="panel panel--flush">
                                 <table>
                                     <tbody>
-                                        {ranks.map((r) => {
+                                        {ranks.map((r, k) => {
                                             const c = byId.get(r.contenderId);
                                             const qualified = phase.qualifierCount && r.rank <= phase.qualifierCount;
                                             return (
@@ -318,7 +390,14 @@ export function Body({ prediction }) {
                                                     data-anchor={`rank:${phase.id}:${r.contenderId}`}
                                                 >
                                                     <td className="rank-cell">{r.rank}</td>
-                                                    <td>
+                                                    <td className={entry ? 'score-host' : undefined}>
+                                                        {entry && (
+                                                            <RankScore
+                                                                line={entry.rows.get(r.contenderId)}
+                                                                mode={score}
+                                                                i={k}
+                                                            />
+                                                        )}
                                                         <span className="stat-row">
                                                             <ArtistFigure src={photo(c)} name={c?.name} size="xs" />
                                                             <span style={{ color: qualified ? 'var(--ok)' : undefined }}>
@@ -333,7 +412,12 @@ export function Body({ prediction }) {
                                 </table>
                             </div>
                         ) : (
-                            <ReadOnlyBracket battles={battles} byId={byId} photo={photo} />
+                            <ReadOnlyBracket
+                                battles={battles}
+                                byId={byId}
+                                photo={photo}
+                                score={entry ? { mode: score, entry } : null}
+                            />
                         )}
                     </section>
                 );

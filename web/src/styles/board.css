@@ -1263,3 +1263,305 @@ details.panel>summary .eyebrow {
     font-size: 0.72rem;
   }
 }
+
+
+/* ===========================================================================
+   LE CALQUE DES POINTS
+
+   Le mode MIX du télétexte : la page posée sur l'image. On regarde son
+   pronostic ; on pose le résultat par-dessus ; on le retire.
+
+   Les règles du système tiennent : aplats purs, aucun arrondi, aucune ombre,
+   aucune transparence. Le vert est aux points — c'est son rôle —, le jaune à
+   ce qui a payé en partie, le magenta au résultat officiel, qui est une
+   méta-information sur le pronostic.
+
+   L'animation non plus n'invente rien : le tube dessinait ses pages ligne par
+   ligne et faisait clignoter ce qu'il voulait signaler. D'où les `steps()` —
+   un fondu serait un dégradé dans le temps, et le télétexte n'en connaît pas.
+   =========================================================================== */
+
+.score-host {
+  position: relative;
+}
+
+/* --- Les pastilles de points ------------------------------------------------ */
+
+.score-chip {
+  display: inline-block;
+  padding: 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.score-chip--full { background: var(--g); color: #000; }
+.score-chip--part { background: var(--y); color: #000; }
+.score-chip--none { background: var(--line); color: var(--ink-faint); }
+
+/* --- Une ligne de classement ---------------------------------------------- */
+
+/* Un bandeau calé à droite de la ligne. Il recouvre la fin de la cellule, pas
+   le nom : les noms tiennent dans la moitié gauche, et la ligne garde sa
+   hauteur — le classement ne bouge pas quand le calque se pose. */
+.score-strip {
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.05rem 0 0.05rem 0.45rem;
+  transform: translateY(-50%);
+  background: var(--screen);
+  border: var(--border-w) solid var(--line);
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.score-strip--full { border-color: var(--g); }
+.score-strip--part { border-color: var(--y); }
+
+.score-strip__real { color: var(--ink); }
+
+.score-strip__label {
+  margin-right: 0.35em;
+  color: var(--m);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.score-strip__gap { color: var(--m); }
+.score-strip__gap--exact { color: var(--g); }
+
+.score-strip__q {
+  padding: 0 0.25rem;
+  background: var(--g);
+  color: #000;
+  font-size: 0.68rem;
+}
+
+.score-strip .score-chip { align-self: stretch; display: flex; align-items: center; }
+
+/* --- Une affiche ----------------------------------------------------------- */
+
+/* La feuille posée sur l'affiche, décalée de quelques pixels : on voit le
+   bord de la carte dessous, et c'est ce qui dit « posée par-dessus » sans
+   ombre ni transparence. */
+.score-sheet {
+  position: absolute;
+  inset: calc(var(--border-w) * -1);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.2rem 0.55rem;
+  transform: translate(4px, -4px);
+  background: var(--screen);
+  border: var(--border-w) solid var(--m);
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+}
+
+.score-sheet__tag {
+  position: absolute;
+  top: -0.7rem;
+  left: 0.4rem;
+  padding: 0 0.3rem;
+  background: var(--m);
+  color: #000;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.score-sheet__side {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* Le nom annoncé, barré de rouge : ce qui élimine. Il cède la place au vrai
+   nom quand la carte est étroite. */
+.score-sheet__was {
+  flex: 0 1 auto;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  text-decoration-color: var(--r);
+  text-decoration-thickness: 2px;
+}
+
+.score-sheet__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.score-sheet__name--right { color: var(--g); }
+
+/* Le vainqueur réel : le chevron du site, en jaune. */
+.score-sheet__side--won .score-sheet__name::before {
+  content: '► ';
+  color: var(--y);
+}
+
+.score-sheet__score { margin-left: auto; color: var(--m); }
+.score-sheet__score--right { color: var(--g); }
+
+.score-sheet__none {
+  margin: 0;
+  color: var(--ink-faint);
+}
+
+/* Les points de l'affiche, au coin, dépassant de la feuille comme une
+   étiquette agrafée. */
+.score-badge {
+  position: absolute;
+  top: -0.85rem;
+  right: -0.55rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.05rem 0.35rem 0.2rem;
+  color: #000;
+}
+
+.score-badge--full { background: var(--g); }
+.score-badge--part { background: var(--y); }
+.score-badge--none { background: var(--line); color: var(--ink-faint); }
+
+.score-badge__value {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.score-badge__pips { display: flex; gap: 2px; }
+
+/* Un témoin par point du barème : l'affiche, le vainqueur, le score. */
+.score-pip {
+  width: 0.4rem;
+  height: 0.4rem;
+  border: 1px solid currentColor;
+}
+
+.score-pip--on { background: currentColor; }
+
+/* --- L'en-tête de phase ---------------------------------------------------- */
+
+.score-phase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.score-phase__total { font-size: 1.5rem; }
+
+.score-four {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.score-four__place {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-left: 0.4rem;
+  border: var(--border-w) solid var(--line);
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+}
+
+.score-four__place--hit { border-color: var(--g); }
+.score-four__rank { font-family: var(--font-display); font-size: 1.1rem; color: var(--y); }
+.score-four__name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Le mouvement ---------------------------------------------------------- */
+
+/* Le tracé : de haut en bas, par paliers, comme le balayage du tube. Les
+   marges négatives du découpage laissent dépasser l'étiquette de points et
+   l'intitulé « réel », qui sortent du cadre de la feuille. */
+.score--on,
+.score--leaving {
+  animation-duration: 0.26s;
+  animation-timing-function: steps(6, end);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--score-i, 0) * 28ms);
+}
+
+.score--on { animation-name: score-draw; }
+.score--leaving { animation-name: score-erase; }
+
+/* Le bandeau de classement se déroule de droite à gauche : il entre par le
+   bord où il se cale. */
+.score-strip.score--on { animation-name: score-wipe-in; }
+.score-strip.score--leaving { animation-name: score-wipe-out; }
+
+/* Les points arrivent APRÈS leur support, en clignotant deux fois : l'attribut
+   « flash » du télétexte, celui qui signalait un résultat qui vient de tomber. */
+.score--on .score-badge,
+.score--on .score-chip {
+  animation: score-flash 0.5s steps(1, end) both;
+  animation-delay: calc(var(--score-i, 0) * 28ms + 0.26s);
+}
+
+@keyframes score-draw {
+  from { clip-path: inset(-1.2rem -1.2rem 100% -1.2rem); }
+  to   { clip-path: inset(-1.2rem -1.2rem -1.2rem -1.2rem); }
+}
+
+@keyframes score-erase {
+  from { clip-path: inset(-1.2rem -1.2rem -1.2rem -1.2rem); }
+  to   { clip-path: inset(100% -1.2rem -1.2rem -1.2rem); }
+}
+
+@keyframes score-wipe-in {
+  from { clip-path: inset(-0.2rem -0.2rem -0.2rem 100%); }
+  to   { clip-path: inset(-0.2rem -0.2rem -0.2rem -0.2rem); }
+}
+
+@keyframes score-wipe-out {
+  from { clip-path: inset(-0.2rem -0.2rem -0.2rem -0.2rem); }
+  to   { clip-path: inset(-0.2rem -0.2rem -0.2rem 100%); }
+}
+
+@keyframes score-flash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  40%  { opacity: 0; }
+  60%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score--on,
+  .score--leaving,
+  .score--on .score-badge,
+  .score--on .score-chip { animation: none; }
+}
+
+/* Sur téléphone, le bandeau perd son intitulé : le rang, la flèche et les
+   points suffisent, et le nom de l'artiste garde sa place. */
+@media (max-width: 520px) {
+  .score-strip__label { display: none; }
+  .score-sheet { font-size: 0.74rem; padding-inline: 0.4rem; }
+}
