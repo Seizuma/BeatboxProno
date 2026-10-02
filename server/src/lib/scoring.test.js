@@ -51,6 +51,48 @@ test('une battle trouvée dans un autre slot du meme tour paie quand meme', () =
   assert.equal(total, 6); // affiche + vainqueur + score
 });
 
+test('une battle jouee dans un autre tour paie aussi, vainqueur et score compris', () => {
+  // Annoncée en demie, jouée en quart : D-low – FootboxG, D-low 4-1.
+  const predicted = [
+    { round: 'SEMI', slot: 1, contenderAId: 'dlow', contenderBId: 'footbox', winnerId: 'dlow', scoreA: 4, scoreB: 1 },
+  ];
+  const official = [
+    { round: 'QUARTER', slot: 2, contenderAId: 'dlow', contenderBId: 'footbox', winnerId: 'dlow', scoreA: 4, scoreB: 1, played: true },
+  ];
+  const { total, lines } = scoreBattlePhase(predicted, official);
+  assert.equal(total, 6);
+  assert.equal(lines[0].matchedRound, 'QUARTER');
+  assert.equal(lines[0].matchedSlot, 2);
+});
+
+test('le meme tour passe avant les autres tours', () => {
+  // La paire x–y est annoncée deux fois : en quart (lu en premier) et en
+  // finale. Elle ne s'est jouée qu'une fois, en finale. La finale annoncée
+  // doit la garder ; le quart ne doit pas la lui prendre.
+  const predicted = [
+    { round: 'QUARTER', slot: 0, contenderAId: 'x', contenderBId: 'y', winnerId: 'y' },
+    { round: 'FINAL', slot: 0, contenderAId: 'x', contenderBId: 'y', winnerId: 'x' },
+  ];
+  const official = [
+    { round: 'FINAL', slot: 0, contenderAId: 'x', contenderBId: 'y', winnerId: 'x', played: true },
+  ];
+  const { total, lines } = scoreBattlePhase(predicted, official);
+  assert.equal(lines[0].points, 0);
+  assert.equal(lines[1].points, 4); // affiche + vainqueur
+  assert.equal(total, 4);
+});
+
+test('une affiche officielle ne paie qu une fois', () => {
+  const predicted = [
+    { round: 'QUARTER', slot: 0, contenderAId: 'x', contenderBId: 'y' },
+    { round: 'SEMI', slot: 0, contenderAId: 'x', contenderBId: 'y' },
+  ];
+  const official = [
+    { round: 'FINAL', slot: 0, contenderAId: 'x', contenderBId: 'y', winnerId: 'x', played: true },
+  ];
+  assert.equal(scoreBattlePhase(predicted, official).total, 2);
+});
+
 test('une affiche inexistante ne rapporte rien', () => {
   const predicted = [
     { round: 'FINAL', slot: 0, contenderAId: 'x', contenderBId: 'z', winnerId: 'x' },

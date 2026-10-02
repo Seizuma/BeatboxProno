@@ -99,27 +99,38 @@ export function scoreIndex(prediction) {
  * L'affiche officielle à mettre en face d'une affiche pronostiquée, orientée
  * comme elle.
  *
- * D'abord la même paire dans le même tour, où qu'elle soit : c'est la règle du
- * barème — « la battle a eu lieu » paie même si le seeding diffère — et le
- * calque doit montrer ce qui a payé. À défaut, l'affiche du même emplacement :
- * c'est elle qui a pris la place de celle qu'on avait annoncée.
+ * Celle qui a PAYÉ d'abord : le détail des points dit où le moteur l'a
+ * trouvée (`matchedRound`, `matchedSlot`) — un autre emplacement, voire un
+ * autre tour. Le calque doit montrer ce qui a rapporté, sinon une affiche
+ * créditée de six points paraîtrait fausse.
+ *
+ * Un détail calculé avant que le moteur n'enregistre cet endroit n'a que
+ * `matched` : on retrouve alors la paire dans le même tour, seule règle de
+ * l'époque. Sans correspondance, l'affiche du même emplacement : c'est elle
+ * qui a pris la place de celle qu'on avait annoncée.
  *
  * Orientée côté contender : si le pronostiqué A est le B officiel, on
  * retourne l'officielle, sinon une affiche juste paraîtrait inversée.
  */
-function officialFor(pick, official) {
+function officialFor(pick, official, line) {
     const played = official?.battles ?? [];
-    const sameRound = played.filter((b) => b.round === pick.round);
     const key = pairKey(pick.contenderAId, pick.contenderBId);
-    const real =
-        sameRound.find((b) => b.contenderAId && b.contenderBId && pairKey(b.contenderAId, b.contenderBId) === key) ??
-        sameRound.find((b) => b.slot === pick.slot);
+    const samePair = (b) => b.contenderAId && b.contenderBId && pairKey(b.contenderAId, b.contenderBId) === key;
+
+    let real = null;
+    if (line?.matchedRound) {
+        real = played.find((b) => b.round === line.matchedRound && b.slot === line.matchedSlot);
+    } else if (line?.matched) {
+        real = played.find((b) => b.round === pick.round && samePair(b));
+    }
+    real ??= played.find((b) => b.round === pick.round && b.slot === pick.slot);
     if (!real) return null;
 
     const flip = real.contenderAId === pick.contenderBId || real.contenderBId === pick.contenderAId;
+    const base = { round: real.round, winnerId: real.winnerId };
     return flip
-        ? { a: real.contenderBId, b: real.contenderAId, scoreA: real.scoreB, scoreB: real.scoreA, winnerId: real.winnerId }
-        : { a: real.contenderAId, b: real.contenderBId, scoreA: real.scoreA, scoreB: real.scoreB, winnerId: real.winnerId };
+        ? { ...base, a: real.contenderBId, b: real.contenderAId, scoreA: real.scoreB, scoreB: real.scoreA }
+        : { ...base, a: real.contenderAId, b: real.contenderBId, scoreA: real.scoreA, scoreB: real.scoreB };
 }
 
 /** Le niveau d'une ligne : tout juste, en partie, ou rien. Une couleur par niveau, et c'est tout. */
@@ -239,7 +250,10 @@ export function RankScore({ line, mode, i }) {
  */
 export function BattleScore({ pick, line, official, byId, mode, i }) {
     const { t } = useI18n();
-    const real = officialFor(pick, official);
+    const real = officialFor(pick, official, line);
+    // Jouée dans un autre tour que celui annoncé : l'étiquette le dit, sinon
+    // une affiche de quart posée sur une demie se lirait comme une erreur.
+    const elsewhere = Boolean(real) && real.round !== pick.round;
     if (!real && !line) return null;
 
     const nameOf = (id) => byId.get(id)?.name ?? '—';
@@ -277,7 +291,11 @@ export function BattleScore({ pick, line, official, byId, mode, i }) {
 
     return (
         <div className={`score-sheet score--${mode}`} style={delay(i)}>
-            <span className="score-sheet__tag">{t('score.real')}</span>
+            <span className={`score-sheet__tag${elsewhere ? ' score-sheet__tag--elsewhere' : ''}`}>
+                {elsewhere
+                    ? t('score.realIn', { round: t(`bracket.round.${real.round}`) })
+                    : t('score.real')}
+            </span>
             {real ? (
                 <>
                     {side(pick.contenderAId, real.a, real.scoreA, pick.scoreA)}
