@@ -640,7 +640,10 @@ groupRouter.get('/:slug/predictions/:predictionId/comments', loadGroup, guard(as
  * Reposer le sien le DÉPLACE — c'est ce qu'on attend en cliquant ailleurs.
  * -------------------------------------------------------------------------- */
 
-const stampInput = z.object({
+// L'ancre est la même que celle des commentaires : l'élément visé, et le
+// décalage dans sa boîte. `x`/`y` restent obligatoires — c'est la position de
+// repli quand l'élément n'existe plus sur la fiche.
+const stampInput = anchor.extend({
     itemId: z.string().min(1).max(60),
     // En fractions bornées, jamais en pixels : la fiche n'a pas la même largeur
     // sur un téléphone et sur un écran large. Bornées ici et pas seulement dans
@@ -676,6 +679,9 @@ groupRouter.get('/:slug/predictions/:predictionId/stamps', loadGroup, guard(asyn
             itemId: s.itemId,
             x: s.x,
             y: s.y,
+            anchorKey: s.anchorKey,
+            anchorX: s.anchorX,
+            anchorY: s.anchorY,
             createdAt: s.createdAt,
             author: s.author,
             mine: s.authorId === req.user.id,
@@ -687,7 +693,13 @@ groupRouter.put('/:slug/predictions/:predictionId/stamp', loadGroup, guard(async
     const prediction = await commentablePrediction(req.group, req.groupEventIds, req.params.predictionId);
     if (!prediction) return res.status(404).json({ error: 'Pronostic introuvable dans ce groupe.' });
 
-    const { itemId, x, y } = stampInput.parse(req.body ?? {});
+    const parsed = stampInput.parse(req.body ?? {});
+    const { itemId, x, y } = parsed;
+    // Une ancre sans décalage se pose au centre de l'élément ; pas d'ancre du
+    // tout efface celle d'une pose précédente.
+    const anchorKey = parsed.anchorKey || null;
+    const anchorX = anchorKey ? parsed.anchorX ?? 0.5 : null;
+    const anchorY = anchorKey ? parsed.anchorY ?? 0.5 : null;
 
     // On ne pose que ce qu'on possède. Le contrôle est ici et non dans
     // l'interface : sans lui, n'importe quel identifiant de tampon posté à la
@@ -714,7 +726,7 @@ groupRouter.put('/:slug/predictions/:predictionId/stamp', loadGroup, guard(async
         },
         // Reposer déplace : on met à jour la position ET l'objet, puisqu'on a pu
         // changer de tampon entre-temps.
-        update: { itemId, x, y },
+        update: { itemId, x, y, anchorKey, anchorX, anchorY },
         create: {
             groupId: req.group.id,
             predictionId: prediction.id,
@@ -722,10 +734,13 @@ groupRouter.put('/:slug/predictions/:predictionId/stamp', loadGroup, guard(async
             itemId,
             x,
             y,
+            anchorKey,
+            anchorX,
+            anchorY,
         },
     });
 
-    res.json({ stamp: { id: stamp.id, itemId, x, y, mine: true } });
+    res.json({ stamp: { id: stamp.id, itemId, x, y, anchorKey, anchorX, anchorY, mine: true } });
 }));
 
 groupRouter.delete('/:slug/predictions/:predictionId/stamp', loadGroup, guard(async (req, res) => {

@@ -145,7 +145,9 @@ export default function PredictionView({ predictionId, onClose, groupSlug, group
             )}
 
             {exporting && data && (
-                <ExportPrediction prediction={data} onClose={() => setExporting(false)} />
+                // Le groupe suit : la carte exportée reprend les tampons que
+                // ses membres ont posés sur la fiche.
+                <ExportPrediction prediction={data} groupSlug={groupSlug} onClose={() => setExporting(false)} />
             )}
         </Modal>
     );

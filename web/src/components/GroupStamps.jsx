@@ -32,6 +32,21 @@ import { itemById } from '../lib/cosmetics.js';
  * personne ne descendait jusque-là, et le retrait passait pour absent. Les
  * marques et la couche de pose sont en position absolue, l'ordre du document
  * ne les concerne pas.
+ *
+ * ─── Accroché à un élément, pas à la fiche ──────────────────────────────────
+ *
+ * Un tampon visait la fiche entière, en fractions de sa boîte. Mais la fiche
+ * se réorganise avec la largeur de l'écran — le tableau passe d'une colonne à
+ * cinq — et un tampon posé sur une demi-finale depuis un ordinateur tombait au
+ * milieu d'un classement sur téléphone. Il s'accroche désormais à l'élément
+ * visé, avec les clés `data-anchor` des commentaires. Les fractions de la
+ * fiche restent la position de repli, et celle des tampons d'avant.
+ *
+ * ─── La punaise ─────────────────────────────────────────────────────────────
+ *
+ * Chaque tampon est épinglé par l'avatar de son auteur. Le survol ne
+ * fonctionne pas sur téléphone et le tampon n'intercepte aucun clic : sans la
+ * punaise, rien ne disait qui avait tamponné.
  */
 export default function GroupStamps({ groupSlug, predictionId, canvasRef, placing, onPlacingEnd }) {
     const { t, lang } = useI18n();
@@ -73,18 +88,33 @@ export default function GroupStamps({ groupSlug, predictionId, canvasRef, placin
         const canvas = canvasRef?.current;
         if (!canvas) return;
         const box = canvas.getBoundingClientRect();
-        setSpots(stamps.map((s) => ({ ...s, left: s.x * box.width, top: s.y * box.height })));
+        setSpots(stamps.map((s) => {
+            const el = s.anchorKey && canvas.querySelector(`[data-anchor="${CSS.escape(s.anchorKey)}"]`);
+            if (!el) return { ...s, left: s.x * box.width, top: s.y * box.height };
+            const er = el.getBoundingClientRect();
+            return {
+                ...s,
+                left: er.left - box.left + (s.anchorX ?? 0.5) * er.width,
+                top: er.top - box.top + (s.anchorY ?? 0.5) * er.height,
+            };
+        }));
     }, [canvasRef, stamps]);
 
     useEffect(() => {
         measure();
+        // La fiche change de hauteur sans que la fenêtre bouge : photos qui
+        // arrivent, fil de commentaires qui s'allonge. Les éléments visés se
+        // déplacent avec, d'où l'observateur.
+        const ro = new ResizeObserver(measure);
+        if (canvasRef?.current) ro.observe(canvasRef.current);
         window.addEventListener('resize', measure);
         window.addEventListener('scroll', measure, true);
         return () => {
+            ro.disconnect();
             window.removeEventListener('resize', measure);
             window.removeEventListener('scroll', measure, true);
         };
-    }, [measure]);
+    }, [measure, canvasRef]);
 
     async function place(event) {
         if (!placing || !worn) return;
@@ -95,8 +125,25 @@ export default function GroupStamps({ groupSlug, predictionId, canvasRef, placin
         const x = Math.min(0.95, Math.max(0.05, (event.clientX - box.left) / box.width));
         const y = Math.min(0.95, Math.max(0.05, (event.clientY - box.top) / box.height));
 
+        // La couche de pose recouvre la fiche : c'est elle que le clic touche.
+        // On regarde donc ce qu'il y a DESSOUS, au même point.
+        const target = document
+            .elementsFromPoint(event.clientX, event.clientY)
+            .map((el) => el.closest('[data-anchor]'))
+            .find((el) => el && canvas.contains(el));
+        const unit = (v) => Math.min(1, Math.max(0, v));
+        let anchor = {};
+        if (target) {
+            const er = target.getBoundingClientRect();
+            anchor = {
+                anchorKey: target.dataset.anchor,
+                anchorX: unit((event.clientX - er.left) / er.width),
+                anchorY: unit((event.clientY - er.top) / er.height),
+            };
+        }
+
         try {
-            await api.put(base, { itemId: worn, x, y });
+            await api.put(base, { itemId: worn, x, y, ...anchor });
             const { stamps: frais } = await api.get(`${base}s`);
             setStamps(frais);
             // Le sien est repéré dans la liste FRAÎCHE et non dans l'ancienne :
@@ -142,14 +189,14 @@ export default function GroupStamps({ groupSlug, predictionId, canvasRef, placin
                         // et l'animation repart de zéro, même quand on tamponne
                         // deux fois au même endroit.
                         key={neuf ? `${s.id}:${fresh.hits}` : s.id}
-                        className={
-                            `cos-stamp cos-stamp--posed cos-stamp--${item.color} gs-mark` +
-                            (neuf ? ' cos-stamp--slam' : '')
-                        }
+                        // La couleur est portée par l'enveloppe : le cadre du
+                        // tampon ET le cerclage de la punaise la reprennent.
+                        className={`gs-mark cos-stamp--${item.color}` + (neuf ? ' gs-mark--slam' : '')}
                         style={{ left: s.left, top: s.top }}
-                        title={t('group.stamp.by', { name: nom })}
+                        aria-label={t('group.stamp.by', { name: nom })}
                     >
-                        {item.text[lang] ?? item.text.en}
+                        <span className="cos-stamp gs-mark__stamp">{item.text[lang] ?? item.text.en}</span>
+                        <StampPin person={s.author} />
                     </span>
                 );
             })}
@@ -182,5 +229,26 @@ export default function GroupStamps({ groupSlug, predictionId, canvasRef, placin
 
             {error && <p className="notice" style={{ margin: '0.4rem 0 0' }}>{error}</p>}
         </>
+    );
+}
+
+/**
+ * La punaise : l'avatar de la personne qui a tamponné.
+ *
+ * Sans avatar, ou s'il ne charge pas, l'initiale prend la place — une punaise
+ * vide dirait « quelqu'un », l'initiale dit déjà « qui ».
+ */
+function StampPin({ person }) {
+    const [broken, setBroken] = useState(false);
+    const name = person?.globalName ?? person?.username ?? '';
+    const url = person?.avatarUrl;
+    return (
+        <span className="stamp-pin" aria-hidden="true">
+            {url && !broken ? (
+                <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} />
+            ) : (
+                <span className="stamp-pin__initial">{name.trim().charAt(0).toUpperCase() || '?'}</span>
+            )}
+        </span>
     );
 }

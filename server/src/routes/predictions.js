@@ -574,6 +574,13 @@ predictionRouter.put('/:predictionId/stamp', async (req, res) => {
           // se fie pas à son client.
           x: z.number().min(0).max(1),
           y: z.number().min(0).max(1),
+          // L'élément de la carte visé, et le décalage dans sa boîte. Les
+          // formats ne mettent pas la carte en page de la même façon : une
+          // fraction de l'image tombe sur une autre battle d'un format à
+          // l'autre, l'élément se retrouve partout. `x`/`y` restent le repli.
+          anchorKey: z.string().max(120).regex(/^[A-Za-z0-9:_-]+$/).nullable().optional(),
+          anchorX: z.number().min(0).max(1).nullable().optional(),
+          anchorY: z.number().min(0).max(1).nullable().optional(),
         })
         .nullable(),
     })

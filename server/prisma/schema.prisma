@@ -221,10 +221,18 @@ model GroupStamp {
   authorId     String
   author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
   itemId       String
+  // Position de repli, en fractions de la fiche. Seule position des tampons
+  // posés avant l'ancrage.
   x            Float
   y            Float
+  // L'élément visé et le décalage dans sa boîte — mêmes clés que les
+  // commentaires. La fiche se réorganise avec la largeur de l'écran ; l'élément,
+  // lui, se retrouve toujours.
+  anchorKey    String?
+  anchorX      Float?
+  anchorY      Float?
   createdAt    DateTime   @default(now())
-  
+
 
   @@unique([groupId, predictionId, authorId])
   @@index([groupId, predictionId])
